@@ -1,0 +1,13 @@
+# Segurança (NUNCA subir para o GitHub)
+.env
+
+# Frontend (React/Node)
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.DS_Store
+
+# Backend (Go)
+backend/tmp/
+backend/bin/
+backend/*.exe

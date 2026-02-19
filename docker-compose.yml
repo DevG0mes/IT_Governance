@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: governanca_pg
+    restart: always
+    environment:
+      POSTGRES_USER: admin_gov
+      POSTGRES_PASSWORD: senha_super_segura
+      POSTGRES_DB: governanca_ti
+    ports:
+      # Mudamos a porta da sua máquina para 5433 (esquerda) e mantemos a do container na 5432 (direita)
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  pgdata:
