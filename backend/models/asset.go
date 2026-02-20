@@ -23,7 +23,7 @@ type Asset struct {
 	Notebook        *AssetNotebook        `gorm:"foreignKey:AssetID" json:"notebook,omitempty"`
 	Starlink        *AssetStarlink        `gorm:"foreignKey:AssetID" json:"starlink,omitempty"`
 	Chip            *AssetChip            `gorm:"foreignKey:AssetID" json:"chip,omitempty"`
-	Celular         *AssetCelular         `gorm:"foreignKey:AssetID" json:"celular,omitempty"` // NOVO
+	Celular         *AssetCelular         `gorm:"foreignKey:AssetID" json:"celular,omitempty"`
 	MaintenanceLogs []AssetMaintenanceLog `gorm:"foreignKey:AssetID" json:"maintenance_logs"`
 	Assignments     []AssetAssignment     `gorm:"foreignKey:AssetID" json:"assignments"`
 }
@@ -50,9 +50,9 @@ type AssetStarlink struct {
 
 type AssetChip struct {
 	AssetID     uint   `gorm:"primaryKey;column:asset_id" json:"asset_id"`
-	ICCID       string `gorm:"column:iccid" json:"iccid"`             // ATUALIZADO
+	ICCID       string `gorm:"column:iccid" json:"iccid"`
 	Numero      string `gorm:"column:numero" json:"numero"`
-	Responsavel string `gorm:"column:responsavel" json:"responsavel"` // NOVO
+	Responsavel string `gorm:"column:responsavel" json:"responsavel"`
 }
 
 type AssetCelular struct {
@@ -62,22 +62,46 @@ type AssetCelular struct {
 	Responsavel string `gorm:"column:responsavel" json:"responsavel"`
 }
 
+// Licenças com o NOVO CAMPO: DataRenovacao
+type License struct {
+	ID               uint              `gorm:"primaryKey;column:id" json:"id"`
+	Nome             string            `gorm:"column:nome" json:"nome"`
+	Fornecedor       string            `gorm:"column:fornecedor" json:"fornecedor"`
+	Plano            string            `gorm:"column:plano" json:"plano"`
+	Custo            float64           `gorm:"column:custo" json:"custo"`
+	QuantidadeTotal  int               `gorm:"column:quantidade_total" json:"quantidade_total"`
+	QuantidadeEmUso  int               `gorm:"column:quantidade_em_uso" json:"quantidade_em_uso"`
+	DataRenovacao    string            `gorm:"column:data_renovacao" json:"data_renovacao"`
+	CreatedAt        time.Time         `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt        time.Time         `gorm:"column:updated_at" json:"updated_at"`
+	EmployeeLicenses []EmployeeLicense `gorm:"foreignKey:LicenseID" json:"assignments,omitempty"`
+}
+
+type EmployeeLicense struct {
+	ID         uint      `gorm:"primaryKey;column:id" json:"id"`
+	EmployeeID uint      `gorm:"column:employee_id" json:"employee_id"`
+	LicenseID  uint      `gorm:"column:license_id" json:"license_id"`
+	AssignedAt time.Time `gorm:"column:assigned_at" json:"assigned_at"`
+	Employee   *Employee `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
+	License    *License  `gorm:"foreignKey:LicenseID" json:"license,omitempty"`
+}
+
 type Employee struct {
-	ID                 uint       `gorm:"primaryKey;column:id" json:"id"`
-	Nome               string     `gorm:"column:nome" json:"nome"`
-	Email              string     `gorm:"column:email" json:"email"`
-	Departamento       string     `gorm:"column:departamento" json:"departamento"`
-	Notebook           string     `gorm:"column:notebook" json:"notebook"`
-	Chip               string     `gorm:"column:chip" json:"chip"`
-	Licencas           string     `gorm:"column:licencas" json:"licencas"`
-	Status             string     `gorm:"column:status;default:'Ativo'" json:"status"`
-	TermoUrl           string     `gorm:"column:termo_url" json:"termo_url"`
-	OffboardingOnfly   bool       `gorm:"column:offboarding_onfly" json:"offboarding_onfly"`
-	OffboardingAdm365  bool       `gorm:"column:offboarding_adm365" json:"offboarding_adm365"`
-	OffboardingLicense bool       `gorm:"column:offboarding_license" json:"offboarding_license"`
-	OffboardingDate    *time.Time `gorm:"column:offboarding_date" json:"offboarding_date"`
-	CreatedAt          time.Time  `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt          time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	ID                 uint              `gorm:"primaryKey;column:id" json:"id"`
+	Nome               string            `gorm:"column:nome" json:"nome"`
+	Email              string            `gorm:"column:email" json:"email"`
+	Departamento       string            `gorm:"column:departamento" json:"departamento"`
+	Notebook           string            `gorm:"column:notebook" json:"notebook"`
+	Chip               string            `gorm:"column:chip" json:"chip"`
+	Status             string            `gorm:"column:status;default:'Ativo'" json:"status"`
+	TermoUrl           string            `gorm:"column:termo_url" json:"termo_url"`
+	OffboardingOnfly   bool              `gorm:"column:offboarding_onfly" json:"offboarding_onfly"`
+	OffboardingAdm365  bool              `gorm:"column:offboarding_adm365" json:"offboarding_adm365"`
+	OffboardingLicense bool              `gorm:"column:offboarding_license" json:"offboarding_license"`
+	OffboardingDate    *time.Time        `gorm:"column:offboarding_date" json:"offboarding_date"`
+	CreatedAt          time.Time         `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt          time.Time         `gorm:"column:updated_at" json:"updated_at"`
+	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID" json:"assigned_licenses,omitempty"`
 }
 
 type AssetAssignment struct {
@@ -102,7 +126,9 @@ func (Asset) TableName() string               { return "assets" }
 func (AssetNotebook) TableName() string       { return "asset_notebooks" }
 func (AssetStarlink) TableName() string       { return "asset_starlinks" }
 func (AssetChip) TableName() string           { return "asset_chips" }
-func (AssetCelular) TableName() string        { return "asset_celulares" } // NOVO
+func (AssetCelular) TableName() string        { return "asset_celulares" }
 func (Employee) TableName() string            { return "employees" }
 func (AssetAssignment) TableName() string     { return "asset_assignments" }
 func (AssetMaintenanceLog) TableName() string { return "asset_maintenance_logs" }
+func (License) TableName() string             { return "licenses" }
+func (EmployeeLicense) TableName() string     { return "employee_licenses" }

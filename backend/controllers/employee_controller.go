@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -115,7 +114,6 @@ func AssignAsset(c *gin.Context) {
 		tx.Save(&employee)
 	}
 
-	// REGRA DE HISTÓRICO: Cria registro de início
 	assignment := models.AssetAssignment{
 		EmployeeID: employee.ID,
 		AssetID:    asset.ID,
@@ -141,25 +139,34 @@ func ToggleEmployeeStatus(c *gin.Context) {
 	if employee.Status == "Ativo" || employee.Status == "" {
 		employee.Status = "Desligado"
 		now := time.Now()
-		employee.OffboardingDate = &now // Medida de quando foi desligado
+		employee.OffboardingDate = &now
 
-		if employee.Notebook != "" {
-			var asset models.AssetNotebook
-			if err := tx.Where("patrimonio = ?", employee.Notebook).First(&asset).Error; err == nil {
-				var mainAsset models.Asset
-				if err := tx.First(&mainAsset, asset.AssetID).Error; err == nil {
-					mainAsset.Status = models.StatusDisponivel
-					tx.Save(&mainAsset)
+		// 1. ARRANCAR HARDWARE
+		var activeAssignments []models.AssetAssignment
+		tx.Where("employee_id = ? AND returned_at IS NULL", employee.ID).Find(&activeAssignments)
 
-					var assignment models.AssetAssignment
-					if err := tx.Where("asset_id = ? AND returned_at IS NULL", mainAsset.ID).First(&assignment).Error; err == nil {
-						assignment.ReturnedAt = &now
-						tx.Save(&assignment)
-					}
-				}
+		for _, asg := range activeAssignments {
+			asg.ReturnedAt = &now
+			tx.Save(&asg)
+			var asset models.Asset
+			if err := tx.First(&asset, asg.AssetID).Error; err == nil {
+				asset.Status = models.StatusDisponivel
+				tx.Save(&asset)
 			}
-			employee.Notebook = ""
 		}
+		employee.Notebook = "" 
+
+		// 2. ARRANCAR LICENÇAS (FinOps)
+		var empLicenses []models.EmployeeLicense
+		tx.Where("employee_id = ?", employee.ID).Find(&empLicenses)
+		for _, el := range empLicenses {
+			var lic models.License
+			if err := tx.First(&lic, el.LicenseID).Error; err == nil {
+				tx.Model(&lic).Update("quantidade_em_uso", lic.QuantidadeEmUso-1)
+			}
+			tx.Delete(&el) // Apaga o vínculo permanentemente
+		}
+
 	} else {
 		employee.Status = "Ativo"
 		employee.OffboardingDate = nil
@@ -167,13 +174,12 @@ func ToggleEmployeeStatus(c *gin.Context) {
 
 	if err := tx.Save(&employee).Error; err != nil {
 		tx.Rollback()
-		log.Println("Erro:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar status"})
 		return
 	}
 
 	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "Status do colaborador atualizado"})
+	c.JSON(http.StatusOK, gin.H{"message": "Status do colaborador atualizado e ativos revogados"})
 }
 
 func UpdateOffboarding(c *gin.Context) {
@@ -186,16 +192,53 @@ func UpdateOffboarding(c *gin.Context) {
 	}
 
 	var input struct {
-		Onfly   bool `json:"offboarding_onfly"`
-		Adm365  bool `json:"offboarding_adm365"`
-		License bool `json:"offboarding_license"`
+		Onfly    bool   `json:"offboarding_onfly"`
+		Adm365   bool   `json:"offboarding_adm365"`
+		License  bool   `json:"offboarding_license"`
+		TermoUrl string `json:"termo_url"`
 	}
 	c.ShouldBindJSON(&input)
 
 	employee.OffboardingOnfly = input.Onfly
 	employee.OffboardingAdm365 = input.Adm365
 	employee.OffboardingLicense = input.License
+	employee.TermoUrl = input.TermoUrl
+
 	config.DB.Save(&employee)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Checklist atualizado"})
+	c.JSON(http.StatusOK, gin.H{"message": "Checklist e Termo atualizados"})
+}
+
+func DeleteEmployee(c *gin.Context) {
+	id := c.Param("id")
+	tx := config.DB.Begin()
+
+	var employee models.Employee
+	if err := tx.First(&employee, id).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusNotFound, gin.H{"error": "Colaborador não encontrado"})
+		return
+	}
+
+	// Limpa qualquer ativo que ele possua e devolve ao estoque
+	var activeAssignments []models.AssetAssignment
+	tx.Where("employee_id = ? AND returned_at IS NULL", employee.ID).Find(&activeAssignments)
+
+	for _, asg := range activeAssignments {
+		var asset models.Asset
+		if err := tx.First(&asset, asg.AssetID).Error; err == nil {
+			asset.Status = models.StatusDisponivel
+			tx.Save(&asset)
+		}
+	}
+
+	// Exclui o cadastro da base de dados
+	if err := tx.Delete(&employee).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao excluir colaborador do banco de dados"})
+		return
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{"message": "Colaborador excluído com sucesso"})
 }
