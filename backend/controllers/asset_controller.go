@@ -328,3 +328,34 @@ func UpdateAssetMaintenance(c *gin.Context) {
 	tx.Commit()
 	c.JSON(http.StatusOK, gin.H{"message": "Tratativa atualizada com sucesso!"})
 }
+
+func DiscardAsset(c *gin.Context) {
+    var input struct {
+        Status     string `json:"status"`
+        Observacao string `json:"observacao"` // Agora recebe o motivo do Frontend
+    }
+    if err := c.ShouldBindJSON(&input); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos"})
+        return
+    }
+
+    assetID := c.Param("id")
+    var asset models.Asset
+    
+    if err := config.DB.First(&asset, assetID).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Ativo não encontrado"})
+        return
+    }
+
+    if asset.Status == "Em uso" {
+        c.JSON(http.StatusForbidden, gin.H{"error": "Remova a atribuição antes de descartar este item."})
+        return
+    }
+
+    // Salva o status e a justificativa no banco de dados
+    asset.Status = models.AssetStatus(input.Status)
+    asset.Observacao = input.Observacao 
+    config.DB.Save(&asset)
+
+    c.JSON(http.StatusOK, gin.H{"message": "Ativo atualizado para " + input.Status})
+}

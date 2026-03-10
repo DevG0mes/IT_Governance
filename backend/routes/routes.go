@@ -47,6 +47,7 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/employees/:id/assign", controllers.AssignAsset)
 		api.PUT("/employees/:id/toggle-status", controllers.ToggleEmployeeStatus)
 		api.PUT("/employees/:id/offboarding", controllers.UpdateOffboarding)
+		api.PUT("/assets/:id/discard", controllers.DiscardAsset)
 	}
 
 	return r

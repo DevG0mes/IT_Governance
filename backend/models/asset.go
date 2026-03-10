@@ -26,6 +26,7 @@ type Asset struct {
 	Celular         *AssetCelular         `gorm:"foreignKey:AssetID" json:"celular,omitempty"`
 	MaintenanceLogs []AssetMaintenanceLog `gorm:"foreignKey:AssetID" json:"maintenance_logs"`
 	Assignments     []AssetAssignment     `gorm:"foreignKey:AssetID" json:"assignments"`
+	Observacao 		string 				  `json:"observacao"`
 }
 
 type AssetNotebook struct {
@@ -102,6 +103,7 @@ type Employee struct {
 	CreatedAt          time.Time         `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time         `gorm:"column:updated_at" json:"updated_at"`
 	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID" json:"assigned_licenses,omitempty"`
+	TermoURL 		   string 			 `json:"termo_url"`
 }
 
 type AssetAssignment struct {
