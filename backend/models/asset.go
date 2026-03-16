@@ -124,6 +124,18 @@ type AssetMaintenanceLog struct {
 	ResolvedAt *time.Time `gorm:"column:resolved_at" json:"resolved_at"`
 }
 
+type Contract struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Servico        string    `json:"servico"`
+	Fornecedor     string    `json:"fornecedor"`
+	MesCompetencia string    `json:"mes_competencia"`
+	ValorPrevisto  float64   `json:"valor_previsto"`
+	ValorRealizado float64   `json:"valor_realizado"`
+	UrlContrato    string    `json:"url_contrato"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 func (Asset) TableName() string               { return "assets" }
 func (AssetNotebook) TableName() string       { return "asset_notebooks" }
 func (AssetStarlink) TableName() string       { return "asset_starlinks" }

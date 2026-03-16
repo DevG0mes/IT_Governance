@@ -20,28 +20,48 @@ func CreateEmployee(c *gin.Context) {
 	var input struct {
 		Nome         string `json:"nome" binding:"required"`
 		Email        string `json:"email" binding:"required"`
-		Departamento string `json:"departamento" binding:"required"`
+		Departamento string `json:"departamento"`
 	}
 
+	// Tenta ler o JSON enviado pelo React
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos: Nome e Email são obrigatórios"})
 		return
 	}
 
-	employee := models.Employee{
+	var existingEmployee models.Employee
+	
+	// --- A MÁGICA DO UPSERT COMEÇA AQUI ---
+	// Verifica se o E-mail já existe no banco de dados
+	if err := config.DB.Where("email = ?", input.Email).First(&existingEmployee).Error; err == nil {
+		// SE EXISTIR: Nós atualizamos o nome (para consertar os acentos) e o departamento!
+		existingEmployee.Nome = input.Nome
+		existingEmployee.Departamento = input.Departamento
+		config.DB.Save(&existingEmployee) // Salva a correção no banco
+		
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Colaborador atualizado com sucesso", 
+			"data": existingEmployee,
+		})
+		return
+	}
+	// --- FIM DA MÁGICA ---
+
+	// Se o e-mail NÃO EXISTIR, ele cria um novo colaborador do zero (comportamento normal)
+	newEmployee := models.Employee{
 		Nome:         input.Nome,
 		Email:        input.Email,
 		Departamento: input.Departamento,
 		Status:       "Ativo",
 	}
 
-	if err := config.DB.Create(&employee).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := config.DB.Create(&newEmployee).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar colaborador no banco"})
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"data": employee})
-}
 
+	c.JSON(http.StatusCreated, gin.H{"data": newEmployee})
+}
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
 	var employee models.Employee

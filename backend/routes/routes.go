@@ -31,6 +31,8 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/assets/:id/resolve-maintenance", controllers.ResolveMaintenance)
 		api.PUT("/assets/:id/details", controllers.UpdateAssetDetails)
 		api.PUT("/assets/:id/update-maintenance", controllers.UpdateAssetMaintenance)
+		api.DELETE("/assets/:id", controllers.DeleteAsset)
+		api.PUT("/assets/:id/discard", controllers.DiscardAsset)
 
 		// Licenças
 		api.GET("/licenses", controllers.GetLicenses)
@@ -47,7 +49,21 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/employees/:id/assign", controllers.AssignAsset)
 		api.PUT("/employees/:id/toggle-status", controllers.ToggleEmployeeStatus)
 		api.PUT("/employees/:id/offboarding", controllers.UpdateOffboarding)
-		api.PUT("/assets/:id/discard", controllers.DiscardAsset)
+
+		// --- Rotas de Contratos & Serviços ---
+		// (Ajustadas para não duplicar o /api)
+		api.GET("/contracts", controllers.GetContracts)
+		api.POST("/contracts", controllers.CreateContract)
+		api.PUT("/contracts/:id", controllers.UpdateContract)
+		api.DELETE("/contracts/:id", controllers.DeleteContract)
+
+		// --- Autenticação, Usuários e Logs ---
+		api.POST("/login", controllers.Login)
+		api.GET("/users", controllers.GetUsers)
+		api.POST("/users", controllers.CreateUser)
+		api.DELETE("/users/:id", controllers.DeleteUser)
+		api.GET("/audit-logs", controllers.GetAuditLogs)
+		api.POST("/audit-logs", controllers.CreateAuditLog)
 	}
 
 	return r

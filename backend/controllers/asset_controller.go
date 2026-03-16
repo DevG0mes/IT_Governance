@@ -19,44 +19,59 @@ func GetAssets(c *gin.Context) {
 }
 
 type CreateAssetInput struct {
-	AssetType      string             `json:"asset_type" binding:"required"`
-	Status         models.AssetStatus `json:"status" binding:"required"`
-	SerialNumber   string             `json:"serial_number"`
-	Patrimonio     string             `json:"patrimonio"`
-	ModeloNotebook string             `json:"modelo_notebook"`
-	Garantia       string             `json:"garantia"`
-	StatusGarantia string             `json:"status_garantia"`
-	ModeloStarlink string             `json:"modelo_starlink"`
-	Projeto        string             `json:"projeto"`
-	Localizacao    string             `json:"localizacao"`
-	Email          string             `json:"email"`
-	Senha          string             `json:"senha"`
-	SenhaRoteador  string             `json:"senha_roteador"`
-	Responsavel    string             `json:"responsavel"`
-	IMEI           string             `json:"imei"`
-	Numero         string             `json:"numero"`
-	ICCID          string             `json:"iccid"`
-	ModeloCelular  string             `json:"modelo_celular"`
+	AssetType      string `json:"asset_type" binding:"required"`
+	Status         string `json:"status"` // REMOVIDO o binding:"required" para não dar erro 400
+	SerialNumber   string `json:"serial_number"`
+	Patrimonio     string `json:"patrimonio"`
+	ModeloNotebook string `json:"modelo_notebook"`
+	Garantia       string `json:"garantia"`
+	StatusGarantia string `json:"status_garantia"`
+	ModeloStarlink string `json:"modelo_starlink"`
+	Projeto        string `json:"projeto"`
+	Localizacao    string `json:"localizacao"`
+	Email          string `json:"email"`
+	Senha          string `json:"senha"`
+	SenhaRoteador  string `json:"senha_roteador"`
+	Responsavel    string `json:"responsavel"`
+	IMEI           string `json:"imei"`
+	Numero         string `json:"numero"`
+	ICCID          string `json:"iccid"`
+	ModeloCelular  string `json:"modelo_celular"`
 }
 
 func CreateAsset(c *gin.Context) {
 	var input CreateAssetInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "JSON inválido"})
+		// Agora ele mostra o motivo real do erro 400 no terminal e no React
+		c.JSON(http.StatusBadRequest, gin.H{"error": "JSON inválido: " + err.Error()})
 		return
 	}
 
-	// REGRA DE OURO: Validação de Patrimônio e Serial Únicos antes de criar
+	// Se não veio status do React, define como Disponível por padrão
+	if input.Status == "" {
+		input.Status = "Disponível"
+	}
+
+	// REGRA DE OURO MELHORADA: Validação de Patrimônio e Serial Únicos antes de criar
 	if input.AssetType == "Notebook" {
 		var count int64
-		config.DB.Model(&models.AssetNotebook{}).Where("serial_number = ? OR patrimonio = ?", input.SerialNumber, input.Patrimonio).Count(&count)
+		// Verifica duplicidade APENAS se o campo não for vazio e não for os genéricos que o React gera
+		config.DB.Model(&models.AssetNotebook{}).
+			Where("(serial_number = ? AND serial_number != '' AND serial_number NOT LIKE 'Sem-Serial%') OR (patrimonio = ? AND patrimonio != '' AND patrimonio NOT LIKE 'Sem-Patr%')", input.SerialNumber, input.Patrimonio).
+			Count(&count)
+			
 		if count > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Já existe um Notebook cadastrado com este Serial Number ou Patrimônio!"})
 			return
 		}
 	}
 
-	asset := models.Asset{AssetType: input.AssetType, Status: input.Status}
+	// Força a conversão do Status em string para o tipo do banco de dados
+	asset := models.Asset{
+		AssetType: input.AssetType, 
+		Status:    models.AssetStatus(input.Status),
+	}
+
 	switch input.AssetType {
 	case "Notebook":
 		asset.Notebook = &models.AssetNotebook{SerialNumber: input.SerialNumber, Patrimonio: input.Patrimonio, Modelo: input.ModeloNotebook, Garantia: input.Garantia, StatusGarantia: input.StatusGarantia}
@@ -112,9 +127,11 @@ func UpdateAssetDetails(c *gin.Context) {
 	}
 
 	if asset.AssetType == "Notebook" && asset.Notebook != nil {
-		// REGRA DE OURO: Validação na hora da Edição (Garante que não está roubando o número de OUTRO Notebook)
+		// REGRA DE OURO NA EDIÇÃO
 		var count int64
-		config.DB.Model(&models.AssetNotebook{}).Where("(serial_number = ? OR patrimonio = ?) AND asset_id != ?", input.SerialNumber, input.Patrimonio, asset.ID).Count(&count)
+		config.DB.Model(&models.AssetNotebook{}).
+			Where("(serial_number = ? AND serial_number != '') OR (patrimonio = ? AND patrimonio != '') AND asset_id != ?", input.SerialNumber, input.Patrimonio, asset.ID).
+			Count(&count)
 		if count > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Já existe OUTRO Notebook no estoque usando esse Serial Number ou Patrimônio!"})
 			return
@@ -330,32 +347,50 @@ func UpdateAssetMaintenance(c *gin.Context) {
 }
 
 func DiscardAsset(c *gin.Context) {
-    var input struct {
-        Status     string `json:"status"`
-        Observacao string `json:"observacao"` // Agora recebe o motivo do Frontend
-    }
-    if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos"})
-        return
-    }
+	var input struct {
+		Status     string `json:"status"`
+		Observacao string `json:"observacao"` 
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos"})
+		return
+	}
 
-    assetID := c.Param("id")
-    var asset models.Asset
-    
-    if err := config.DB.First(&asset, assetID).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Ativo não encontrado"})
-        return
-    }
+	assetID := c.Param("id")
+	var asset models.Asset
+	
+	if err := config.DB.First(&asset, assetID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ativo não encontrado"})
+		return
+	}
 
-    if asset.Status == "Em uso" {
-        c.JSON(http.StatusForbidden, gin.H{"error": "Remova a atribuição antes de descartar este item."})
-        return
-    }
+	if asset.Status == "Em uso" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Remova a atribuição antes de descartar este item."})
+		return
+	}
 
-    // Salva o status e a justificativa no banco de dados
-    asset.Status = models.AssetStatus(input.Status)
-    asset.Observacao = input.Observacao 
-    config.DB.Save(&asset)
+	asset.Status = models.AssetStatus(input.Status)
+	asset.Observacao = input.Observacao 
+	config.DB.Save(&asset)
 
-    c.JSON(http.StatusOK, gin.H{"message": "Ativo atualizado para " + input.Status})
+	c.JSON(http.StatusOK, gin.H{"message": "Ativo atualizado para " + input.Status})
+}
+
+func DeleteAsset(c *gin.Context) {
+	id := c.Param("id")
+
+	var asset models.Asset
+	if err := config.DB.First(&asset, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Ativo não encontrado"})
+		return
+	}
+
+	err := config.DB.Select("Notebook", "Celular", "Chip", "Starlink", "Assignments", "MaintenanceLogs").Delete(&asset).Error
+	
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "O banco bloqueou a exclusão: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Ativo e históricos excluídos com sucesso"})
 }
