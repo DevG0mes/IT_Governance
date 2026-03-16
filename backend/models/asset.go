@@ -103,7 +103,6 @@ type Employee struct {
 	CreatedAt          time.Time         `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time         `gorm:"column:updated_at" json:"updated_at"`
 	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID" json:"assigned_licenses,omitempty"`
-	TermoURL 		   string 			 `json:"termo_url"`
 }
 
 type AssetAssignment struct {
