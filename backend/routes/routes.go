@@ -9,10 +9,12 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
+	// Configuração de CORS
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
@@ -22,7 +24,13 @@ func SetupRouter() *gin.Engine {
 
 	api := r.Group("/api")
 	{
-		// Hardwares
+		// 🔓 ROTA PÚBLICA (Livre para tentativa de login)
+		api.POST("/login", controllers.Login)
+
+		// 🛡️ MIDDLEWARE DE SEGURANÇA (Tranca o restante do sistema)
+		api.Use(controllers.AuthMiddleware())
+
+		// --- Hardwares / Ativos ---
 		api.GET("/assets", controllers.GetAssets)
 		api.POST("/assets", controllers.CreateAsset)
 		api.PUT("/assets/:id/status", controllers.UpdateAssetStatus)
@@ -34,14 +42,14 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/assets/:id", controllers.DeleteAsset)
 		api.PUT("/assets/:id/discard", controllers.DiscardAsset)
 
-		// Licenças
+		// --- Licenças ---
 		api.GET("/licenses", controllers.GetLicenses)
 		api.POST("/licenses", controllers.CreateLicense)
 		api.PUT("/licenses/:id", controllers.UpdateLicense)
 		api.POST("/licenses/assign", controllers.AssignLicense)
 		api.DELETE("/licenses/unassign/:id", controllers.UnassignLicense)
 
-		// Colaboradores
+		// --- Colaboradores ---
 		api.GET("/employees", controllers.GetEmployees)
 		api.POST("/employees", controllers.CreateEmployee)
 		api.PUT("/employees/:id", controllers.UpdateEmployee)
@@ -50,26 +58,33 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/employees/:id/toggle-status", controllers.ToggleEmployeeStatus)
 		api.PUT("/employees/:id/offboarding", controllers.UpdateOffboarding)
 
-		// --- Rotas de Contratos & Serviços ---
-		// (Ajustadas para não duplicar o /api)
+		// --- Contratos ---
 		api.GET("/contracts", controllers.GetContracts)
 		api.POST("/contracts", controllers.CreateContract)
 		api.PUT("/contracts/:id", controllers.UpdateContract)
 		api.DELETE("/contracts/:id", controllers.DeleteContract)
 
-		// --- Autenticação, Usuários e Logs ---
-		api.POST("/login", controllers.Login)
-		api.GET("/users", controllers.GetUsers)
-		api.POST("/users", controllers.CreateUser)
-		api.DELETE("/users/:id", controllers.DeleteUser)
+		// --- Auditoria ---
 		api.GET("/audit-logs", controllers.GetAuditLogs)
 		api.POST("/audit-logs", controllers.CreateAuditLog)
 
-		// Catálogo de Preços
+		// --- FinOps: Catálogo ---
 		api.GET("/catalog", controllers.GetCatalog)
-		api.POST("/catalog", controllers.CreateCatalogItem)
-		api.PUT("/catalog/:id", controllers.UpdateCatalogItem)
-		api.DELETE("/catalog/:id", controllers.DeleteCatalogItem)
+
+		// 👑 BLOCO DE ACESSO RESTRITO (Apenas Administradores)
+		admin := api.Group("/")
+		admin.Use(controllers.AdminOnly()) 
+		{
+			// Só admin vê, cria e deleta usuários
+			admin.GET("/users", controllers.GetUsers)
+			admin.POST("/users", controllers.CreateUser)
+			admin.DELETE("/users/:id", controllers.DeleteUser)
+
+			// Só admin mexe na tabela de preços base do Catálogo
+			admin.POST("/catalog", controllers.CreateCatalogItem)
+			admin.PUT("/catalog/:id", controllers.UpdateCatalogItem)
+			admin.DELETE("/catalog/:id", controllers.DeleteCatalogItem)
+		}
 	}
 
 	return r

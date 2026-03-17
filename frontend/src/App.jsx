@@ -6,6 +6,15 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Papa from 'papaparse';
 
+// HELPER DE SEGURANÇA (Adiciona o Token JWT em cada requisição)
+const getAuthHeaders = () => {
+  const token = sessionStorage.getItem('jwt_token');
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : ''
+  };
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
@@ -25,14 +34,37 @@ function App() {
       'Analista N2': { dashboard: 'read', inventory: 'none', licenses: 'none', contracts: 'none', catalog: 'read', employees: 'none', maintenance: 'none', offboarding: 'none', export: 'edit', import: 'edit', admin: 'none' }
   };
 
+  // RECUPERA A SESSÃO AO ATUALIZAR A PÁGINA (F5)
+ // No topo do App.jsx, adicione esta função utilitária
+const fetchWithAuth = (url, options = {}) => {
+  const token = sessionStorage.getItem('jwt_token');
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+};
+
+// Dentro do componente App:
+useEffect(() => {
+  const savedUser = sessionStorage.getItem('logged_user');
+  const token = sessionStorage.getItem('jwt_token');
+  if (savedUser && token) {
+    setCurrentUser(JSON.parse(savedUser));
+  }
+}, []);
+
   const fetchAdminData = () => {
-      fetch('http://localhost:8080/api/users').then(res => res.json()).then(data => { const usersFromDB = (data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) })); setSystemUsers(usersFromDB); });
-      fetch('http://localhost:8080/api/audit-logs').then(res => res.json()).then(data => setAuditLogs(data.data || []));
+      fetch('http://localhost:8080/api/users', { headers: getAuthHeaders() }).then(res => res.json()).then(data => { const usersFromDB = (data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) })); setSystemUsers(usersFromDB); }).catch(e => { if(e.message.includes('401')) handleLogout(); });
+      fetch('http://localhost:8080/api/audit-logs', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setAuditLogs(data.data || []));
   };
 
   const registerLog = (action, module, details) => {
       const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
-      fetch('http://localhost:8080/api/audit-logs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) }).then(() => { if (currentUser?.cargo === 'Administrator') fetchAdminData(); });
+      fetch('http://localhost:8080/api/audit-logs', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(logEntry) }).then(() => { if (currentUser?.cargo === 'Administrator') fetchAdminData(); });
   };
 
   const handleLogin = (e) => {
@@ -40,23 +72,35 @@ function App() {
       fetch('http://localhost:8080/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
       .then(async res => { if(!res.ok) throw new Error((await res.json()).error); return res.json(); })
       .then(data => {
-          const loggedUser = data.data; loggedUser.permissions = loggedUser.permissions_json ? JSON.parse(loggedUser.permissions_json) : (roleTemplates[loggedUser.cargo] || {});
-          setCurrentUser(loggedUser); registerLog('LOGIN', 'Autenticação', `Acessou o sistema.`);
+          const loggedUser = data.data; 
+          loggedUser.permissions = loggedUser.permissions_json ? JSON.parse(loggedUser.permissions_json) : (roleTemplates[loggedUser.cargo] || {});
+          
+          // SALVA O CRACHÁ NO NAVEGADOR
+          sessionStorage.setItem('jwt_token', data.token);
+          sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
+          
+          setCurrentUser(loggedUser); 
+          
+          // O timeout garante que o token foi salvo antes de registrar o log
+          setTimeout(() => { registerLog('LOGIN', 'Autenticação', `Acessou o sistema.`); }, 500);
       }).catch(err => {
           console.error(err);
-          if (loginForm.email === 'admin@psi.com.br' && loginForm.senha === 'admin') {
-              const fallbackAdmin = { id: 1, nome: 'Administrador Root', email: 'admin@psi.com.br', cargo: 'Administrator', permissions: roleTemplates['Administrator'] };
-              setCurrentUser(fallbackAdmin); registerLog('LOGIN', 'Autenticação', `Acessou pelo Modo de Segurança.`);
-          } else { alert("Erro ao fazer login: E-mail ou senha incorretos."); }
+          alert("Acesso Negado: E-mail ou senha incorretos.");
       });
   };
 
-  const handleLogout = () => { registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); setCurrentUser(null); setLoginForm({ email: '', senha: '' }); };
+  const handleLogout = () => { 
+      registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); 
+      sessionStorage.clear(); // LIMPA O CRACHÁ
+      setCurrentUser(null); 
+      setLoginForm({ email: '', senha: '' }); 
+  };
+
   const hasAccess = (module, requiredLevel = 'read') => { if (!currentUser) return false; if (currentUser.cargo === 'Administrator') return true; const perm = currentUser.permissions[module]; if (!perm || perm === 'none') return false; if (requiredLevel === 'read') return perm === 'read' || perm === 'edit'; if (requiredLevel === 'edit') return perm === 'edit'; return false; };
   const handleRoleChange = (cargo) => { setNewUser({ ...newUser, cargo: cargo, permissions: { ...roleTemplates[cargo] } }); };
-  const handleCreateSystemUser = (e) => { e.preventDefault(); const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; fetch('http://localhost:8080/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(async res => { if(!res.ok) throw new Error((await res.json()).error); return res.json(); }).then(() => { setIsUserModalOpen(false); fetchAdminData(); registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome} (${newUser.cargo})`); }).catch(err => alert("Erro: " + err.message)); };
+  const handleCreateSystemUser = (e) => { e.preventDefault(); const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; fetch('http://localhost:8080/api/users', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(async res => { if(!res.ok) throw new Error((await res.json()).error); return res.json(); }).then(() => { setIsUserModalOpen(false); fetchAdminData(); registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome} (${newUser.cargo})`); }).catch(err => alert("Erro: " + err.message)); };
   
-  const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente do banco?', () => { const u = systemUsers.find(x => x.id === id); fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE' }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ${u?.nome}`); }); }, true, 'Excluir'); };
+  const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente do banco?', () => { const u = systemUsers.find(x => x.id === id); fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ${u?.nome}`); }); }, true, 'Excluir'); };
 
   const [assets, setAssets] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -138,7 +182,7 @@ function App() {
         if (!endpoint) return;
 
         try {
-            await Promise.all(selectedIds.map(async (id) => { const res = await fetch(`http://localhost:8080/api/${endpoint}/${id}`, { method: 'DELETE' }); if (!res.ok) { throw new Error(`A rota DELETE falhou para o ID ${id}`); } }));
+            await Promise.all(selectedIds.map(async (id) => { const res = await fetch(`http://localhost:8080/api/${endpoint}/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); if (!res.ok) { throw new Error(`A rota DELETE falhou para o ID ${id}`); } }));
             registerLog('DELETE BULK', endpoint.toUpperCase(), `Excluiu ${selectedIds.length} registros em massa.`); setSelectedIds([]); fetchData(); alert('✅ Exclusão em massa concluída!');
         } catch (err) { alert(`❌ Erro Crítico:\n\n${err.message}`); }
     }, true, 'Excluir Selecionados');
@@ -153,11 +197,11 @@ function App() {
   const [newCatalogItem, setNewCatalogItem] = useState({ category: 'Notebook', nome: '', valor: '' });
 
   const fetchData = () => {
-    fetch('http://localhost:8080/api/assets').then(res => res.json()).then(data => setAssets(data.data || []));
-    fetch('http://localhost:8080/api/employees').then(res => res.json()).then(data => setEmployees(data.data || []));
-    fetch('http://localhost:8080/api/licenses').then(res => res.json()).then(data => setLicenses(data.data || []));
-    fetch('http://localhost:8080/api/contracts').then(res => res.ok ? res.json() : {data: []}).then(data => setContracts(data.data || [])).catch(() => setContracts([]));
-    fetch('http://localhost:8080/api/catalog').then(res => res.ok ? res.json() : {data: []}).then(data => setCatalogItems(data.data || [])).catch(() => setCatalogItems([]));
+    fetch('http://localhost:8080/api/assets', { headers: getAuthHeaders() }).then(res => { if(res.status===401) handleLogout(); return res.json(); }).then(data => setAssets(data.data || [])).catch(()=>{});
+    fetch('http://localhost:8080/api/employees', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setEmployees(data.data || []));
+    fetch('http://localhost:8080/api/licenses', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setLicenses(data.data || []));
+    fetch('http://localhost:8080/api/contracts', { headers: getAuthHeaders() }).then(res => res.ok ? res.json() : {data: []}).then(data => setContracts(data.data || [])).catch(() => setContracts([]));
+    fetch('http://localhost:8080/api/catalog', { headers: getAuthHeaders() }).then(res => res.ok ? res.json() : {data: []}).then(data => setCatalogItems(data.data || [])).catch(() => setCatalogItems([]));
   };
 
   useEffect(() => { if(currentUser) { fetchData(); if(currentUser.cargo === 'Administrator') fetchAdminData(); } 
@@ -176,31 +220,31 @@ function App() {
 
   const safeFetchJson = async (res) => { const text = await res.text(); let data; try { data = JSON.parse(text); } catch (err) { console.error(err); throw new Error(`Erro inesperado (${res.status})`); } if (!res.ok) throw new Error(data.error || 'Erro no banco'); return data; };
 
-  const handleCreateAsset = (e) => { e.preventDefault(); const isGrupo = newAsset.grupo && newAsset.grupo.trim() !== ''; const statusInicial = isGrupo ? 'Em uso' : 'Disponível'; fetch('http://localhost:8080/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({...newAsset, status: statusInicial}) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); setIsAssetModalOpen(false); fetchData(); }).catch(err => alert(err.message)); };
-  const handleCreateEmployee = (e) => { e.preventDefault(); fetch('http://localhost:8080/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newEmployee) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployee.nome}`); setIsEmployeeModalOpen(false); setNewEmployee({ nome: '', email: '', departamento: '' }); fetchData(); }).catch(err => alert(err.message)); };
-  const submitAssignment = (e) => { e.preventDefault(); const employeeId = activeEmployee ? activeEmployee.id : selectedItemForAssign; const assetId = activeAsset ? activeAsset.id : selectedItemForAssign; fetch(`http://localhost:8080/api/employees/${employeeId}/assign`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ asset_id: parseInt(assetId) }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${assetId} ao colab ID ${employeeId}`); setIsAssignEmployeeModalOpen(false); setIsAssignAssetModalOpen(false); setSelectedItemForAssign(''); fetchData(); }).catch(err => alert(err.message)); };
+  const handleCreateAsset = (e) => { e.preventDefault(); const isGrupo = newAsset.grupo && newAsset.grupo.trim() !== ''; const statusInicial = isGrupo ? 'Em uso' : 'Disponível'; fetch('http://localhost:8080/api/assets', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({...newAsset, status: statusInicial}) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); setIsAssetModalOpen(false); fetchData(); }).catch(err => alert(err.message)); };
+  const handleCreateEmployee = (e) => { e.preventDefault(); fetch('http://localhost:8080/api/employees', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(newEmployee) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployee.nome}`); setIsEmployeeModalOpen(false); setNewEmployee({ nome: '', email: '', departamento: '' }); fetchData(); }).catch(err => alert(err.message)); };
+  const submitAssignment = (e) => { e.preventDefault(); const employeeId = activeEmployee ? activeEmployee.id : selectedItemForAssign; const assetId = activeAsset ? activeAsset.id : selectedItemForAssign; fetch(`http://localhost:8080/api/employees/${employeeId}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: parseInt(assetId) }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${assetId} ao colab ID ${employeeId}`); setIsAssignEmployeeModalOpen(false); setIsAssignAssetModalOpen(false); setSelectedItemForAssign(''); fetchData(); }).catch(err => alert(err.message)); };
   
-  const handleAction = (assetId, action) => { requestConfirm('Confirmar Ação', `Tem certeza que deseja aplicar a ação: ${action.toUpperCase()} neste equipamento?`, () => { fetch(`http://localhost:8080/api/assets/${assetId}/${action}`, { method: 'PUT' }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); setOpenActionMenu(null); fetchData(); }).catch(err => alert(err.message)); }, action === 'unassign' || action === 'discard', action === 'unassign' ? 'Devolver' : 'Confirmar'); };
+  const handleAction = (assetId, action) => { requestConfirm('Confirmar Ação', `Tem certeza que deseja aplicar a ação: ${action.toUpperCase()} neste equipamento?`, () => { fetch(`http://localhost:8080/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); setOpenActionMenu(null); fetchData(); }).catch(err => alert(err.message)); }, action === 'unassign' || action === 'discard', action === 'unassign' ? 'Devolver' : 'Confirmar'); };
   
-  const handleCreateLicense = (e) => { e.preventDefault(); const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Licenças', `Cadastrou licença ${payload.nome}`); setIsLicenseModalOpen(false); setNewLicense({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' }); fetchData(); }).catch(err => alert(err.message)); };
-  const handleUpdateLicense = (e) => { e.preventDefault(); const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; fetch(`http://localhost:8080/api/licenses/${editLicenseData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Licenças', `Atualizou licença ${payload.nome}`); setEditLicenseData(null); fetchData(); }).catch(err => alert(err.message)); };
-  const assignLicenseToEmployee = (empId, licenseId) => { fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee_id: empId, license_id: parseInt(licenseId) }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Licenças', `Atribuiu licença ${licenseId} ao colab ${empId}`); fetchData(); }).catch(err => alert(err.message)); };
-  const unassignLicense = (assignmentId) => { fetch(`http://localhost:8080/api/licenses/unassign/${assignmentId}`, { method: 'DELETE' }).then(() => { registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); fetchData(); }); };
+  const handleCreateLicense = (e) => { e.preventDefault(); const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Licenças', `Cadastrou licença ${payload.nome}`); setIsLicenseModalOpen(false); setNewLicense({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' }); fetchData(); }).catch(err => alert(err.message)); };
+  const handleUpdateLicense = (e) => { e.preventDefault(); const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; fetch(`http://localhost:8080/api/licenses/${editLicenseData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Licenças', `Atualizou licença ${payload.nome}`); setEditLicenseData(null); fetchData(); }).catch(err => alert(err.message)); };
+  const assignLicenseToEmployee = (empId, licenseId) => { fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: empId, license_id: parseInt(licenseId) }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Licenças', `Atribuiu licença ${licenseId} ao colab ${empId}`); fetchData(); }).catch(err => alert(err.message)); };
+  const unassignLicense = (assignmentId) => { fetch(`http://localhost:8080/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); fetchData(); }); };
 
   const handleContractServiceSelect = (servicoName) => { const base = contracts.find(c => c.servico === servicoName); if (base) { setNewContract(prev => ({ ...prev, servico: base.servico, fornecedor: base.fornecedor, valor_previsto: base.valor_previsto, url_contrato: base.url_contrato })); } };
-  const handleCreateContract = (e) => { e.preventDefault(); const payload = { ...newContract, valor_previsto: parseCurrencyToFloat(newContract.valor_previsto), valor_realizado: parseCurrencyToFloat(newContract.valor_realizado) }; fetch('http://localhost:8080/api/contracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Contratos', `Lançou medição do contrato ${payload.servico}`); setIsContractModalOpen(false); setNewContract({ servico: '', fornecedor: '', mes_competencia: '', valor_previsto: '', valor_realizado: '', url_contrato: '' }); fetchData(); }).catch(err => alert(err.message)); };
-  const handleUpdateContract = (e) => { e.preventDefault(); const payload = { ...editContractData, valor_previsto: parseCurrencyToFloat(editContractData.valor_previsto), valor_realizado: parseCurrencyToFloat(editContractData.valor_realizado) }; fetch(`http://localhost:8080/api/contracts/${editContractData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Contratos', `Atualizou medição ID ${payload.id}`); setEditContractData(null); fetchData(); }).catch(err => alert(err.message)); };
+  const handleCreateContract = (e) => { e.preventDefault(); const payload = { ...newContract, valor_previsto: parseCurrencyToFloat(newContract.valor_previsto), valor_realizado: parseCurrencyToFloat(newContract.valor_realizado) }; fetch('http://localhost:8080/api/contracts', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Contratos', `Lançou medição do contrato ${payload.servico}`); setIsContractModalOpen(false); setNewContract({ servico: '', fornecedor: '', mes_competencia: '', valor_previsto: '', valor_realizado: '', url_contrato: '' }); fetchData(); }).catch(err => alert(err.message)); };
+  const handleUpdateContract = (e) => { e.preventDefault(); const payload = { ...editContractData, valor_previsto: parseCurrencyToFloat(editContractData.valor_previsto), valor_realizado: parseCurrencyToFloat(editContractData.valor_realizado) }; fetch(`http://localhost:8080/api/contracts/${editContractData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Contratos', `Atualizou medição ID ${payload.id}`); setEditContractData(null); fetchData(); }).catch(err => alert(err.message)); };
 
-  const handleCreateCatalogItem = (e) => { e.preventDefault(); const payload = { ...newCatalogItem, valor: parseCurrencyToFloat(newCatalogItem.valor) }; fetch('http://localhost:8080/api/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Catálogo', `Cadastrou item no catálogo: ${payload.nome}`); setIsCatalogModalOpen(false); setNewCatalogItem({ category: 'Notebook', nome: '', valor: '' }); fetchData(); }).catch(err => alert(err.message)); };
-  const handleUpdateCatalogItem = (e) => { e.preventDefault(); const payload = { ...editCatalogData, valor: parseCurrencyToFloat(editCatalogData.valor) }; fetch(`http://localhost:8080/api/catalog/${editCatalogData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Catálogo', `Atualizou item no catálogo ID ${payload.id}`); setEditCatalogData(null); fetchData(); }).catch(err => alert(err.message)); };
-  const handleDeleteCatalogItem = (id) => { requestConfirm('Excluir do Catálogo', 'Certeza que deseja remover este item do catálogo base?', () => { fetch(`http://localhost:8080/api/catalog/${id}`, { method: 'DELETE' }).then(() => { fetchData(); }); }, true); };
+  const handleCreateCatalogItem = (e) => { e.preventDefault(); const payload = { ...newCatalogItem, valor: parseCurrencyToFloat(newCatalogItem.valor) }; fetch('http://localhost:8080/api/catalog', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('CREATE', 'Catálogo', `Cadastrou item no catálogo: ${payload.nome}`); setIsCatalogModalOpen(false); setNewCatalogItem({ category: 'Notebook', nome: '', valor: '' }); fetchData(); }).catch(err => alert(err.message)); };
+  const handleUpdateCatalogItem = (e) => { e.preventDefault(); const payload = { ...editCatalogData, valor: parseCurrencyToFloat(editCatalogData.valor) }; fetch(`http://localhost:8080/api/catalog/${editCatalogData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Catálogo', `Atualizou item no catálogo ID ${payload.id}`); setEditCatalogData(null); fetchData(); }).catch(err => alert(err.message)); };
+  const handleDeleteCatalogItem = (id) => { requestConfirm('Excluir do Catálogo', 'Certeza que deseja remover este item do catálogo base?', () => { fetch(`http://localhost:8080/api/catalog/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchData(); }); }, true); };
 
-  const submitMaintenance = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(maintenanceForm) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); setIsMaintenanceModalOpen(false); setMaintenanceForm({chamado: '', observacao: ''}); fetchData(); }).catch(err => alert(err.message)); };
-  const resolveMaintenance = (assetId) => { requestConfirm('Finalizar Manutenção', 'Deseja devolver este equipamento para o estoque?', () => { fetch(`http://localhost:8080/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT' }).then(() => { registerLog('UPDATE', 'Manutenção', `Retornou ativo ID ${assetId} p/ estoque`); setOpenActionMenu(null); fetchData(); }); }, false, 'Devolver ao Estoque'); };
+  const submitMaintenance = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(maintenanceForm) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); setIsMaintenanceModalOpen(false); setMaintenanceForm({chamado: '', observacao: ''}); fetchData(); }).catch(err => alert(err.message)); };
+  const resolveMaintenance = (assetId) => { requestConfirm('Finalizar Manutenção', 'Deseja devolver este equipamento para o estoque?', () => { fetch(`http://localhost:8080/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT', headers: getAuthHeaders() }).then(() => { registerLog('UPDATE', 'Manutenção', `Retornou ativo ID ${assetId} p/ estoque`); setOpenActionMenu(null); fetchData(); }); }, false, 'Devolver ao Estoque'); };
   const openEditMaintenance = (asset) => { const activeLog = asset.maintenance_logs?.find(log => !log.resolved_at); setEditMaintenanceForm({ assetId: asset.id, chamado: activeLog?.chamado || '', observacao: activeLog?.observacao || '' }); setOpenActionMenu(null); setIsEditMaintenanceModalOpen(true); };
-  const submitEditMaintenance = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chamado: editMaintenanceForm.chamado, observacao: editMaintenanceForm.observacao }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Manutenção', `Atualizou log do ativo ID ${editMaintenanceForm.assetId}`); setIsEditMaintenanceModalOpen(false); fetchData(); }).catch(err => alert(err.message)); };
-  const toggleEmployeeStatus = (empId) => { requestConfirm('Iniciar Offboarding', 'Atenção: Desligar este colaborador devolverá TODOS os hardwares e LICENÇAS para o estoque. Continuar?', () => { fetch(`http://localhost:8080/api/employees/${empId}/toggle-status`, { method: 'PUT' }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${empId}`); setOpenActionMenu(null); setEditEmployeeData(null); fetchData(); }).catch(err => alert(err.message)); }, true, 'Iniciar Desligamento'); };
-  const handleDeleteEmployee = (empId) => { requestConfirm('Excluir Colaborador', '🔴 EXCLUIR DEFINITIVAMENTE este colaborador? Esta ação não pode ser desfeita.', () => { fetch(`http://localhost:8080/api/employees/${empId}`, { method: 'DELETE' }).then(safeFetchJson).then(() => { registerLog('DELETE', 'Colaboradores', `Deletou colab ID ${empId}`); setOpenActionMenu(null); fetchData(); }).catch(err => alert(err.message)); }, true, 'Excluir Colaborador'); };
+  const submitEditMaintenance = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ chamado: editMaintenanceForm.chamado, observacao: editMaintenanceForm.observacao }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Manutenção', `Atualizou log do ativo ID ${editMaintenanceForm.assetId}`); setIsEditMaintenanceModalOpen(false); fetchData(); }).catch(err => alert(err.message)); };
+  const toggleEmployeeStatus = (empId) => { requestConfirm('Iniciar Offboarding', 'Atenção: Desligar este colaborador devolverá TODOS os hardwares e LICENÇAS para o estoque. Continuar?', () => { fetch(`http://localhost:8080/api/employees/${empId}/toggle-status`, { method: 'PUT', headers: getAuthHeaders() }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${empId}`); setOpenActionMenu(null); setEditEmployeeData(null); fetchData(); }).catch(err => alert(err.message)); }, true, 'Iniciar Desligamento'); };
+  const handleDeleteEmployee = (empId) => { requestConfirm('Excluir Colaborador', '🔴 EXCLUIR DEFINITIVAMENTE este colaborador? Esta ação não pode ser desfeita.', () => { fetch(`http://localhost:8080/api/employees/${empId}`, { method: 'DELETE', headers: getAuthHeaders() }).then(safeFetchJson).then(() => { registerLog('DELETE', 'Colaboradores', `Deletou colab ID ${empId}`); setOpenActionMenu(null); fetchData(); }).catch(err => alert(err.message)); }, true, 'Excluir Colaborador'); };
   
   const updateOffboardingData = (empId, field, value) => { 
       const emp = employees.find(e => e.id === empId); 
@@ -211,14 +255,14 @@ function App() {
           offboarding_mega: field === 'mega' ? value : emp.offboarding_mega,
           termo_url: field === 'termo_url' ? value : (emp.termo_url || '') 
       }; 
-      fetch(`http://localhost:8080/api/employees/${empId}/offboarding`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(() => { registerLog('UPDATE', 'Revogação', `Atualizou checklist offboarding ID ${empId}`); fetchData(); }); 
+      fetch(`http://localhost:8080/api/employees/${empId}/offboarding`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) }).then(() => { registerLog('UPDATE', 'Revogação', `Atualizou checklist offboarding ID ${empId}`); fetchData(); }); 
   };
   
-  const saveEditEmployee = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/employees/${editEmployeeData.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editEmployeeData) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Colaboradores', `Editou dados do colab ID ${editEmployeeData.id}`); setEditEmployeeData(null); fetchData(); }).catch(err => alert(err.message)); };
+  const saveEditEmployee = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/employees/${editEmployeeData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(editEmployeeData) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Colaboradores', `Editou dados do colab ID ${editEmployeeData.id}`); setEditEmployeeData(null); fetchData(); }).catch(err => alert(err.message)); };
   const openEditDetails = (asset) => { setEditFormData({ asset_type: asset.asset_type, serial_number: asset.notebook?.serial_number || '', patrimonio: asset.notebook?.patrimonio || '', modelo_notebook: asset.notebook?.modelo || '', garantia: asset.notebook?.garantia || '', status_garantia: asset.notebook?.status_garantia || 'No prazo', modelo_starlink: asset.starlink?.modelo || '', grupo: asset.starlink?.grupo || asset.celular?.grupo || asset.chip?.grupo || '', localizacao: asset.starlink?.localizacao || '', responsavel: asset.starlink?.responsavel || asset.celular?.responsavel || asset.chip?.responsavel || '', email: asset.starlink?.email || '', senha: asset.starlink?.senha || '', senha_roteador: asset.starlink?.senha_roteador || '', imei: asset.celular?.imei || '', numero: asset.chip?.numero || '', iccid: asset.chip?.iccid || '', modelo_celular: asset.celular?.modelo || '', plano: asset.chip?.plano || '' }); setOpenActionMenu(null); setIsEditingDetails(true); };
-  const saveEditDetails = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${viewAssetDetails.id}/details`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editFormData) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Editou detalhes do ativo ID ${viewAssetDetails.id}`); setIsEditingDetails(false); setViewAssetDetails(null); fetchData(); }).catch(err => alert(err.message)); };
+  const saveEditDetails = (e) => { e.preventDefault(); fetch(`http://localhost:8080/api/assets/${viewAssetDetails.id}/details`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(editFormData) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Inventário', `Editou detalhes do ativo ID ${viewAssetDetails.id}`); setIsEditingDetails(false); setViewAssetDetails(null); fetchData(); }).catch(err => alert(err.message)); };
   const openStatusModal = (asset, newStatus) => { setOpenActionMenu(null); setStatusModalData({ asset: asset, status: newStatus, observacao: '' }); };
-  const submitStatusChange = (e) => { e.preventDefault(); if (!statusModalData || !statusModalData.asset) return; if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } fetch(`http://localhost:8080/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); setStatusModalData(null); fetchData(); }).catch(err => alert(err.message)); };
+  const submitStatusChange = (e) => { e.preventDefault(); if (!statusModalData || !statusModalData.asset) return; if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } fetch(`http://localhost:8080/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) }).then(safeFetchJson).then(() => { registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); setStatusModalData(null); fetchData(); }).catch(err => alert(err.message)); };
 
   const generateTermoPDF = (employee) => {
     const doc = new jsPDF(); const empAssets = getActiveAssetsForEmployee(employee.id); const marginX = 15; let cursorY = 20;
@@ -283,22 +327,22 @@ function App() {
             if (importCategory === 'Colaboradores') {
               const nome = getVal(row, 'nome', 'name'); const email = getVal(row, 'email', 'e-mail'); const depto = getVal(row, 'departamento', 'depto', 'setor');
               if (!nome || !email) throw new Error("Falta Nome ou E-mail");
-              const res = await fetch('http://localhost:8080/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: nome, email: email, departamento: depto }) }); if (!res.ok) throw new Error();
+              const res = await fetch('http://localhost:8080/api/employees', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ nome: nome, email: email, departamento: depto }) }); if (!res.ok) throw new Error();
             } else if (importCategory === 'Medições de Contratos') {
               const servico = getVal(row, 'serviço', 'servico', 'nome'); const mes = getVal(row, 'mês', 'mes', 'competencia'); const realizadoStr = getVal(row, 'valor_realizado', 'realizado', 'pago');
               if (!servico || !mes) throw new Error("Falta Serviço ou Mês"); const baseContract = contracts.find(c => c.servico.toLowerCase() === servico.toLowerCase()); if (!baseContract) throw new Error(`Contrato '${servico}' não encontrado.`);
               const payload = { servico: baseContract.servico, fornecedor: baseContract.fornecedor, mes_competencia: mes, valor_previsto: parseFloat(baseContract.valor_previsto), valor_realizado: parseCurrencyToFloat(realizadoStr), url_contrato: baseContract.url_contrato };
-              const res = await fetch('http://localhost:8080/api/contracts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
+              const res = await fetch('http://localhost:8080/api/contracts', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
             } else if (importCategory === 'Licenças (Cadastro)') {
               const software = getVal(row, 'software', 'nome'); const fornecedor = getVal(row, 'fornecedor'); const plano = getVal(row, 'plano') || 'Mensal'; const custo = parseCurrencyToFloat(getVal(row, 'custo', 'valor')); const qtd = parseInt(getVal(row, 'quantidade', 'qtd')) || 1;
               if (!software) throw new Error("Falta o nome do Software");
               const payload = { nome: software, fornecedor: fornecedor, plano: plano, custo: custo, quantidade_total: qtd };
-              const res = await fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
+              const res = await fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
             } else if (importCategory === 'Vínculos de Licenças') {
               const emailColab = normalizeEmail(getVal(row, 'email_colaborador', 'email')); const software = getVal(row, 'software', 'nome');
               const emp = employees.find(e => normalizeEmail(e.email) === emailColab); const lic = licenses.find(l => l.nome.toLowerCase() === software.toLowerCase());
               if (!emp) throw new Error(`Colaborador ${emailColab} não encontrado`); if (!lic) throw new Error(`Licença ${software} não encontrada`);
-              const res = await fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ employee_id: emp.id, license_id: lic.id }) }); if (!res.ok) throw new Error("Falha ao vincular");
+              const res = await fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: emp.id, license_id: lic.id }) }); if (!res.ok) throw new Error("Falha ao vincular");
             } else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let emailColab = getVal(row, 'email_colaborador', 'email'); 
               let rawStatus = normalizeStatus(getVal(row, 'status')); 
@@ -338,7 +382,7 @@ function App() {
               } else if (importCategory === 'CHIPs') { let num = getVal(row, 'numero', 'linha'); if (!num || num === '0' || num.toLowerCase() === '#n/d') num = `S/Num-${i}-${Math.floor(Math.random()*1000)}`; payload = { asset_type: 'CHIP', numero: num, iccid: getVal(row, 'iccid') || '', plano: getVal(row, 'plano'), grupo: grupoValue, responsavel: getVal(row, 'responsavel'), status: statusPlanilha };
               } else if (importCategory === 'Starlinks') { payload = { asset_type: 'Starlink', grupo: grupoValue || 'N/A', modelo_starlink: getVal(row, 'modelo') || 'N/A', localizacao: getVal(row, 'localizacao', 'local') || 'N/A', responsavel: getVal(row, 'responsavel') || 'N/A', email: getVal(row, 'email_conta', 'email'), senha: getVal(row, 'senha_conta', 'senha'), senha_roteador: getVal(row, 'senha_wifi', 'wifi'), status: statusPlanilha }; }
               
-              const res = await fetch('http://localhost:8080/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); 
+              const res = await fetch('http://localhost:8080/api/assets', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); 
               const resData = await res.json().catch(() => ({}));
               if (!res.ok) { throw new Error(resData.error || "Falha ao gravar no banco"); }
               
@@ -347,7 +391,7 @@ function App() {
                   const cleanEmailColab = normalizeEmail(emailColab); 
                   const emp = employees.find(e => normalizeEmail(e.email) === cleanEmailColab); 
                   if (emp) { 
-                      const assignRes = await fetch(`http://localhost:8080/api/employees/${emp.id}/assign`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ asset_id: parseInt(safeAssetId) }) }); 
+                      const assignRes = await fetch(`http://localhost:8080/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: parseInt(safeAssetId) }) }); 
                       if (!assignRes.ok) throw new Error(`Salvo, mas falhou ao vincular ao usuário.`); 
                   } else { 
                       throw new Error(`Salvo no estoque, mas o e-mail não existe na base.`); 
@@ -462,8 +506,6 @@ function App() {
               {hasAccess('catalog', 'read') && <button onClick={() => setActiveTab('catalog')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:-translate-y-1 hover:shadow-lg border ${activeTab === 'catalog' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-white hover:border-gray-600'}`}><Tag className="w-4 h-4"/> Catálogo Preços</button>}
               {hasAccess('employees', 'read') && <button onClick={() => setActiveTab('employees')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:-translate-y-1 hover:shadow-lg border ${activeTab === 'employees' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-white hover:border-gray-600'}`}><Users className="w-4 h-4"/> Colaboradores</button>}
               {hasAccess('maintenance', 'read') && <button onClick={() => setActiveTab('maintenance')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:-translate-y-1 hover:shadow-lg border ${activeTab === 'maintenance' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-white hover:border-gray-600'}`}><Wrench className="w-4 h-4"/> Manutenção</button>}
-              
-              {/* BOTÃO DA ABA REVOGAÇÃO (OFFBOARDING) */}
               {hasAccess('offboarding', 'read') && <button onClick={() => setActiveTab('offboarding')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:-translate-y-1 hover:shadow-lg border ${activeTab === 'offboarding' ? 'bg-red-900/20 border-red-500/50 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-white hover:border-gray-600'}`}><FileCheck className="w-4 h-4"/> Revogação</button>}
               
               {(hasAccess('export', 'read') || hasAccess('import', 'read') || hasAccess('admin', 'read')) && <div className="hidden lg:block border-l border-gray-700/50 mx-1"></div>}
