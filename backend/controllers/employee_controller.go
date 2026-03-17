@@ -204,29 +204,33 @@ func ToggleEmployeeStatus(c *gin.Context) {
 
 func UpdateOffboarding(c *gin.Context) {
 	id := c.Param("id")
-	var employee models.Employee
-
-	if err := config.DB.First(&employee, id).Error; err != nil {
+	var emp models.Employee
+	if err := config.DB.First(&emp, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Colaborador não encontrado"})
 		return
 	}
 
 	var input struct {
-		Onfly    bool   `json:"offboarding_onfly"`
-		Adm365   bool   `json:"offboarding_adm365"`
-		License  bool   `json:"offboarding_license"`
-		TermoUrl string `json:"termo_url"`
+		OffboardingOnfly   bool   `json:"offboarding_onfly"`
+		OffboardingAdm365  bool   `json:"offboarding_adm365"`
+		OffboardingLicense bool   `json:"offboarding_license"`
+		OffboardingMega    bool   `json:"offboarding_mega"` // <-- NOVA LINHA AQUI
+		TermoUrl           string `json:"termo_url"`
 	}
-	c.ShouldBindJSON(&input)
 
-	employee.OffboardingOnfly = input.Onfly
-	employee.OffboardingAdm365 = input.Adm365
-	employee.OffboardingLicense = input.License
-	employee.TermoUrl = input.TermoUrl
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	config.DB.Save(&employee)
+	emp.OffboardingOnfly = input.OffboardingOnfly
+	emp.OffboardingAdm365 = input.OffboardingAdm365
+	emp.OffboardingLicense = input.OffboardingLicense
+	emp.OffboardingMega = input.OffboardingMega // <-- NOVA LINHA AQUI
+	emp.TermoUrl = input.TermoUrl
 
-	c.JSON(http.StatusOK, gin.H{"message": "Checklist e Termo atualizados"})
+	config.DB.Save(&emp)
+	c.JSON(http.StatusOK, gin.H{"data": emp})
 }
 
 func DeleteEmployee(c *gin.Context) {

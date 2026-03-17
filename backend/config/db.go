@@ -40,6 +40,8 @@ func ConnectDatabase() {
 	database.AutoMigrate(&models.AssetStarlink{})
 	database.AutoMigrate(&models.AssetCelular{})
 	database.AutoMigrate(&models.AssetChip{})
+	database.AutoMigrate(&models.AssetMaintenanceLog{})
+	database.AutoMigrate(&models.CatalogItem{})
 
 	log.Println("Sincronização de tabelas concluída!")
 

@@ -20,13 +20,15 @@ type Asset struct {
 	Status          AssetStatus           `gorm:"column:status" json:"status"`
 	CreatedAt       time.Time             `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time             `gorm:"column:updated_at" json:"updated_at"`
-	Notebook        *AssetNotebook        `gorm:"foreignKey:AssetID" json:"notebook,omitempty"`
-	Starlink        *AssetStarlink        `gorm:"foreignKey:AssetID" json:"starlink,omitempty"`
-	Chip            *AssetChip            `gorm:"foreignKey:AssetID" json:"chip,omitempty"`
-	Celular         *AssetCelular         `gorm:"foreignKey:AssetID" json:"celular,omitempty"`
-	MaintenanceLogs []AssetMaintenanceLog `gorm:"foreignKey:AssetID" json:"maintenance_logs"`
-	Assignments     []AssetAssignment     `gorm:"foreignKey:AssetID" json:"assignments"`
-	Observacao 		string 				  `json:"observacao"`
+	Observacao      string                `gorm:"column:observacao" json:"observacao"`
+	
+	// O "CASCADE" garante que deletar um Ativo limpe também os dados das tabelas filhas no PostgreSQL
+	Notebook        *AssetNotebook        `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"notebook,omitempty"`
+	Starlink        *AssetStarlink        `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"starlink,omitempty"`
+	Chip            *AssetChip            `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"chip,omitempty"`
+	Celular         *AssetCelular         `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"celular,omitempty"`
+	MaintenanceLogs []AssetMaintenanceLog `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"maintenance_logs"`
+	Assignments     []AssetAssignment     `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"assignments"`
 }
 
 type AssetNotebook struct {
@@ -39,31 +41,36 @@ type AssetNotebook struct {
 }
 
 type AssetStarlink struct {
-	AssetID       uint   `gorm:"primaryKey;column:asset_id" json:"asset_id"`
+	ID            uint   `gorm:"primaryKey;column:id" json:"id"`
+	AssetID       uint   `gorm:"column:asset_id" json:"asset_id"`
 	Modelo        string `gorm:"column:modelo" json:"modelo"`
-	Projeto       string `gorm:"column:projeto" json:"projeto"`
+	Grupo         string `gorm:"column:grupo" json:"grupo"`
 	Localizacao   string `gorm:"column:localizacao" json:"localizacao"`
+	Responsavel   string `gorm:"column:responsavel" json:"responsavel"`
 	Email         string `gorm:"column:email" json:"email"`
 	Senha         string `gorm:"column:senha" json:"senha"`
 	SenhaRoteador string `gorm:"column:senha_roteador" json:"senha_roteador"`
-	Responsavel   string `gorm:"column:responsavel" json:"responsavel"`
-}
-
-type AssetChip struct {
-	AssetID     uint   `gorm:"primaryKey;column:asset_id" json:"asset_id"`
-	ICCID       string `gorm:"column:iccid" json:"iccid"`
-	Numero      string `gorm:"column:numero" json:"numero"`
-	Responsavel string `gorm:"column:responsavel" json:"responsavel"`
 }
 
 type AssetCelular struct {
-	AssetID     uint   `gorm:"primaryKey;column:asset_id" json:"asset_id"`
-	Modelo      string `gorm:"column:modelo" json:"modelo"`
+	ID          uint   `gorm:"primaryKey;column:id" json:"id"`
+	AssetID     uint   `gorm:"column:asset_id" json:"asset_id"`
 	IMEI        string `gorm:"column:imei" json:"imei"`
+	Modelo      string `gorm:"column:modelo" json:"modelo"`
+	Grupo       string `gorm:"column:grupo" json:"grupo"`
 	Responsavel string `gorm:"column:responsavel" json:"responsavel"`
 }
 
-// Licenças com o NOVO CAMPO: DataRenovacao
+type AssetChip struct {
+	ID          uint   `gorm:"primaryKey;column:id" json:"id"`
+	AssetID     uint   `gorm:"column:asset_id" json:"asset_id"`
+	Numero      string `gorm:"column:numero" json:"numero"`
+	ICCID       string `gorm:"column:iccid" json:"iccid"`
+	Plano       string `gorm:"column:plano" json:"plano"`
+	Grupo       string `gorm:"column:grupo" json:"grupo"`
+	Responsavel string `gorm:"column:responsavel" json:"responsavel"`
+}
+
 type License struct {
 	ID               uint              `gorm:"primaryKey;column:id" json:"id"`
 	Nome             string            `gorm:"column:nome" json:"nome"`
@@ -75,7 +82,7 @@ type License struct {
 	DataRenovacao    string            `gorm:"column:data_renovacao" json:"data_renovacao"`
 	CreatedAt        time.Time         `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt        time.Time         `gorm:"column:updated_at" json:"updated_at"`
-	EmployeeLicenses []EmployeeLicense `gorm:"foreignKey:LicenseID" json:"assignments,omitempty"`
+	EmployeeLicenses []EmployeeLicense `gorm:"foreignKey:LicenseID;constraint:OnDelete:CASCADE" json:"assignments,omitempty"`
 }
 
 type EmployeeLicense struct {
@@ -99,12 +106,12 @@ type Employee struct {
 	OffboardingOnfly   bool              `gorm:"column:offboarding_onfly" json:"offboarding_onfly"`
 	OffboardingAdm365  bool              `gorm:"column:offboarding_adm365" json:"offboarding_adm365"`
 	OffboardingLicense bool              `gorm:"column:offboarding_license" json:"offboarding_license"`
+	OffboardingMega    bool              `gorm:"column:offboarding_mega" json:"offboarding_mega"` // <-- NOVA LINHA AQUI
 	OffboardingDate    *time.Time        `gorm:"column:offboarding_date" json:"offboarding_date"`
 	CreatedAt          time.Time         `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time         `gorm:"column:updated_at" json:"updated_at"`
-	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID" json:"assigned_licenses,omitempty"`
+	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID;constraint:OnDelete:CASCADE" json:"assigned_licenses,omitempty"`
 }
-
 type AssetAssignment struct {
 	ID         uint       `gorm:"primaryKey;column:id" json:"id"`
 	EmployeeID uint       `gorm:"column:employee_id" json:"employee_id"`

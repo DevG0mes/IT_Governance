@@ -64,6 +64,12 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/users/:id", controllers.DeleteUser)
 		api.GET("/audit-logs", controllers.GetAuditLogs)
 		api.POST("/audit-logs", controllers.CreateAuditLog)
+
+		// Catálogo de Preços
+		api.GET("/catalog", controllers.GetCatalog)
+		api.POST("/catalog", controllers.CreateCatalogItem)
+		api.PUT("/catalog/:id", controllers.UpdateCatalogItem)
+		api.DELETE("/catalog/:id", controllers.DeleteCatalogItem)
 	}
 
 	return r
