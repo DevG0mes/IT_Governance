@@ -1,0 +1,7 @@
+export const roleTemplates = {
+    'Administrator': { dashboard: 'edit', inventory: 'edit', licenses: 'edit', contracts: 'edit', catalog: 'edit', employees: 'edit', maintenance: 'edit', offboarding: 'edit', export: 'edit', import: 'edit', admin: 'edit' },
+    'Gestor': { dashboard: 'read', inventory: 'read', licenses: 'read', contracts: 'read', catalog: 'read', employees: 'read', maintenance: 'read', offboarding: 'read', export: 'edit', import: 'none', admin: 'none' },
+    'Analista de Contrato': { dashboard: 'read', inventory: 'none', licenses: 'edit', contracts: 'edit', catalog: 'edit', employees: 'none', maintenance: 'none', offboarding: 'none', export: 'none', import: 'none', admin: 'none' },
+    'Analista N1': { dashboard: 'read', inventory: 'edit', licenses: 'none', contracts: 'none', catalog: 'read', employees: 'edit', maintenance: 'edit', offboarding: 'edit', export: 'none', import: 'none', admin: 'none' },
+    'Analista N2': { dashboard: 'read', inventory: 'none', licenses: 'none', contracts: 'none', catalog: 'read', employees: 'none', maintenance: 'none', offboarding: 'none', export: 'edit', import: 'edit', admin: 'none' }
+};

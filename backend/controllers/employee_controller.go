@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"net/http"
+	"strings" // Adicionado para validar o "@" do email
 	"time"
 
 	"governanca-ti/config"
 	"governanca-ti/models"
+	"governanca-ti/utils" // Importante: Garante o uso do seu sanitizer.go
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,51 +19,32 @@ func GetEmployees(c *gin.Context) {
 }
 
 func CreateEmployee(c *gin.Context) {
-	var input struct {
-		Nome         string `json:"nome" binding:"required"`
-		Email        string `json:"email" binding:"required"`
-		Departamento string `json:"departamento"`
-	}
-
-	// Tenta ler o JSON enviado pelo React
+	var input models.Employee
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos: Nome e Email são obrigatórios"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var existingEmployee models.Employee
-	
-	// --- A MÁGICA DO UPSERT COMEÇA AQUI ---
-	// Verifica se o E-mail já existe no banco de dados
-	if err := config.DB.Where("email = ?", input.Email).First(&existingEmployee).Error; err == nil {
-		// SE EXISTIR: Nós atualizamos o nome (para consertar os acentos) e o departamento!
-		existingEmployee.Nome = input.Nome
-		existingEmployee.Departamento = input.Departamento
-		config.DB.Save(&existingEmployee) // Salva a correção no banco
-		
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Colaborador atualizado com sucesso", 
-			"data": existingEmployee,
-		})
+	// --- CAMADA DE ROBUSTEZ (QA) ---
+	// Padroniza os dados antes de salvar para evitar sujeira no banco
+	input.Nome = utils.StandardizeText(input.Nome)
+	input.Email = utils.StandardizeEmail(input.Email)
+	input.Departamento = utils.StandardizeText(input.Departamento)
+
+	// Validação básica de Sanidade
+	if input.Nome == "" || !strings.Contains(input.Email, "@") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos: Nome obrigatório e E-mail deve ser válido."})
 		return
 	}
-	// --- FIM DA MÁGICA ---
+	// -------------------------------
 
-	// Se o e-mail NÃO EXISTIR, ele cria um novo colaborador do zero (comportamento normal)
-	newEmployee := models.Employee{
-		Nome:         input.Nome,
-		Email:        input.Email,
-		Departamento: input.Departamento,
-		Status:       "Ativo",
-	}
-
-	if err := config.DB.Create(&newEmployee).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar colaborador no banco"})
+	if err := config.DB.Create(&input).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao salvar colaborador no banco"})
 		return
 	}
-
-	c.JSON(http.StatusCreated, gin.H{"data": newEmployee})
+	c.JSON(http.StatusCreated, gin.H{"data": input})
 }
+
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
 	var employee models.Employee
@@ -82,13 +65,14 @@ func UpdateEmployee(c *gin.Context) {
 		return
 	}
 
-	employee.Nome = input.Nome
-	employee.Email = input.Email
-	employee.Departamento = input.Departamento
-	employee.TermoUrl = input.TermoUrl
+	// Padroniza na atualização também para manter a integridade
+	employee.Nome = utils.StandardizeText(input.Nome)
+	employee.Email = utils.StandardizeEmail(input.Email)
+	employee.Departamento = utils.StandardizeText(input.Departamento)
+	employee.TermoUrl = strings.TrimSpace(input.TermoUrl)
 
 	config.DB.Save(&employee)
-	c.JSON(http.StatusOK, gin.H{"message": "Colaborador atualizado"})
+	c.JSON(http.StatusOK, gin.H{"message": "Colaborador atualizado com sucesso", "data": employee})
 }
 
 func AssignAsset(c *gin.Context) {
@@ -96,7 +80,10 @@ func AssignAsset(c *gin.Context) {
 	var input struct {
 		AssetID uint `json:"asset_id" binding:"required"`
 	}
-	c.ShouldBindJSON(&input)
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID do ativo é obrigatório"})
+		return
+	}
 
 	tx := config.DB.Begin()
 
@@ -122,7 +109,7 @@ func AssignAsset(c *gin.Context) {
 
 	if asset.Status != models.StatusDisponivel {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Este equipamento não está disponível"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Este equipamento não está disponível (Status atual: " + string(asset.Status) + ")"})
 		return
 	}
 
@@ -161,22 +148,18 @@ func ToggleEmployeeStatus(c *gin.Context) {
 		now := time.Now()
 		employee.OffboardingDate = &now
 
-		// 1. ARRANCAR HARDWARE
+		// 1. REVOGAR HARDWARE AUTOMATICAMENTE
 		var activeAssignments []models.AssetAssignment
 		tx.Where("employee_id = ? AND returned_at IS NULL", employee.ID).Find(&activeAssignments)
 
 		for _, asg := range activeAssignments {
 			asg.ReturnedAt = &now
 			tx.Save(&asg)
-			var asset models.Asset
-			if err := tx.First(&asset, asg.AssetID).Error; err == nil {
-				asset.Status = models.StatusDisponivel
-				tx.Save(&asset)
-			}
+			tx.Model(&models.Asset{}).Where("id = ?", asg.AssetID).Update("status", models.StatusDisponivel)
 		}
-		employee.Notebook = "" 
+		employee.Notebook = ""
 
-		// 2. ARRANCAR LICENÇAS (FinOps)
+		// 2. REVOGAR LICENÇAS (Compliance FinOps)
 		var empLicenses []models.EmployeeLicense
 		tx.Where("employee_id = ?", employee.ID).Find(&empLicenses)
 		for _, el := range empLicenses {
@@ -184,7 +167,7 @@ func ToggleEmployeeStatus(c *gin.Context) {
 			if err := tx.First(&lic, el.LicenseID).Error; err == nil {
 				tx.Model(&lic).Update("quantidade_em_uso", lic.QuantidadeEmUso-1)
 			}
-			tx.Delete(&el) // Apaga o vínculo permanentemente
+			tx.Delete(&el)
 		}
 
 	} else {
@@ -194,12 +177,12 @@ func ToggleEmployeeStatus(c *gin.Context) {
 
 	if err := tx.Save(&employee).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar status"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar status do colaborador"})
 		return
 	}
 
 	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "Status do colaborador atualizado e ativos revogados"})
+	c.JSON(http.StatusOK, gin.H{"message": "Status atualizado e ativos revogados com sucesso"})
 }
 
 func UpdateOffboarding(c *gin.Context) {
@@ -214,7 +197,7 @@ func UpdateOffboarding(c *gin.Context) {
 		OffboardingOnfly   bool   `json:"offboarding_onfly"`
 		OffboardingAdm365  bool   `json:"offboarding_adm365"`
 		OffboardingLicense bool   `json:"offboarding_license"`
-		OffboardingMega    bool   `json:"offboarding_mega"` // <-- NOVA LINHA AQUI
+		OffboardingMega    bool   `json:"offboarding_mega"`
 		TermoUrl           string `json:"termo_url"`
 	}
 
@@ -226,8 +209,8 @@ func UpdateOffboarding(c *gin.Context) {
 	emp.OffboardingOnfly = input.OffboardingOnfly
 	emp.OffboardingAdm365 = input.OffboardingAdm365
 	emp.OffboardingLicense = input.OffboardingLicense
-	emp.OffboardingMega = input.OffboardingMega // <-- NOVA LINHA AQUI
-	emp.TermoUrl = input.TermoUrl
+	emp.OffboardingMega = input.OffboardingMega
+	emp.TermoUrl = strings.TrimSpace(input.TermoUrl)
 
 	config.DB.Save(&emp)
 	c.JSON(http.StatusOK, gin.H{"data": emp})
@@ -244,25 +227,23 @@ func DeleteEmployee(c *gin.Context) {
 		return
 	}
 
-	// Limpa qualquer ativo que ele possua e devolve ao estoque
+	// QA Sec: Antes de excluir, devolve os ativos pro estoque para não "sumirem" do sistema
 	var activeAssignments []models.AssetAssignment
 	tx.Where("employee_id = ? AND returned_at IS NULL", employee.ID).Find(&activeAssignments)
 
 	for _, asg := range activeAssignments {
-		var asset models.Asset
-		if err := tx.First(&asset, asg.AssetID).Error; err == nil {
-			asset.Status = models.StatusDisponivel
-			tx.Save(&asset)
-		}
+		tx.Model(&models.Asset{}).Where("id = ?", asg.AssetID).Update("status", models.StatusDisponivel)
+		now := time.Now()
+		asg.ReturnedAt = &now
+		tx.Save(&asg)
 	}
 
-	// Exclui o cadastro da base de dados
 	if err := tx.Delete(&employee).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao excluir colaborador do banco de dados"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao excluir colaborador do banco"})
 		return
 	}
 
 	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "Colaborador excluído com sucesso"})
+	c.JSON(http.StatusOK, gin.H{"message": "Colaborador removido e ativos retornados ao estoque"})
 }

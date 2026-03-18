@@ -24,10 +24,10 @@ func SetupRouter() *gin.Engine {
 
 	api := r.Group("/api")
 	{
-		// 🔓 ROTA PÚBLICA (Livre para tentativa de login)
+		// 🔓 ROTA PÚBLICA
 		api.POST("/login", controllers.Login)
 
-		// 🛡️ MIDDLEWARE DE SEGURANÇA (Tranca o restante do sistema)
+		// 🛡️ MIDDLEWARE DE SEGURANÇA
 		api.Use(controllers.AuthMiddleware())
 
 		// --- Hardwares / Ativos ---
@@ -63,6 +63,8 @@ func SetupRouter() *gin.Engine {
 		api.POST("/contracts", controllers.CreateContract)
 		api.PUT("/contracts/:id", controllers.UpdateContract)
 		api.DELETE("/contracts/:id", controllers.DeleteContract)
+		// 📄 Rota de análise (Movida para o grupo api para consistência)
+		api.POST("/contracts/analyze-pdf", controllers.AnalyzeContractPDF)
 
 		// --- Auditoria ---
 		api.GET("/audit-logs", controllers.GetAuditLogs)
@@ -75,12 +77,10 @@ func SetupRouter() *gin.Engine {
 		admin := api.Group("/")
 		admin.Use(controllers.AdminOnly()) 
 		{
-			// Só admin vê, cria e deleta usuários
 			admin.GET("/users", controllers.GetUsers)
 			admin.POST("/users", controllers.CreateUser)
 			admin.DELETE("/users/:id", controllers.DeleteUser)
 
-			// Só admin mexe na tabela de preços base do Catálogo
 			admin.POST("/catalog", controllers.CreateCatalogItem)
 			admin.PUT("/catalog/:id", controllers.UpdateCatalogItem)
 			admin.DELETE("/catalog/:id", controllers.DeleteCatalogItem)
