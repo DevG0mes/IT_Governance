@@ -1,12 +1,12 @@
 package controllers
 
 import (
-    "net/http"
-    "governanca-ti/config"
-    "governanca-ti/models"
-    "governanca-ti/utils"
+	"net/http"
+	"governanca-ti/config"
+	"governanca-ti/models"
+	"governanca-ti/utils"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 )
 
 type CreateAssetInput struct {
@@ -62,18 +62,49 @@ func CreateAsset(c *gin.Context) {
 	}
 
 	var err error
+	// AJUSTE FEITO AQUI: Todos os campos declarados nas structs agora estão
+	// sendo mapeados corretamente a partir do input JSON.
 	switch input.AssetType {
 	case "Notebook":
-		nb := models.AssetNotebook{AssetID: asset.ID, SerialNumber: input.SerialNumber, Patrimonio: input.Patrimonio, Modelo: input.ModeloNotebook}
+		nb := models.AssetNotebook{
+			AssetID:        asset.ID,
+			SerialNumber:   input.SerialNumber,
+			Patrimonio:     input.Patrimonio,
+			Modelo:         input.ModeloNotebook,
+			Garantia:       input.Garantia,
+			StatusGarantia: input.StatusGarantia,
+		}
 		err = tx.Create(&nb).Error
 	case "Starlink":
-		sl := models.AssetStarlink{AssetID: asset.ID, Modelo: input.ModeloStarlink, Grupo: input.Grupo}
+		sl := models.AssetStarlink{
+			AssetID:       asset.ID,
+			Modelo:        input.ModeloStarlink,
+			Grupo:         input.Grupo,
+			Localizacao:   input.Localizacao,
+			Responsavel:   input.Responsavel,
+			Email:         input.Email,
+			Senha:         input.Senha,
+			SenhaRoteador: input.SenhaRoteador,
+		}
 		err = tx.Create(&sl).Error
 	case "CHIP":
-		chip := models.AssetChip{AssetID: asset.ID, Numero: input.Numero, Plano: input.Plano}
+		chip := models.AssetChip{
+			AssetID:     asset.ID,
+			Numero:      input.Numero,
+			Plano:       input.Plano,
+			ICCID:       input.ICCID,
+			Grupo:       input.Grupo,
+			Responsavel: input.Responsavel,
+		}
 		err = tx.Create(&chip).Error
 	case "Celular":
-		cel := models.AssetCelular{AssetID: asset.ID, IMEI: input.IMEI, Modelo: input.ModeloCelular}
+		cel := models.AssetCelular{
+			AssetID:     asset.ID,
+			IMEI:        input.IMEI,
+			Modelo:      input.ModeloCelular,
+			Grupo:       input.Grupo,
+			Responsavel: input.Responsavel,
+		}
 		err = tx.Create(&cel).Error
 	}
 
@@ -90,12 +121,17 @@ func CreateAsset(c *gin.Context) {
 func UpdateAssetStatus(c *gin.Context) {
 	id := c.Param("id")
 	var asset models.Asset
-	var input struct { Status models.AssetStatus `json:"status" binding:"required"` }
+	var input struct {
+		Status models.AssetStatus `json:"status" binding:"required"`
+	}
 	c.ShouldBindJSON(&input)
 	config.DB.Model(&asset).Where("id = ?", id).Update("status", input.Status)
 	c.JSON(http.StatusOK, gin.H{"message": "Status atualizado"})
 }
 
+// Nota: Esta função ainda está como um "stub" (apenas retornando a mensagem).
+// Quando você for implementar a lógica de UPDATE real dos detalhes dos ativos,
+// lembre-se de usar a regra do Select("*").Updates() que conversamos antes!
 func UpdateAssetDetails(c *gin.Context) {
 	id := c.Param("id")
 	c.JSON(http.StatusOK, gin.H{"message": "Detalhes atualizados (ID: " + id + ")"})

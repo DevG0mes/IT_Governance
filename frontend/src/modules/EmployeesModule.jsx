@@ -9,7 +9,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
 
-  // Estados dos Modais
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ nome: '', email: '', departamento: '' });
   const [editEmployeeData, setEditEmployeeData] = useState(null);
@@ -136,19 +135,128 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   };
 
   const generateTermoPDF = (employee) => {
-    const doc = new jsPDF(); const empAssets = getActiveAssetsForEmployee(employee.id); const marginX = 15; let cursorY = 20;
-    doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.text("TERMO DE RESPONSABILIDADE PELA GUARDA E USO DE", 105, cursorY, { align: "center" }); cursorY += 7; doc.text("EQUIPAMENTO E FERRAMENTAS DE TRABALHO", 105, cursorY, { align: "center" }); cursorY += 10;
-    doc.setFontSize(12); doc.text("PSI ENERGY SOLUCAO EM AUTOMACAO DE ENERGIA LTDA", 105, cursorY, { align: "center" }); cursorY += 15; doc.setFontSize(10); doc.setFont("helvetica", "normal");
-    const addText = (text) => { doc.text(text, marginX, cursorY, { maxWidth: 180, align: "left" }); const lines = doc.splitTextToSize(text, 180); cursorY += (lines.length * 5) + 5; };
-    addText("PSI ENERGY SOLUCAO EM AUTOMACAO DE ENERGIA LTDA, pessoa jurídica de direito privado, inscrita no CNPJ/MF sob o número 14.475.723/0001-51, por seu representante legal, designada “PSI” e, de outro lado:"); addText(`Empregado ou Prestador: ${employee.nome.toUpperCase()}, doravante designado(a) “RESPONSÁVEL”, acordam o seguinte:`); doc.setFont("helvetica", "bold"); doc.text("Do Objeto de Responsabilidade:", marginX, cursorY); cursorY += 5; doc.setFont("helvetica", "normal"); addText("O(a) RESPONSÁVEL reconhece ter recebido os seguintes equipamentos e ferramentas de trabalho, de propriedade da PSI Energy:");
-    const tableData = empAssets.map(a => [ a.asset_type.toUpperCase(), a.notebook?.modelo || a.celular?.modelo || a.chip?.numero || a.starlink?.grupo || '-', '[  ] SIM    [  ] NÃO' ]);
+    const doc = new jsPDF();
+    const empAssets = getActiveAssetsForEmployee(employee.id);
+    const marginX = 15;
+    let cursorY = 20;
+
+    // Cabeçalho
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("TERMO DE RESPONSABILIDADE PELA GUARDA E USO DE", 105, cursorY, { align: "center" });
+    cursorY += 7;
+    doc.text("EQUIPAMENTO E FERRAMENTAS DE TRABALHO", 105, cursorY, { align: "center" });
+    cursorY += 10;
+    doc.setFontSize(12);
+    doc.text("PSI ENERGY SOLUCAO EM AUTOMACAO DE ENERGIA LTDA", 105, cursorY, { align: "center" });
+    cursorY += 15;
+
+    // Função auxiliar para injetar o texto de forma segura e fazer a quebra de página
+    const addText = (text, isBold = false) => {
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(text, 180);
+      
+      // Se as próximas linhas passarem do limite da página, cria uma nova folha
+      if (cursorY + (lines.length * 5) > 280) {
+        doc.addPage();
+        cursorY = 20;
+      }
+      doc.text(lines, marginX, cursorY, { align: "left", lineHeightFactor: 1.5 });
+      cursorY += (lines.length * 5) + 3;
+    };
+
+    addText("PSI ENERGY SOLUCAO EM AUTOMACAO DE ENERGIA LTDA, pessoa jurídica de direito privado, inscrita no CNPJ/MF sob o número 14.475.723/0001-51, por seu representante legal, designada “PSI” e, de outro lado:");
+    addText(`Empregado ou Prestador: ${employee.nome.toUpperCase()}, doravante designado(a) “RESPONSÁVEL”, acordam o seguinte:`);
+
+    cursorY += 2;
+    addText("Do Objeto de Responsabilidade:", true);
+    addText("1 - O(a) RESPONSÁVEL reconhece ter recebido os seguintes equipamentos e ferramentas de trabalho, de propriedade da PSI Energy:");
+
+    // Tabela Dinâmica
+    const tableData = empAssets.map(a => [
+      a.asset_type.toUpperCase(),
+      a.notebook?.modelo || a.celular?.modelo || a.chip?.numero || a.starlink?.grupo || '-',
+      '[  ] SIM    [  ] NÃO'
+    ]);
     if (tableData.length === 0) tableData.push(['-', '-', '[  ] SIM    [  ] NÃO']);
-    autoTable(doc, { startY: cursorY, head: [['EQUIPAMENTO', 'MODELO/MARCA', 'DEVOLVIDO SEM AVARIA ?']], body: tableData, theme: 'plain', styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 }, headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' } });
-    cursorY = doc.lastAutoTable.finalY + 10;
-    const addClause = (title, text) => { if (cursorY > 260) { doc.addPage(); cursorY = 20; } doc.setFont("helvetica", "bold"); doc.text(title, marginX, cursorY); cursorY += 5; doc.setFont("helvetica", "normal"); addText(text); };
-    addClause("Da Responsabilidade", "2 - O(a) RESPONSÁVEL compromete-se a zelar pela conservação dos equipamentos."); if (cursorY > 210) { doc.addPage(); cursorY = 20; } else { cursorY += 5; }
-    const dataAtual = new Date(); const dataExtenso = `${String(dataAtual.getDate()).padStart(2, '0')}/${String(dataAtual.getMonth()+1).padStart(2, '0')}/${dataAtual.getFullYear()}`;
-    doc.text(`Jundiaí, ${dataExtenso}.`, marginX, cursorY); cursorY += 25; doc.line(marginX, cursorY, 95, cursorY); doc.line(105, cursorY, 195, cursorY); cursorY += 5; doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("PSI ENERGY", marginX, cursorY); doc.text("Assinatura do(a) Empregado / Prestador", 105, cursorY); registerLog('EXPORT', 'Colaboradores', `Gerou Termo PDF para ${employee.nome}`); doc.save(`Termo_PSI_${employee.nome.replace(/\s+/g, '_')}.pdf`);
+
+    autoTable(doc, {
+      startY: cursorY,
+      head: [['EQUIPAMENTO', 'MODELO/MARCA', 'DEVOLVIDO SEM AVARIA ?']],
+      body: tableData,
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+      margin: { left: marginX, right: marginX }
+    });
+    
+    // Atualiza o cursorY com base em onde a tabela terminou
+    cursorY = doc.lastAutoTable.finalY + 8;
+
+    // Cláusulas Adicionais Completas
+    addText("Da Responsabilidade", true);
+    addText("2 - O(a) RESPONSÁVEL compromete-se a:\n2.1. Utilizar os equipamentos e ferramentas exclusivamente para o desempenho de suas funções ou serviços contratados pela PSI Energy.\n2.2. Zelar pela boa conservação e guarda dos equipamentos e ferramentas, evitando seu desgaste ou danos fora do uso normal.\n2.3. Proibido realizar qualquer tipo de intervenção física no notebook e adornar o dispositivo.");
+
+    addText("Da Devolução", true);
+    addText("3 - O(a) RESPONSÁVEL se compromete a cuidar bem dos equipamentos e ferramentas, devolvendo-os em ótimo estado ao final do nosso contrato de trabalho ou de prestação de serviços, excetuado seu desgaste natural.");
+
+    addText("Dos Danos ou Perda", true);
+    addText("4 - Em caso de dano ou perda dos equipamentos ou ferramentas por negligência ou mau uso, o(a) RESPONSÁVEL poderá ser responsabilizado(a), conforme previsto no Artigo 462, § 1º da Consolidação das Leis do Trabalho (“§ 1º - Em caso de dano causado pelo empregado, o desconto será lícito, desde que esta possibilidade tenha sido acordada ou na ocorrência de dolo do empregado.”) e nos termos do contrato de prestação de serviços, se aplicável.");
+
+    addText("Das Disposições Gerais", true);
+    addText("5 - Este termo é regido pelas leis trabalhistas vigentes e pelos termos do contrato de prestação de serviços, se aplicável. Qualquer disputa relacionada a ele será submetida à jurisdição local.\n\nPor estarem assim justos e contratados, firmam o presente termo em duas vias de igual teor e forma, na presença de duas testemunhas.");
+
+    // ==========================================
+    // TRAVA DE SEGURANÇA PARA AS ASSINATURAS
+    // ==========================================
+    // Exigimos 90 unidades de espaço para assinar e colocar as testemunhas sem cortar
+    if (cursorY + 90 > 290) {
+      doc.addPage();
+      cursorY = 20;
+    } else {
+      cursorY += 10;
+    }
+
+    const dataExtenso = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    doc.text(`Jundiaí, ${dataExtenso}.`, marginX, cursorY);
+    cursorY += 25;
+
+    // Linhas de Assinatura
+    doc.line(15, cursorY, 95, cursorY);
+    doc.line(115, cursorY, 195, cursorY);
+
+    cursorY += 5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+
+    doc.text("PSI ENERGY SOLUÇÃO EM AUTOMAÇÃO", 55, cursorY, { align: "center" });
+    doc.text("DE ENERGIA LTDA", 55, cursorY + 4, { align: "center" });
+
+    doc.text("Nome e Assinatura do(a) Empregado ou", 155, cursorY, { align: "center" });
+    doc.text("Representante Legal", 155, cursorY + 4, { align: "center" });
+
+    cursorY += 15;
+
+    // Testemunhas
+    doc.setFontSize(10);
+    doc.text("Testemunhas:", 15, cursorY);
+    cursorY += 12;
+
+    doc.line(15, cursorY, 95, cursorY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Nome:", 15, cursorY + 4);
+    doc.text("RG:", 15, cursorY + 9);
+    doc.text("CPF:", 15, cursorY + 14);
+
+    doc.line(115, cursorY, 195, cursorY);
+    doc.text("Nome:", 115, cursorY + 4);
+    doc.text("RG:", 115, cursorY + 9);
+    doc.text("CPF:", 115, cursorY + 14);
+
+    registerLog('EXPORT', 'Colaboradores', `Gerou Termo PDF para ${employee.nome}`);
+    doc.save(`Termo_PSI_${employee.nome.replace(/\s+/g, '_')}.pdf`);
   };
 
   return (
@@ -215,7 +323,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         </table>
       </div>
 
-      {/* COFRE DE MODAIS DO EMPLOYEES */}
       {isEmployeeModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">

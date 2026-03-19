@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck } from 'lucide-react';
 
-// IMPORTAÇÃO DOS MÓDULOS INTELIGENTES
 import DashboardModule from './modules/DashboardModule';
 import AdminModule from './modules/AdminModule';
 import InventoryModule from './modules/InventoryModule';
@@ -18,13 +17,12 @@ import { roleTemplates } from './constants/permissions';
 import { getAuthHeaders, formatCurrency } from './utils/helpers';
 
 export default function App() {
-  // =========================================================================
-  // 1. ESTADOS GLOBAIS DO SISTEMA E LOGIN
-  // =========================================================================
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
   
-  // Dados do Banco (APIs)
+  // Estado Global de Loading adicionado
+  const [isLoading, setIsLoading] = useState(false);
+  
   const [assets, setAssets] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [licenses, setLicenses] = useState([]);
@@ -33,30 +31,53 @@ export default function App() {
   const [systemUsers, setSystemUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
 
-  // Estados de Interface e Navegação
   const [activeTab, setActiveTab] = useState('dashboard'); 
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: false, confirmText: 'Confirmar' });
   const requestConfirm = (title, message, onConfirm, isDanger = false, confirmText = 'Confirmar') => { setConfirmDialog({ isOpen: true, title, message, onConfirm, isDanger, confirmText }); };
 
-  // Modais Globais (Apenas Segurança)
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ nome: '', email: '', senha: '', cargo: 'Gestor' });
 
-  // =========================================================================
-  // 2. EFEITOS GLOBAIS E FETCHS
-  // =========================================================================
   useEffect(() => {
     const savedUser = sessionStorage.getItem('logged_user');
     const token = sessionStorage.getItem('jwt_token');
     if (savedUser && token) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
+  // LÓGICA DE CARREGAMENTO (DELAY DE 1 SEGUNDO GARANTIDO NA NAVEGAÇÃO)
   const fetchData = () => {
-    fetch('http://localhost:8080/api/assets', { headers: getAuthHeaders() }).then(res => { if(res.status===401) handleLogout(); return res.json(); }).then(data => setAssets(data.data || [])).catch(()=>{});
-    fetch('http://localhost:8080/api/employees', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setEmployees(data.data || []));
-    fetch('http://localhost:8080/api/licenses', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setLicenses(data.data || []));
-    fetch('http://localhost:8080/api/contracts', { headers: getAuthHeaders() }).then(res => res.ok ? res.json() : {data: []}).then(data => setContracts(data.data || [])).catch(() => setContracts([]));
-    fetch('http://localhost:8080/api/catalog', { headers: getAuthHeaders() }).then(res => res.ok ? res.json() : {data: []}).then(data => setCatalogItems(data.data || [])).catch(() => setCatalogItems([]));
+    setIsLoading(true);
+    const startTime = Date.now(); // Marca o tempo que começou a buscar
+    
+    Promise.all([
+      fetch('http://localhost:8080/api/assets', { headers: getAuthHeaders() })
+        .then(res => { if(res.status===401) handleLogout(); return res.json(); }).catch(() => ({data: []})),
+      fetch('http://localhost:8080/api/employees', { headers: getAuthHeaders() })
+        .then(res => res.json()).catch(() => ({data: []})),
+      fetch('http://localhost:8080/api/licenses', { headers: getAuthHeaders() })
+        .then(res => res.json()).catch(() => ({data: []})),
+      fetch('http://localhost:8080/api/contracts', { headers: getAuthHeaders() })
+        .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []})),
+      fetch('http://localhost:8080/api/catalog', { headers: getAuthHeaders() })
+        .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []}))
+    ])
+    .then(([assetsData, empData, licData, contData, catData]) => {
+      setAssets(assetsData.data || []);
+      setEmployees(empData.data || []);
+      setLicenses(licData.data || []);
+      setContracts(contData.data || []);
+      setCatalogItems(catData.data || []);
+    })
+    .finally(() => {
+      // Calcula quanto tempo a API demorou. Se foi rápido demais, segura o loading 
+      // até completar 1000ms (1 segundo) para o efeito visual da tela.
+      const elapsedTime = Date.now() - startTime;
+      const delayRequired = Math.max(1000 - elapsedTime, 0);
+      
+      setTimeout(() => {
+        setIsLoading(false);
+      }, delayRequired);
+    });
   };
 
   const fetchAdminData = () => {
@@ -74,9 +95,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
 
-  // =========================================================================
-  // 3. SEGURANÇA E LOGIN
-  // =========================================================================
   const handleLogin = (e) => {
     e.preventDefault();
     fetch('http://localhost:8080/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
@@ -109,9 +127,6 @@ export default function App() {
   
   const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', () => { fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); }); }, true, 'Excluir'); };
 
-  // =========================================================================
-  // 4. RENDERIZAÇÃO
-  // =========================================================================
   return (
     <div className="min-h-screen bg-[#0a0a0f] font-sans selection:bg-brandGreen selection:text-white pb-32">
       {!currentUser ? (
@@ -149,34 +164,36 @@ export default function App() {
           
           <div className="border-b border-gray-800/60 bg-gray-900/30 backdrop-blur-xl sticky top-[73px] z-20 py-4 shadow-sm">
             <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-3 px-4">
-              {hasAccess('dashboard', 'read') && <button onClick={() => setActiveTab('dashboard')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'dashboard' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><LayoutDashboard className="w-4 h-4"/> Dashboard</button>}
-              {hasAccess('inventory', 'read') && <button onClick={() => setActiveTab('inventory')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'inventory' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Database className="w-4 h-4"/> Inventário</button>}
-              {hasAccess('employees', 'read') && <button onClick={() => setActiveTab('employees')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'employees' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Users className="w-4 h-4"/> Colaboradores</button>}
-              {hasAccess('contracts', 'read') && <button onClick={() => setActiveTab('contracts')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'contracts' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><FileSignature className="w-4 h-4"/> Contratos</button>}
-              {hasAccess('catalog', 'read') && <button onClick={() => setActiveTab('catalog')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'catalog' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Tag className="w-4 h-4"/> Catálogo Preços</button>}
-              {hasAccess('licenses', 'read') && <button onClick={() => setActiveTab('licenses')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'licenses' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><CreditCard className="w-4 h-4"/> Licenças</button>}
-              {hasAccess('maintenance', 'read') && <button onClick={() => setActiveTab('maintenance')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'maintenance' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Wrench className="w-4 h-4"/> Manutenção</button>}
-              {hasAccess('offboarding', 'read') && <button onClick={() => setActiveTab('offboarding')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'offboarding' ? 'bg-red-900/20 border-red-500/50 text-red-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><FileCheck className="w-4 h-4"/> Revogação</button>}
+              {hasAccess('dashboard', 'read') && <button onClick={() => setActiveTab('dashboard')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'dashboard' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><LayoutDashboard className="w-4 h-4"/> Dashboard</button>}
+              {hasAccess('inventory', 'read') && <button onClick={() => setActiveTab('inventory')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'inventory' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Database className="w-4 h-4"/> Inventário</button>}
+              {hasAccess('employees', 'read') && <button onClick={() => setActiveTab('employees')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'employees' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Users className="w-4 h-4"/> Colaboradores</button>}
+              {hasAccess('contracts', 'read') && <button onClick={() => setActiveTab('contracts')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'contracts' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><FileSignature className="w-4 h-4"/> Contratos</button>}
+              {hasAccess('catalog', 'read') && <button onClick={() => setActiveTab('catalog')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'catalog' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Tag className="w-4 h-4"/> Catálogo Preços</button>}
+              {hasAccess('licenses', 'read') && <button onClick={() => setActiveTab('licenses')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'licenses' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><CreditCard className="w-4 h-4"/> Licenças</button>}
+              {hasAccess('maintenance', 'read') && <button onClick={() => setActiveTab('maintenance')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'maintenance' ? 'bg-brandGreen/10 border-brandGreen/50 text-brandGreen' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Wrench className="w-4 h-4"/> Manutenção</button>}
+              {hasAccess('offboarding', 'read') && <button onClick={() => setActiveTab('offboarding')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'offboarding' ? 'bg-red-900/20 border-red-500/50 text-red-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><FileCheck className="w-4 h-4"/> Revogação</button>}
               
               {(hasAccess('export', 'read') || hasAccess('import', 'read') || hasAccess('admin', 'read')) && <div className="hidden lg:block border-l border-gray-700/50 mx-1"></div>}
               
-              {hasAccess('import', 'read') && <button onClick={() => setActiveTab('import')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'import' ? 'bg-blue-900/20 border-blue-500/50 text-blue-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><UploadCloud className="w-4 h-4"/> Importar</button>}
-              {hasAccess('export', 'read') && <button onClick={() => setActiveTab('export')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'export' ? 'bg-purple-900/20 border-purple-500/50 text-purple-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><DownloadCloud className="w-4 h-4"/> Exportar</button>}
-              {hasAccess('admin', 'read') && <button onClick={() => setActiveTab('admin')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border ${activeTab === 'admin' ? 'bg-gray-800 border-gray-500 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Shield className="w-4 h-4"/> Segurança</button>}
+              {hasAccess('import', 'read') && <button onClick={() => setActiveTab('import')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'import' ? 'bg-blue-900/20 border-blue-500/50 text-blue-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><UploadCloud className="w-4 h-4"/> Importar</button>}
+              {hasAccess('export', 'read') && <button onClick={() => setActiveTab('export')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'export' ? 'bg-purple-900/20 border-purple-500/50 text-purple-400' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><DownloadCloud className="w-4 h-4"/> Exportar</button>}
+              {hasAccess('admin', 'read') && <button onClick={() => setActiveTab('admin')} className={`text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-full border transition-colors ${activeTab === 'admin' ? 'bg-gray-800 border-gray-500 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white border-transparent'}`}><Shield className="w-4 h-4"/> Segurança</button>}
             </div>
           </div>
 
           <main className="max-w-7xl mx-auto p-6 mt-4">
-            {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} />}
+            {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} isLoading={isLoading} />}
             {activeTab === 'admin' && hasAccess('admin', 'read') && <AdminModule hasAccess={hasAccess} systemUsers={systemUsers} auditLogs={auditLogs} deleteSystemUser={deleteSystemUser} setNewUser={setNewUser} setIsUserModalOpen={setIsUserModalOpen} roleTemplates={roleTemplates} />}
-            {activeTab === 'inventory' && hasAccess('inventory', 'read') && <InventoryModule assets={assets} catalogItems={catalogItems} employees={employees} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
-            {activeTab === 'employees' && hasAccess('employees', 'read') && <EmployeesModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
+            {activeTab === 'inventory' && hasAccess('inventory', 'read') && <InventoryModule assets={assets} catalogItems={catalogItems} employees={employees} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
+            {activeTab === 'employees' && hasAccess('employees', 'read') && <EmployeesModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
             {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && <MaintenanceModule assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
-            {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} />}
-            {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} />}
+            {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
+            {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
+            
             {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
-            {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} />}
-            {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} />}
+            
+            {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
+            {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
           </main>
 
           {/* MODAIS GLOBAIS (Avisos e Segurança) */}
@@ -216,7 +233,7 @@ export default function App() {
                       {Object.keys(roleTemplates).map(role => <option key={role} value={role}>{role}</option>)}
                     </select>
                   </div>
-                  <button type="submit" className="w-full bg-brandGreen text-white py-4 rounded-full font-bold mt-4">Criar Usuário</button>
+                  <button type="submit" className="w-full bg-brandGreen text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Criar Usuário</button>
                 </form>
               </div>
             </div>

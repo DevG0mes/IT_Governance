@@ -21,7 +21,7 @@ type Asset struct {
 	CreatedAt       time.Time             `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt       time.Time             `gorm:"column:updated_at" json:"updated_at"`
 	Observacao      string                `gorm:"column:observacao" json:"observacao"`
-	
+
 	// O "CASCADE" garante que deletar um Ativo limpe também os dados das tabelas filhas no PostgreSQL
 	Notebook        *AssetNotebook        `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"notebook,omitempty"`
 	Starlink        *AssetStarlink        `gorm:"foreignKey:AssetID;constraint:OnDelete:CASCADE" json:"starlink,omitempty"`
@@ -106,12 +106,13 @@ type Employee struct {
 	OffboardingOnfly   bool              `gorm:"column:offboarding_onfly" json:"offboarding_onfly"`
 	OffboardingAdm365  bool              `gorm:"column:offboarding_adm365" json:"offboarding_adm365"`
 	OffboardingLicense bool              `gorm:"column:offboarding_license" json:"offboarding_license"`
-	OffboardingMega    bool              `gorm:"column:offboarding_mega" json:"offboarding_mega"` // <-- NOVA LINHA AQUI
+	OffboardingMega    bool              `gorm:"column:offboarding_mega" json:"offboarding_mega"`
 	OffboardingDate    *time.Time        `gorm:"column:offboarding_date" json:"offboarding_date"`
 	CreatedAt          time.Time         `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt          time.Time         `gorm:"column:updated_at" json:"updated_at"`
 	AssignedLicenses   []EmployeeLicense `gorm:"foreignKey:EmployeeID;constraint:OnDelete:CASCADE" json:"assigned_licenses,omitempty"`
 }
+
 type AssetAssignment struct {
 	ID         uint       `gorm:"primaryKey;column:id" json:"id"`
 	EmployeeID uint       `gorm:"column:employee_id" json:"employee_id"`
@@ -131,15 +132,15 @@ type AssetMaintenanceLog struct {
 }
 
 type Contract struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	Servico        string    `json:"servico"`
-	Fornecedor     string    `json:"fornecedor"`
-	MesCompetencia string    `json:"mes_competencia"`
-	ValorPrevisto  float64   `json:"valor_previsto"`
-	ValorRealizado float64   `json:"valor_realizado"`
-	UrlContrato    string    `json:"url_contrato"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uint      `gorm:"primaryKey;column:id" json:"id"`
+	Servico        string    `gorm:"column:servico" json:"servico"`
+	Fornecedor     string    `gorm:"column:fornecedor" json:"fornecedor"`
+	MesCompetencia string    `gorm:"column:mes_competencia" json:"mes_competencia"`
+	ValorPrevisto  float64   `gorm:"column:valor_previsto" json:"valor_previsto"`
+	ValorRealizado float64   `gorm:"column:valor_realizado" json:"valor_realizado"`
+	UrlContrato    string    `gorm:"column:url_contrato" json:"url_contrato"`
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Asset) TableName() string               { return "assets" }
@@ -152,3 +153,4 @@ func (AssetAssignment) TableName() string     { return "asset_assignments" }
 func (AssetMaintenanceLog) TableName() string { return "asset_maintenance_logs" }
 func (License) TableName() string             { return "licenses" }
 func (EmployeeLicense) TableName() string     { return "employee_licenses" }
+func (Contract) TableName() string            { return "contracts" }

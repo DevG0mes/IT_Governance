@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { FileSignature, Plus, MoreVertical, LinkIcon, Edit2, X, FileText, Zap, CheckCircle2 } from 'lucide-react';
+import { FileSignature, Plus, MoreVertical, LinkIcon, Edit2, X, FileText, Zap, Trash2 } from 'lucide-react';
 import { getAuthHeaders, parseCurrencyToFloat } from '../utils/helpers';
 
-export default function ContractsModule({ contracts, catalogItems, hasAccess, fetchData, formatCurrency }) {
+export default function ContractsModule({ contracts, catalogItems, hasAccess, fetchData, formatCurrency, requestConfirm, registerLog }) {
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [contractMode, setContractMode] = useState('lancamento');
   const [tableContractFilter, setTableContractFilter] = useState('Todos');
@@ -11,8 +11,6 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
   const [newContract, setNewContract] = useState({ servico: '', fornecedor: '', mes_competencia: '', valor_previsto: '', valor_realizado: '', url_contrato: '' });
 
   const uniqueContractsList = useMemo(() => [...new Set(contracts.map(c => c.servico))].filter(Boolean), [contracts]);
-  
-  // Pega os serviços registrados no catálogo para auto-completar
   const catalogContracts = catalogItems?.filter(c => c.category === 'Contrato') || [];
 
   const handleExtractDataFromPDF = async (file) => {
@@ -28,7 +26,6 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
       if (!response.ok) throw new Error('Falha na análise');
       const data = await response.json();
       
-      // AUTO-PREENCHIMENTO INTELIGENTE COM O CATÁLOGO
       let valorPrevistoSugerido = '';
       const servicoNoCatalogo = catalogContracts.find(c => c.nome.toLowerCase() === (data.servico || '').toLowerCase());
       if (servicoNoCatalogo) {
@@ -67,11 +64,20 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
     } catch (error) { console.error("Erro:", error); }
   };
 
+  // NOVA FUNÇÃO: Excluir Medição
+  const handleDeleteContract = (id) => {
+    requestConfirm('Excluir Medição', 'Tem certeza que deseja excluir esta medição permanentemente?', async () => {
+      try {
+        const res = await fetch(`http://localhost:8080/api/contracts/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        if(!res.ok) throw new Error("Erro ao excluir");
+        registerLog('DELETE', 'Contratos', `Excluiu a medição ID ${id}`);
+        fetchData();
+      } catch(err) { alert(err.message); }
+    }, true, 'Excluir');
+  };
+
   const handleContractServiceSelect = (servicoName) => {
-    // 1. Tenta achar o valor no Catálogo primeiro (Prioridade)
     const servicoNoCatalogo = catalogContracts.find(c => c.nome === servicoName);
-    
-    // 2. Se não achar no catálogo, pega da última medição feita
     const base = contracts.find(c => c.servico === servicoName);
     
     if (base) {
@@ -79,7 +85,7 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
         ...prev, 
         servico: base.servico, 
         fornecedor: base.fornecedor, 
-        valor_previsto: servicoNoCatalogo ? servicoNoCatalogo.valor : base.valor_previsto, // Usa o catálogo se existir
+        valor_previsto: servicoNoCatalogo ? servicoNoCatalogo.valor : base.valor_previsto, 
         url_contrato: base.url_contrato 
       }));
     } else if (servicoNoCatalogo) {
@@ -129,7 +135,12 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
                       <div className="absolute right-8 top-10 w-56 bg-gray-900 border border-gray-700 rounded-2xl z-40 py-2 shadow-2xl text-left overflow-hidden">
                         <div className="px-4 py-2 text-[10px] font-bold text-gray-500 uppercase border-b border-gray-800 mb-1">Opções de Medição</div>
                         {c.url_contrato && (<a href={c.url_contrato} target="_blank" rel="noreferrer" className="w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-brandGreen/10 hover:text-brandGreen flex items-center gap-3 transition-colors"><LinkIcon className="w-4 h-4 text-blue-400"/> Ver PDF</a>)}
-                        {hasAccess('contracts', 'edit') && (<button onClick={() => { setOpenActionMenu(null); setEditContractData(c); setIsContractModalOpen(true); }} className="w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-yellow-400/10 hover:text-yellow-400 flex items-center gap-3 transition-colors"><Edit2 className="w-4 h-4 text-yellow-400"/> Editar Medição</button>)}
+                        {hasAccess('contracts', 'edit') && (
+                          <>
+                            <button onClick={() => { setOpenActionMenu(null); setEditContractData(c); setIsContractModalOpen(true); }} className="w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-yellow-400/10 hover:text-yellow-400 flex items-center gap-3 transition-colors"><Edit2 className="w-4 h-4 text-yellow-400"/> Editar Medição</button>
+                            <button onClick={() => { setOpenActionMenu(null); handleDeleteContract(c.id); }} className="w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-red-400/10 hover:text-red-400 flex items-center gap-3 transition-colors"><Trash2 className="w-4 h-4 text-red-500"/> Excluir Medição</button>
+                          </>
+                        )}
                       </div>
                     </>
                   )}
@@ -167,7 +178,6 @@ export default function ContractsModule({ contracts, catalogItems, hasAccess, fe
                 {contractMode === 'lancamento' && !editContractData ? (
                   <select required value={newContract.servico} onChange={(e) => handleContractServiceSelect(e.target.value)} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors cursor-pointer">
                     <option value="" disabled>Escolha o Serviço...</option>
-                    {/* Exibe serviços do catálogo + histórico de medições */}
                     {[...new Set([...catalogContracts.map(c=>c.nome), ...uniqueContractsList])].map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
