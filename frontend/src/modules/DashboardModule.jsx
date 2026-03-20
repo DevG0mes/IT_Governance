@@ -1,12 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Laptop, AlertTriangle, CheckCircle, Clock, DollarSign, PieChart, Users, Zap, Calendar, HardDrive, LayoutDashboard, Cpu, Building, Filter, Loader2 } from 'lucide-react';
+import { Laptop, AlertTriangle, CheckCircle, Clock, DollarSign, PieChart, Users, Zap, Calendar, HardDrive, LayoutDashboard, Cpu, Building, Filter, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 export default function DashboardModule({ assets, employees, licenses, contracts, catalogItems, formatCurrency, isLoading }) {
   
   const [filtroAtivo, setFiltroAtivo] = useState('Todos');
+  
+  // Controle do modal de grupos/obras
+  const [selectedGroupForModal, setSelectedGroupForModal] = useState(null);
 
-  // FILTRO BLINDADO E DUPLA VALIDAÇÃO: Garante que os dados vêm da tabela correta
+  // 👇 NOVO ESTADO: Filtro do Gráfico FinOps 👇
+  const [filtroFornecedor, setFiltroFornecedor] = useState('Todos');
+
+  // FILTRO BLINDADO E DUPLA VALIDAÇÃO (ATIVOS)
   const ativosFiltrados = useMemo(() => {
     if (!assets) return [];
     if (filtroAtivo === 'Todos') return assets;
@@ -15,7 +21,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return assets.filter(a => {
       const typeMatch = (a.asset_type || '').trim().toLowerCase() === target;
       
-      // Dupla validação: O asset_type deve bater E a tabela filha deve existir!
       if (target === 'notebook') return typeMatch && !!a.notebook;
       if (target === 'celular') return typeMatch && !!a.celular;
       if (target === 'chip') return typeMatch && !!a.chip;
@@ -25,7 +30,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     });
   }, [assets, filtroAtivo]);
 
-  // MATEMÁTICA DO DASHBOARD (Agora com base nos ativos estritamente filtrados)
+  // MATEMÁTICA DO DASHBOARD
   const stats = useMemo(() => {
     const totalAssets = ativosFiltrados.length;
     
@@ -33,10 +38,21 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       (a.status || '').trim().toLowerCase() === 'em uso'
     ).length;
     
-    const availableAssets = ativosFiltrados.filter(a => 
-      (a.status || '').trim().toLowerCase() === 'disponível' || 
-      (a.status || '').trim().toLowerCase() === 'disponivel'
-    ).length;
+    const availableAssets = ativosFiltrados.filter(a => {
+      const statusStr = (a.status || '').trim().toLowerCase();
+      const isAvailable = statusStr === 'disponível' || statusStr === 'disponivel';
+      
+      const aType = (a.asset_type || '').trim().toLowerCase();
+      
+      if (aType === 'notebook') {
+         return isAvailable;
+      }
+      
+      const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
+      const groupStr = rawGroup.trim().toLowerCase();
+      
+      return isAvailable && groupStr === 'estoque';
+    }).length;
     
     const maintenanceAssets = ativosFiltrados.filter(a => 
       (a.status || '').trim().toLowerCase() === 'manutenção' ||
@@ -57,7 +73,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return { totalAssets, activeAssets, availableAssets, maintenanceAssets, expiringChips, totalEmployees, activeEmployees, activeLicensesCount, monthlyLicenseCost };
   }, [ativosFiltrados, employees, licenses]);
 
-  // AGRUPAMENTO DE OBRAS (Também com validação rigorosa)
+  // AGRUPAMENTO DE OBRAS
   const groupStats = useMemo(() => {
     const groups = {};
     if (assets) {
@@ -69,7 +85,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
               groups[groupName].total += 1;
               const aType = (a.asset_type || '').trim().toLowerCase();
               
-              // Só soma se existir na respectiva tabela do banco
               if (aType === 'celular' && a.celular) groups[groupName].celular += 1;
               if (aType === 'chip' && a.chip) groups[groupName].chip += 1;
               if (aType === 'starlink' && a.starlink) groups[groupName].starlink += 1;
@@ -79,27 +94,49 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return Object.entries(groups).sort((a,b) => b[1].total - a[1].total);
   }, [assets]);
 
-  // CÁLCULO DE CONTRATOS
+  // FILTRA OS ATIVOS ESPECÍFICOS DO GRUPO CLICADO PARA O MODAL
+  const assetsInSelectedGroup = useMemo(() => {
+    if (!selectedGroupForModal || !assets) return [];
+    return assets.filter(a => {
+      const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
+      return rawGroup.trim() === selectedGroupForModal;
+    });
+  }, [assets, selectedGroupForModal]);
+
+  // 👇 EXTRAÇÃO DE FORNECEDORES ÚNICOS PARA O SELECT 👇
+  const fornecedoresUnicos = useMemo(() => {
+    if (!contracts) return ['Todos'];
+    const list = contracts.map(c => (c.fornecedor || 'Desconhecido').trim()).filter(Boolean);
+    return ['Todos', ...new Set(list)].sort();
+  }, [contracts]);
+
+  // 👇 CÁLCULO DE CONTRATOS (AGORA COM FILTRO DE FORNECEDOR) 👇
   const contractChartData = useMemo(() => {
     const dataMap = {};
     if (contracts) {
-      contracts.forEach(c => {
+      
+      // Aplica o filtro selecionado pelo usuário
+      let dadosFiltrados = contracts;
+      if (filtroFornecedor !== 'Todos') {
+          dadosFiltrados = dadosFiltrados.filter(c => (c.fornecedor || 'Desconhecido').trim() === filtroFornecedor);
+      }
+
+      dadosFiltrados.forEach(c => {
         if (!dataMap[c.mes_competencia]) dataMap[c.mes_competencia] = { name: c.mes_competencia, Previsto: 0, Realizado: 0 };
         dataMap[c.mes_competencia].Previsto += parseFloat(c.valor_previsto || 0);
         dataMap[c.mes_competencia].Realizado += parseFloat(c.valor_realizado || 0);
       });
     }
     return Object.values(dataMap).sort((a, b) => a.name.localeCompare(b.name));
-  }, [contracts]);
+  }, [contracts, filtroFornecedor]);
 
-  // VALUATION CRUZADO (Garante que só pega o modelo real da tabela existente)
+  // VALUATION CRUZADO
   const valuationTotal = useMemo(() => {
     let total = 0;
     ativosFiltrados.forEach(a => {
         const aType = (a.asset_type || '').trim().toLowerCase();
         let catModel = '';
         
-        // Pega o modelo exclusivamente da sua respectiva tabela
         if (aType === 'notebook' && a.notebook) catModel = a.notebook.modelo;
         else if (aType === 'celular' && a.celular) catModel = a.celular.modelo;
         else if (aType === 'starlink' && a.starlink) catModel = a.starlink.modelo;
@@ -153,12 +190,12 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
 
         <div className="text-right bg-gray-900/50 p-4 rounded-2xl border border-gray-800">
-            <p className="text-sm text-gray-500 font-bold uppercase tracking-wider">Valuation do Parque (Baseado no Catálogo)</p>
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-wider">Valuation do Parque (Catálogo)</p>
             <p className="text-3xl font-bold text-brandGreen drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">{formatCurrency(valuationTotal)}</p>
         </div>
       </div>
 
-      {/* CARDS SUPERIORES COM EFEITO HOVER ADICIONADO */}
+      {/* CARDS SUPERIORES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-gray-900/80 border border-gray-800 p-6 rounded-3xl shadow-xl hover:-translate-y-1 hover:shadow-brandGreen/10 hover:border-brandGreen/30 transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
@@ -199,25 +236,61 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
       {/* GRÁFICOS E LICENÇAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2"><PieChart className="text-brandGreen w-6 h-6"/> FinOps: Previsto vs Realizado (Contratos)</h3>
+        
+        {/* 👇 GRÁFICO FINOPS (AGORA COM FILTRO) 👇 */}
+        <div className="lg:col-span-2 bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl flex flex-col transition-all duration-300">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <PieChart className="text-brandGreen w-6 h-6"/> FinOps: Previsto vs Realizado
+            </h3>
+            
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Filter className="text-gray-400 w-4 h-4"/>
+                <select 
+                    value={filtroFornecedor} 
+                    onChange={(e) => setFiltroFornecedor(e.target.value)}
+                    className="bg-black border border-gray-700 text-sm rounded-xl px-4 py-2 text-gray-300 outline-none hover:border-brandGreen focus:border-brandGreen transition-colors cursor-pointer w-full sm:w-auto min-w-[200px]"
+                >
+                    {fornecedoresUnicos.map((forn, idx) => (
+                        <option key={idx} value={forn}>{forn === 'Todos' ? 'Todos os Fornecedores' : forn}</option>
+                    ))}
+                </select>
+            </div>
           </div>
+          
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={contractChartData}>
-                <defs>
-                  <linearGradient id="colorPrevisto" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4B5563" stopOpacity={0.3}/><stop offset="95%" stopColor="#4B5563" stopOpacity={0}/></linearGradient>
-                  <linearGradient id="colorRealizado" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.5}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                <XAxis dataKey="name" stroke="#9CA3AF" tick={{fill: '#9CA3AF', fontSize: 12}} dy={10} />
-                <YAxis stroke="#9CA3AF" tick={{fill: '#9CA3AF', fontSize: 12}} tickFormatter={(value) => `R$ ${value}`} />
-                <RechartsTooltip contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff', borderRadius: '12px' }} formatter={(value) => formatCurrency(value)} />
-                <Area type="monotone" dataKey="Previsto" stroke="#9CA3AF" strokeWidth={2} fillOpacity={1} fill="url(#colorPrevisto)" />
-                <Area type="monotone" dataKey="Realizado" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorRealizado)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {contractChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={contractChartData}>
+                    <defs>
+                      <linearGradient id="colorPrevisto" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4B5563" stopOpacity={0.3}/><stop offset="95%" stopColor="#4B5563" stopOpacity={0}/></linearGradient>
+                      <linearGradient id="colorRealizado" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10B981" stopOpacity={0.5}/><stop offset="95%" stopColor="#10B981" stopOpacity={0}/></linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{fill: '#9CA3AF', fontSize: 12}} dy={10} />
+                    <YAxis 
+                        stroke="#9CA3AF" 
+                        tick={{fill: '#9CA3AF', fontSize: 12}} 
+                        tickFormatter={(value) => {
+                            if(value >= 1000000) return `R$ ${(value/1000000).toFixed(1)}M`;
+                            if(value >= 1000) return `R$ ${(value/1000).toFixed(0)}k`;
+                            return `R$ ${value}`;
+                        }} 
+                    />
+                    <RechartsTooltip 
+                        contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff', borderRadius: '12px' }} 
+                        formatter={(value) => formatCurrency(value)} 
+                    />
+                    <Area type="monotone" dataKey="Previsto" stroke="#9CA3AF" strokeWidth={2} fillOpacity={1} fill="url(#colorPrevisto)" />
+                    <Area type="monotone" dataKey="Realizado" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorRealizado)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 italic text-sm border-2 border-dashed border-gray-800 rounded-xl">
+                    <PieChart className="w-10 h-10 text-gray-700 mb-2" />
+                    Nenhuma medição encontrada para este filtro.
+                </div>
+            )}
           </div>
         </div>
 
@@ -244,13 +317,17 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       </div>
 
-      {/* SESSÃO DINÂMICA DE OBRAS / GRUPOS COM EFEITO HOVER ADICIONADO */}
+      {/* SESSÃO DINÂMICA DE OBRAS / GRUPOS */}
       <div className="mt-8">
         <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><Building className="w-7 h-7 text-brandGreen"/> Distribuição por Grupos / Obras</h3>
         {groupStats.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {groupStats.map(([groupName, counts]) => (
-              <div key={groupName} className="bg-gray-900/80 border border-gray-800 p-5 rounded-2xl hover:border-brandGreen/50 hover:-translate-y-1 hover:shadow-lg hover:shadow-brandGreen/10 transition-all duration-300 group">
+              <div 
+                key={groupName} 
+                onClick={() => setSelectedGroupForModal(groupName)}
+                className="bg-gray-900/80 border border-gray-800 p-5 rounded-2xl cursor-pointer hover:border-brandGreen/50 hover:-translate-y-1 hover:shadow-lg hover:shadow-brandGreen/10 transition-all duration-300 group"
+              >
                 <h4 className="text-white font-bold text-lg mb-3 group-hover:text-brandGreen transition-colors truncate" title={groupName}>{groupName}</h4>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-gray-400 text-xs">Total de Ativos</span>
@@ -271,6 +348,86 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         )}
       </div>
 
+      {/* MODAL DE DETALHAMENTO DO GRUPO */}
+      {selectedGroupForModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-4xl shadow-2xl max-h-[80vh] flex flex-col">
+            
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                <Building className="w-6 h-6 text-brandGreen"/> 
+                Ativos do Grupo: <span className="text-brandGreen">{selectedGroupForModal}</span>
+              </h2>
+              <button onClick={() => setSelectedGroupForModal(null)} className="text-gray-400 hover:text-white transition-colors p-2">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto custom-scrollbar flex-1 pr-2">
+              <table className="w-full text-left text-sm text-gray-300">
+                <thead className="bg-black/60 border-b border-gray-800 uppercase text-xs sticky top-0 z-10 backdrop-blur-sm">
+                  <tr>
+                    <th className="px-4 py-4">Tipo</th>
+                    <th className="px-4 py-4">Identificador / Modelo</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Responsável</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/50">
+                  {assetsInSelectedGroup.length > 0 ? assetsInSelectedGroup.map(a => {
+                    const type = a.asset_type;
+                    let ident = '';
+                    let extra = '';
+                    let resp = '';
+
+                    if (type === 'Celular') {
+                        ident = a.celular?.imei ? `IMEI: ${a.celular.imei}` : '-';
+                        extra = a.celular?.modelo || '';
+                        resp = a.celular?.responsavel || '-';
+                    } else if (type === 'CHIP') {
+                        ident = a.chip?.numero ? `Nº: ${a.chip.numero}` : '-';
+                        extra = a.chip?.plano || '';
+                        resp = a.chip?.responsavel || '-';
+                    } else if (type === 'Starlink') {
+                        ident = a.starlink?.modelo || '-';
+                        extra = a.starlink?.localizacao || '';
+                        resp = a.starlink?.responsavel || '-';
+                    }
+
+                    const statusStr = (a.status || '').trim().toLowerCase();
+
+                    return (
+                      <tr key={a.id} className="hover:bg-gray-800/80 transition-colors">
+                        <td className="px-4 py-3 font-bold text-white">{type}</td>
+                        <td className="px-4 py-3">
+                          <p className="text-gray-200 font-semibold">{ident}</p>
+                          {extra && <p className="text-xs text-gray-500">{extra}</p>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 border rounded-full text-[10px] font-bold uppercase ${statusStr === 'disponível' || statusStr === 'disponivel' ? 'border-brandGreen/30 text-brandGreen' : statusStr === 'manutenção' || statusStr === 'manutencao' ? 'border-yellow-500/30 text-yellow-500' : 'border-gray-600 text-gray-400'}`}>
+                            {a.status || 'Indefinido'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-sm font-medium">{resp}</td>
+                      </tr>
+                    )
+                  }) : (
+                    <tr>
+                      <td colSpan="4" className="text-center py-10 text-gray-500 italic">Nenhum ativo detalhado encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
+
 }
+
+
+

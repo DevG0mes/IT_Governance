@@ -50,6 +50,8 @@ type AssetStarlink struct {
 	Email         string `gorm:"column:email" json:"email"`
 	Senha         string `gorm:"column:senha" json:"senha"`
 	SenhaRoteador string `gorm:"column:senha_roteador" json:"senha_roteador"`
+	Projeto          string `gorm:"column:projeto" json:"projeto"`
+    EmailResponsavel string `gorm:"column:email_responsavel" json:"email_responsavel"`
 }
 
 type AssetCelular struct {

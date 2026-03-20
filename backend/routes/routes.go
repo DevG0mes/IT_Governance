@@ -2,7 +2,7 @@ package routes
 
 import (
 	"governanca-ti/controllers"
-
+	"governanca-ti/handlers"
 	"github.com/gin-gonic/gin"
 )
 
@@ -63,8 +63,9 @@ func SetupRouter() *gin.Engine {
 		api.POST("/contracts", controllers.CreateContract)
 		api.PUT("/contracts/:id", controllers.UpdateContract)
 		api.DELETE("/contracts/:id", controllers.DeleteContract)
-		// 📄 Rota de análise (Movida para o grupo api para consistência)
-		api.POST("/contracts/analyze-pdf", controllers.AnalyzeContractPDF)
+		
+		// 📄 Rota de análise de PDF OCR (Única e Absoluta)
+		api.POST("/contracts/analyze-pdf", handlers.AnalyzePDF)
 
 		// --- Auditoria ---
 		api.GET("/audit-logs", controllers.GetAuditLogs)

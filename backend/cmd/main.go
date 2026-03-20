@@ -5,7 +5,6 @@ import (
 
 	"governanca-ti/config"
 	"governanca-ti/routes"
-
 	"github.com/joho/godotenv"
 )
 

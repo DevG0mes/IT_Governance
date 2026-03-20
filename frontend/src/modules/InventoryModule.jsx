@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Laptop, Smartphone, Wifi, Cpu, Search, X, ArrowDownAZ, ArrowUpZA, Trash2, MoreVertical, Info, Clock, CheckCircle, LogOut, ShieldAlert, AlertTriangle, Users, Wrench, RefreshCw, Loader2 } from 'lucide-react';
+import { Database, Laptop, Smartphone, Wifi, Cpu, Search, X, ArrowDownAZ, ArrowUpZA, Trash2, MoreVertical, Info, Clock, CheckCircle, LogOut, ShieldAlert, AlertTriangle, Users, Wrench, RefreshCw, Loader2, Edit2, UserPlus } from 'lucide-react';
 import { getAuthHeaders, formatCurrency } from '../utils/helpers';
 
 export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading }) {
@@ -10,33 +10,39 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
 
-  const getInitialAsset = (type) => ({ asset_type: type === 'Todos' ? 'Notebook' : type, status: 'Disponível', serial_number: '', patrimonio: '', modelo_notebook: '', garantia: '', status_garantia: 'No prazo', grupo: '', localizacao: '', email: '', senha: '', senha_roteador: '', responsavel: '', imei: '', numero: '', iccid: '', modelo_celular: '', plano: '', vencimento_plano: '' });
+  const getInitialAsset = (type) => ({ asset_type: type === 'Todos' ? 'Notebook' : type, status: 'Disponível', serial_number: '', patrimonio: '', modelo_notebook: '', garantia: '', status_garantia: 'No prazo', grupo: '', localizacao: '', projeto: '', modelo_starlink: '', email: '', senha: '', senha_roteador: '', responsavel: '', imei: '', numero: '', iccid: '', modelo_celular: '', plano: '', vencimento_plano: '' });
   const [newAsset, setNewAsset] = useState(getInitialAsset('Todos'));
+  
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
-  const [viewAssetDetails, setViewAssetDetails] = useState(null);
+  const [isEditingAsset, setIsEditingAsset] = useState(false); 
   const [activeAsset, setActiveAsset] = useState(null);
+  
+  const [viewAssetDetails, setViewAssetDetails] = useState(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  
   const [isAssignAssetModalOpen, setIsAssignAssetModalOpen] = useState(false);
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
+  const [newEmployeeForAssign, setNewEmployeeForAssign] = useState({ nome: '', email: '', departamento: '' });
   
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
   const [statusModalData, setStatusModalData] = useState(null);
 
+  const extractError = async (res, defaultMsg) => {
+    try { const data = await res.json(); return data.error || defaultMsg; } 
+    catch (e) { return `${defaultMsg} (Erro no Servidor. Verifique o terminal do Go ou Banco de Dados)`, e; }
+  };
+
   const safeAssets = assets || [];
   
-  // Filtro Blindado: Ignora letras maiúsculas/minúsculas e espaços em branco perdidos
   let filteredAssets = safeAssets.filter(a => { 
     if (!a) return false;
-    
     const assetType = (a.asset_type || '').trim().toLowerCase();
     const targetCategory = selectedCategory.trim().toLowerCase();
     const matchCategory = selectedCategory === 'Todos' ? true : assetType === targetCategory; 
-    
     const assetStatus = (a.status || '').trim().toLowerCase();
     const targetStatus = assetStatusFilter.trim().toLowerCase();
     const matchStatus = assetStatusFilter === 'Todos' ? true : assetStatus === targetStatus; 
-    
     return matchCategory && matchStatus; 
   });
   
@@ -49,6 +55,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
       a?.chip?.numero?.toLowerCase().includes(term) || 
       a?.chip?.iccid?.toLowerCase().includes(term) || 
       a?.starlink?.grupo?.toLowerCase().includes(term) ||
+      a?.starlink?.projeto?.toLowerCase().includes(term) ||
       a?.celular?.grupo?.toLowerCase().includes(term) ||
       a?.chip?.grupo?.toLowerCase().includes(term)
     )); 
@@ -63,15 +70,64 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredAssets.length && filteredAssets.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredAssets.map(item => item.id));
 
+  const openEditModal = (asset) => {
+      const flatAsset = {
+          id: asset.id,
+          asset_type: asset.asset_type,
+          status: asset.status,
+          patrimonio: asset.notebook?.patrimonio || '',
+          serial_number: asset.notebook?.serial_number || '',
+          modelo_notebook: asset.notebook?.modelo || '',
+          garantia: asset.notebook?.garantia || '',
+          status_garantia: asset.notebook?.status_garantia || 'No prazo',
+          imei: asset.celular?.imei || '',
+          modelo_celular: asset.celular?.modelo || '',
+          numero: asset.chip?.numero || '',
+          iccid: asset.chip?.iccid || '',
+          plano: asset.chip?.plano || '',
+          vencimento_plano: asset.chip?.vencimento_plano || '',
+          localizacao: asset.starlink?.localizacao || '',
+          projeto: asset.starlink?.projeto || '',
+          modelo_starlink: asset.starlink?.modelo || '',
+          email: asset.starlink?.email || '',
+          senha: asset.starlink?.senha || '',
+          senha_roteador: asset.starlink?.senha_roteador || '',
+          grupo: asset.celular?.grupo || asset.chip?.grupo || asset.starlink?.grupo || '',
+          responsavel: asset.celular?.responsavel || asset.chip?.responsavel || asset.starlink?.responsavel || ''
+      };
+      setNewAsset(flatAsset);
+      setIsEditingAsset(true);
+      setActiveAsset(asset);
+      setIsAssetModalOpen(true);
+  };
+
   const handleCreateAsset = async (e) => { 
     e.preventDefault(); 
     const statusInicial = newAsset.grupo?.trim() && !['Renovação', 'Manutenção'].includes(newAsset.status) ? 'Em uso' : newAsset.status; 
     try {
       const res = await fetch('http://localhost:8080/api/assets', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({...newAsset, status: statusInicial}) });
-      if(!res.ok) throw new Error((await res.json()).error || 'Erro ao criar');
+      if(!res.ok) throw new Error(await extractError(res, 'Erro ao criar equipamento'));
+      
       registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); 
       setIsAssetModalOpen(false); 
       fetchData(); 
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleUpdateAsset = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch(`http://localhost:8080/api/assets/${activeAsset.id}`, { 
+            method: 'PUT', 
+            headers: getAuthHeaders(), 
+            body: JSON.stringify(newAsset) 
+        });
+        if (!res.ok) throw new Error(await extractError(res, 'Erro ao atualizar equipamento'));
+        
+        registerLog('UPDATE', 'Inventário', `Atualizou os dados do ativo ID ${activeAsset.id}`);
+        setIsAssetModalOpen(false);
+        setIsEditingAsset(false);
+        fetchData();
     } catch (err) { alert(err.message); }
   };
 
@@ -80,7 +136,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     requestConfirm('Confirmar Ação', `Deseja aplicar esta ação no equipamento?`, async () => { 
       try {
         const res = await fetch(`http://localhost:8080/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
-        if(!res.ok) throw new Error((await res.json()).error);
+        if(!res.ok) throw new Error(await extractError(res, 'Erro ao aplicar ação'));
+        
         registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); 
         fetchData(); 
       } catch (err) { alert(err.message); }
@@ -90,11 +147,31 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const submitAssignment = async (e) => { 
     e.preventDefault(); 
     try {
-      const res = await fetch(`http://localhost:8080/api/employees/${selectedItemForAssign}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: activeAsset.id }) });
-      if(!res.ok) throw new Error((await res.json()).error);
-      registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${activeAsset.id} ao colab ID ${selectedItemForAssign}`); 
+      let targetEmpId = selectedItemForAssign;
+
+      if (targetEmpId === 'NEW') {
+          const createRes = await fetch('http://localhost:8080/api/employees', { 
+              method: 'POST', 
+              headers: getAuthHeaders(), 
+              body: JSON.stringify(newEmployeeForAssign) 
+          });
+          if (!createRes.ok) throw new Error(await extractError(createRes, "Erro ao cadastrar o novo colaborador."));
+          const createData = await createRes.json();
+          targetEmpId = createData.data.id; 
+          registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployeeForAssign.nome} via Atribuição`);
+      }
+
+      const res = await fetch(`http://localhost:8080/api/employees/${targetEmpId}/assign`, { 
+          method: 'PUT', 
+          headers: getAuthHeaders(), 
+          body: JSON.stringify({ asset_id: activeAsset.id }) 
+      });
+      if(!res.ok) throw new Error(await extractError(res, "Erro ao atribuir equipamento"));
+      
+      registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${activeAsset.id} ao colab ID ${targetEmpId}`); 
       setIsAssignAssetModalOpen(false); 
       setSelectedItemForAssign(''); 
+      setNewEmployeeForAssign({nome: '', email: '', departamento: ''});
       fetchData(); 
     } catch(err) { alert(err.message); }
   };
@@ -103,7 +180,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault();
     try {
       const res = await fetch(`http://localhost:8080/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(maintenanceForm) });
-      if(!res.ok) throw new Error((await res.json()).error);
+      if(!res.ok) throw new Error(await extractError(res, 'Erro ao enviar para manutenção'));
+      
       registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); 
       setIsMaintenanceModalOpen(false); 
       setMaintenanceForm({chamado: '', observacao: ''}); 
@@ -121,7 +199,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } 
     try {
       const res = await fetch(`http://localhost:8080/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) });
-      if(!res.ok) throw new Error((await res.json()).error);
+      if(!res.ok) throw new Error(await extractError(res, 'Erro ao alterar status'));
+      
       registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); 
       setStatusModalData(null); 
       fetchData();
@@ -148,7 +227,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     <div className="flex flex-col lg:flex-row gap-8 items-start animate-fade-in">
       <div className="w-full lg:w-64 flex-shrink-0 flex flex-col gap-3">
         {hasAccess('inventory', 'edit') && (
-          <button onClick={() => { setNewAsset(getInitialAsset(selectedCategory)); setIsAssetModalOpen(true); }} className="mb-4 bg-brandGreen hover:bg-brandGreenHover text-white px-6 py-3 rounded-2xl font-bold shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all w-full text-center hover:-translate-y-1">+ Novo Ativo</button>
+          <button onClick={() => { setIsEditingAsset(false); setNewAsset(getInitialAsset(selectedCategory)); setIsAssetModalOpen(true); }} className="mb-4 bg-brandGreen hover:bg-brandGreenHover text-white px-6 py-3 rounded-2xl font-bold shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all w-full text-center hover:-translate-y-1">+ Novo Ativo</button>
         )}
         {[{ name: 'Todos', icon: <Database className="w-5 h-5" /> }, { name: 'Notebook', icon: <Laptop className="w-5 h-5" /> }, { name: 'Celular', icon: <Smartphone className="w-5 h-5" /> }, { name: 'Starlink', icon: <Wifi className="w-5 h-5" /> }, { name: 'CHIP', icon: <Cpu className="w-5 h-5" /> }].map(cat => (
           <button key={cat.name} onClick={() => setSelectedCategory(cat.name)} className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-left font-medium transition-all border ${selectedCategory === cat.name ? 'bg-gray-800 text-brandGreen border-brandGreen/30 shadow-lg' : 'text-gray-400 hover:bg-gray-900 hover:text-white border-transparent'}`}>{cat.icon} {cat.name}</button>
@@ -159,7 +238,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
           <div className="w-full md:flex-1 flex items-center gap-3 bg-gray-900/80 border border-gray-700 rounded-full px-4 py-2.5 focus-within:border-brandGreen transition-colors">
             <Search className="w-5 h-5 text-gray-400" />
-            <input type="text" placeholder="Buscar Patrimônio, Grupo, ICCID..." value={inventorySearchTerm} onChange={(e) => setInventorySearchTerm(e.target.value)} className="bg-transparent text-white outline-none w-full text-sm" />
+            <input type="text" placeholder="Buscar Patrimônio, Grupo, ICCID, Projeto..." value={inventorySearchTerm} onChange={(e) => setInventorySearchTerm(e.target.value)} className="bg-transparent text-white outline-none w-full text-sm" />
             {inventorySearchTerm && <button onClick={() => setInventorySearchTerm('')} className="text-gray-500 hover:text-white"><X className="w-4 h-4"/></button>}
           </div>
           <div className="flex w-full md:w-auto gap-2">
@@ -186,7 +265,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           </div>
         )}
 
-        <div className="bg-gray-900/80 border border-gray-800 rounded-3xl overflow-hidden min-h-[400px] relative">
+        {/* Removido o overflow-hidden para não cortar o menu */}
+        <div className="bg-gray-900/80 border border-gray-800 rounded-3xl min-h-[400px] relative">
           {isLoading ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm z-20">
               <Loader2 className="w-12 h-12 text-brandGreen animate-spin mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
@@ -197,18 +277,22 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           <table className="w-full text-left text-sm text-gray-300">
             <thead className="bg-black/60 border-b border-gray-800 uppercase text-xs">
               <tr>
-                <th className="px-6 py-4 w-12">{hasAccess('inventory', 'edit') && <input type="checkbox" checked={selectedIds.length === filteredAssets.length && filteredAssets.length > 0} onChange={toggleAll} className="accent-brandGreen cursor-pointer w-4 h-4" />}</th>
-                <th className="px-6 py-4">Equipamento</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Identificador / Grupo</th><th className="px-6 py-4 text-center">Ações</th>
+                <th className="px-6 py-4 w-12 rounded-tl-3xl">{hasAccess('inventory', 'edit') && <input type="checkbox" checked={selectedIds.length === filteredAssets.length && filteredAssets.length > 0} onChange={toggleAll} className="accent-brandGreen cursor-pointer w-4 h-4" />}</th>
+                <th className="px-6 py-4">Equipamento</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Identificador / Grupo</th><th className="px-6 py-4 text-center rounded-tr-3xl">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/50">
-              {assets && filteredAssets.length > 0 ? filteredAssets.map(asset => { 
+              {assets && filteredAssets.length > 0 ? filteredAssets.map((asset, idx) => { 
                 if (!asset) return null;
                 const activeAsg = asset.assignments?.find(a => !a.returned_at); 
                 const ownerName = activeAsg?.employee?.nome || asset.celular?.responsavel || asset.chip?.responsavel || asset.starlink?.responsavel; 
                 const groupName = asset.celular?.grupo || asset.chip?.grupo || asset.starlink?.grupo;
                 let catModel = asset.notebook?.modelo || asset.celular?.modelo || asset.starlink?.modelo || asset.chip?.plano || '';
                 const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
+
+                // 👇 Lógica Inteligente: Se for uma das últimas linhas da tabela, o menu abre para CIMA 👇
+                const isLastRows = idx >= filteredAssets.length - 2 && filteredAssets.length > 2;
+                const menuPositionClass = isLastRows ? "bottom-10 right-8 origin-bottom-right" : "top-10 right-8 origin-top-right";
 
                 return (
                   <tr key={asset.id} className="hover:bg-gray-800/80 transition-colors">
@@ -223,7 +307,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                       {asset.asset_type === 'Notebook' && asset.notebook && (<div><p className="font-semibold text-gray-200">{asset.notebook.patrimonio}</p><p className="text-xs text-gray-500">SN: {asset.notebook.serial_number}</p></div>)}
                       {asset.asset_type === 'Celular' && asset.celular && (<div><p className="font-semibold text-gray-200">IMEI: {asset.celular.imei}</p></div>)}
                       {asset.asset_type === 'CHIP' && asset.chip && (<div><p className="font-semibold text-gray-200">Nº: {asset.chip.numero}</p>{asset.chip.iccid && <p className="text-xs text-gray-500">ICCID: {asset.chip.iccid}</p>}</div>)}
-                      {asset.asset_type === 'Starlink' && asset.starlink && (<div><p className="font-semibold text-gray-200">{asset.starlink.modelo}</p></div>)}
+                      {asset.asset_type === 'Starlink' && asset.starlink && (<div><p className="font-semibold text-gray-200">{asset.starlink.modelo}</p>{asset.starlink.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {asset.starlink.projeto}</p>}</div>)}
                       
                       {groupName && <p className="text-[10px] bg-gray-800 text-brandGreen px-2 py-0.5 rounded inline-block mt-1 mr-2 border border-brandGreen/20">{groupName}</p>}
                       {asset.chip?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {asset.chip.vencimento_plano}</p>}
@@ -231,15 +315,25 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                     </td>
                     <td className="px-6 py-4 text-center relative">
                       <button onClick={() => setOpenActionMenu(openActionMenu === asset.id ? null : asset.id)} className="p-2 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-white transition-colors"><MoreVertical className="w-5 h-5" /></button>
+                      
+                      {/* 👇 Menu 3 Pontos com Posicionamento Inteligente (menuPositionClass) 👇 */}
                       {openActionMenu === asset.id && (
-                        <div className="absolute right-8 top-10 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-40 py-2 text-left animate-fade-in-up">
+                        <div className={`absolute ${menuPositionClass} w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] py-2 text-left animate-fade-in-up`}>
                           <button onClick={() => { setOpenActionMenu(null); setViewAssetDetails({...asset, catalogValue: mappedCatalog?.valor}); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Info className="w-4 h-4 text-blue-400"/> Detalhes</button>
-                          <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsHistoryModalOpen(true); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Clock className="w-4 h-4 text-purple-400"/> Histórico</button>
+                          
+                          {hasAccess('inventory', 'edit') && (
+                            <button onClick={() => { setOpenActionMenu(null); openEditModal(asset); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Edit2 className="w-4 h-4 text-purple-400"/> Editar Equipamento</button>
+                          )}
+
+                          <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsHistoryModalOpen(true); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Clock className="w-4 h-4 text-pink-400"/> Histórico</button>
                           
                           {hasAccess('inventory', 'edit') && !['Descartado', 'Inutilizado', 'Extraviado/Roubado'].includes(asset.status) && (
                             <>
                               <div className="border-t border-gray-700 my-1"></div>
-                              {asset.status === 'Disponível' && asset.asset_type !== 'Starlink' && <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsAssignAssetModalOpen(true); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><CheckCircle className="w-4 h-4 text-brandGreen"/> Atribuir a Alguém</button>}
+                              
+                              {/* 👇 Botão de Atribuir agora liberado para Starlinks e todos os disponíveis 👇 */}
+                              {asset.status === 'Disponível' && <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsAssignAssetModalOpen(true); setSelectedItemForAssign(''); setNewEmployeeForAssign({nome:'', email:'', departamento:''}); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><CheckCircle className="w-4 h-4 text-brandGreen"/> Atribuir a Alguém</button>}
+                              
                               {asset.status === 'Em uso' && <button onClick={() => handleAction(asset.id, 'unassign')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><LogOut className="w-4 h-4 text-red-400"/> Devolver para Estoque</button>}
                               
                               {asset.asset_type === 'CHIP' && asset.status !== 'Renovação' && <button onClick={() => openStatusModal(asset, 'Renovação')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><RefreshCw className="w-4 h-4 text-blue-400"/> Marcar p/ Renovação</button>}
@@ -269,46 +363,86 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       </div>
 
-      {/* MODAL NOVO ATIVO */}
+      {/* MODAL NOVO/EDITAR ATIVO */}
       {isAssetModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white">Novo Equipamento</h2><button onClick={() => setIsAssetModalOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X/></button></div>
-            <form onSubmit={handleCreateAsset} className="flex flex-col gap-4">
-              <select required value={newAsset.asset_type} onChange={(e) => setNewAsset({...newAsset, asset_type: e.target.value})} className="w-full bg-black/50 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none cursor-pointer">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl my-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                {isEditingAsset ? <Edit2 className="w-5 h-5 text-purple-400" /> : null} 
+                {isEditingAsset ? 'Editar Equipamento' : 'Novo Equipamento'}
+              </h2>
+              <button onClick={() => setIsAssetModalOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X/></button>
+            </div>
+            
+            <form onSubmit={isEditingAsset ? handleUpdateAsset : handleCreateAsset} className="flex flex-col gap-4">
+              <select required disabled={isEditingAsset} value={newAsset.asset_type} onChange={(e) => setNewAsset({...newAsset, asset_type: e.target.value})} className={`w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none ${isEditingAsset ? 'opacity-50 cursor-not-allowed' : 'hover:border-brandGreen/50 focus:border-brandGreen cursor-pointer transition-colors'}`}>
                 <option value="Notebook">Notebook</option><option value="Celular">Celular</option><option value="Starlink">Starlink</option><option value="CHIP">CHIP</option>
               </select>
               
               {newAsset.asset_type === 'Notebook' && (<><input type="text" required placeholder="Patrimônio (Ex: PSI-001)" value={newAsset.patrimonio} onChange={(e) => setNewAsset({...newAsset, patrimonio: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="text" required placeholder="Serial Number" value={newAsset.serial_number} onChange={(e) => setNewAsset({...newAsset, serial_number: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /></>)}
               {newAsset.asset_type === 'Celular' && (<input type="text" placeholder="IMEI (Opcional)" value={newAsset.imei} onChange={(e) => setNewAsset({...newAsset, imei: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />)}
               {newAsset.asset_type === 'CHIP' && (<><input type="text" required placeholder="Número da Linha" value={newAsset.numero} onChange={(e) => setNewAsset({...newAsset, numero: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="text" placeholder="ICCID (Opcional)" value={newAsset.iccid} onChange={(e) => setNewAsset({...newAsset, iccid: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="date" placeholder="Vencimento do Plano" value={newAsset.vencimento_plano} onChange={(e) => setNewAsset({...newAsset, vencimento_plano: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-gray-400 outline-none" title="Vencimento do Plano"/></>)}
-              {newAsset.asset_type === 'Starlink' && (<input type="text" required placeholder="Localização" value={newAsset.localizacao} onChange={(e) => setNewAsset({...newAsset, localizacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />)}
+              
+              {/* Box de Edição da Starlink com Projeto acessível */}
+              {newAsset.asset_type === 'Starlink' && (
+                <>
+                  <input type="text" required placeholder="Modelo (Ex: Kit V2, Actuated)" value={newAsset.modelo_starlink || ''} onChange={(e) => setNewAsset({...newAsset, modelo_starlink: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <input type="text" required placeholder="Localização" value={newAsset.localizacao} onChange={(e) => setNewAsset({...newAsset, localizacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <input type="text" placeholder="Projeto (Ex: Parque Eólico Ventos)" value={newAsset.projeto || ''} onChange={(e) => setNewAsset({...newAsset, projeto: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  
+                  <div className="border-t border-gray-800 pt-3 mt-1">
+                    <p className="text-xs text-gray-500 mb-2">Credenciais de Acesso (Opcional)</p>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <input type="email" placeholder="E-mail da Conta" value={newAsset.email} onChange={(e) => setNewAsset({...newAsset, email: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none text-sm" />
+                      <input type="text" placeholder="Senha da Conta" value={newAsset.senha} onChange={(e) => setNewAsset({...newAsset, senha: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none text-sm" />
+                    </div>
+                    <input type="text" placeholder="Senha da Rede Wi-Fi" value={newAsset.senha_roteador} onChange={(e) => setNewAsset({...newAsset, senha_roteador: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
+                </>
+              )}
               
               {['Celular', 'Starlink', 'CHIP'].includes(newAsset.asset_type) && (
                 <div className="border-t border-gray-800 pt-4 mt-2">
                   <p className="text-xs text-gray-500 mb-2">Agrupamento (Obras/Setores)</p>
                   <input type="text" placeholder="Grupo (Ex: Obra Jundiaí)" value={newAsset.grupo} onChange={(e) => setNewAsset({...newAsset, grupo: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white mb-3 outline-none" />
-                  <input type="text" placeholder="Responsável Local" value={newAsset.responsavel} onChange={(e) => setNewAsset({...newAsset, responsavel: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <input type="text" placeholder="Responsável Local (Nome)" value={newAsset.responsavel} onChange={(e) => setNewAsset({...newAsset, responsavel: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
                 </div>
               )}
 
-              <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Salvar Ativo</button>
+              <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">
+                {isEditingAsset ? 'Salvar Alterações' : 'Salvar Ativo'}
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL ATRIBUIR ATIVO */}
+      {/* MODAL ATRIBUIR ATIVO COM OPÇÃO DE NOVO COLABORADOR */}
       {isAssignAssetModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-white">Atribuir Equipamento</h2><button onClick={() => setIsAssignAssetModalOpen(false)} className="text-gray-400 hover:text-white"><X/></button></div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Atribuir Equipamento</h2>
+              <button onClick={() => setIsAssignAssetModalOpen(false)} className="text-gray-400 hover:text-white"><X/></button>
+            </div>
             <form onSubmit={submitAssignment} className="flex flex-col gap-4">
               <select required value={selectedItemForAssign} onChange={(e) => setSelectedItemForAssign(e.target.value)} className="w-full bg-black/50 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none cursor-pointer">
                 <option value="" disabled>Escolha o Colaborador...</option>
                 {employees?.filter(e => e.status !== 'Desligado').map(emp => (<option key={emp.id} value={emp.id}>{emp.nome}</option>))}
+                <option value="NEW" className="font-bold text-brandGreen">➕ Cadastrar Novo Colaborador</option>
               </select>
-              <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Confirmar Atribuição</button>
+
+              {selectedItemForAssign === 'NEW' && (
+                <div className="border border-brandGreen/30 bg-brandGreen/5 p-4 rounded-xl flex flex-col gap-3 animate-fade-in mt-2 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                    <p className="text-xs font-bold text-brandGreen uppercase flex items-center gap-1"><UserPlus className="w-4 h-4"/> Dados do Novo Colaborador</p>
+                    <input type="text" placeholder="Nome Completo" required value={newEmployeeForAssign.nome} onChange={(e) => setNewEmployeeForAssign({...newEmployeeForAssign, nome: e.target.value})} className="w-full bg-black/50 border border-brandGreen/30 focus:border-brandGreen rounded-lg p-2.5 text-white outline-none text-sm" />
+                    <input type="email" placeholder="E-mail Corporativo" required value={newEmployeeForAssign.email} onChange={(e) => setNewEmployeeForAssign({...newEmployeeForAssign, email: e.target.value})} className="w-full bg-black/50 border border-brandGreen/30 focus:border-brandGreen rounded-lg p-2.5 text-white outline-none text-sm" />
+                    <input type="text" placeholder="Departamento" required value={newEmployeeForAssign.departamento} onChange={(e) => setNewEmployeeForAssign({...newEmployeeForAssign, departamento: e.target.value})} className="w-full bg-black/50 border border-brandGreen/30 focus:border-brandGreen rounded-lg p-2.5 text-white outline-none text-sm" />
+                </div>
+              )}
+
+              <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-2 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Confirmar Atribuição</button>
             </form>
           </div>
         </div>
@@ -331,7 +465,21 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                   <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{viewAssetDetails.chip.iccid}</span></p>
               )}
 
-              {viewAssetDetails.chip?.vencimento_plano && <p className="text-gray-300 mb-1">Vencimento do Plano: <span className="font-bold text-red-400">{viewAssetDetails.chip.vencimento_plano}</span></p>}
+              {viewAssetDetails.asset_type === 'Starlink' && viewAssetDetails.starlink && (
+                  <div className="mt-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
+                      <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Wifi className="w-3 h-3 text-blue-400"/> Info. Rede & Credenciais</p>
+                      <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{viewAssetDetails.starlink.modelo || '-'}</span></p>
+                      <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{viewAssetDetails.starlink.projeto || '-'}</span></p>
+                      <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{viewAssetDetails.starlink.localizacao || '-'}</span></p>
+                      <div className="border-t border-gray-700/50 my-2 pt-2"></div>
+                      <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{viewAssetDetails.starlink.email || 'Não informado'}</span></p>
+                      <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{viewAssetDetails.starlink.senha || 'Não informada'}</span></p>
+                      <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{viewAssetDetails.starlink.senha_roteador || 'Não informada'}</span></p>
+                  </div>
+              )}
+
+              {viewAssetDetails.chip?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{viewAssetDetails.chip.vencimento_plano}</span></p>}
+              
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo Base)</p>
                 <p className="text-xl font-bold text-brandGreen">
@@ -343,7 +491,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       )}
 
-      {/* MODAL HISTÓRICO */}
       {isHistoryModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-2xl shadow-2xl">
@@ -366,7 +513,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       )}
 
-      {/* MODAL MANUTENÇÃO */}
       {isMaintenanceModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
@@ -380,7 +526,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       )}
 
-      {/* MODAL ALTERAÇÃO STATUS */}
       {statusModalData && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-red-900/50 rounded-3xl p-6 w-full max-w-md shadow-[0_0_30px_rgba(239,68,68,0.2)]">
