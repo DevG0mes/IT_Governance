@@ -12,6 +12,8 @@ import ExportModule from './modules/ExportModule';
 import LicensesModule from './modules/LicensesModule';
 import ContractsModule from './modules/ContractsModule';
 import CatalogModule from './modules/CatalogModule';
+// 👇 AQUI: Importação do módulo de Revogação adicionada 👇
+import OffboardingModule from './modules/OffboardingModule'; 
 
 import { roleTemplates } from './constants/permissions';
 import { getAuthHeaders, formatCurrency } from './utils/helpers';
@@ -189,8 +191,10 @@ export default function App() {
             {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && <MaintenanceModule assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
             {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
             {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
-            
             {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
+            
+            {/* 👇 AQUI: O módulo de Revogação finalmente vai renderizar na tela! 👇 */}
+            {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
             
             {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
             {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}

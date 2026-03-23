@@ -185,35 +185,40 @@ func ToggleEmployeeStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Status atualizado e ativos revogados com sucesso"})
 }
 
+// Função para lidar com PUT /api/employees/:id/offboarding
+// Função para lidar com PUT /api/employees/:id/offboarding
+// Função para lidar com PUT /api/employees/:id/offboarding
 func UpdateOffboarding(c *gin.Context) {
 	id := c.Param("id")
-	var emp models.Employee
-	if err := config.DB.First(&emp, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Colaborador não encontrado"})
+	
+	// 1. Busca o funcionário no banco
+	var employee models.Employee // Ajuste 'models.Employee' conforme a estrutura do seu projeto
+	if err := config.DB.First(&employee, id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Colaborador não encontrado"})
 		return
 	}
 
+	// 2. Cria a estrutura lendo APENAS o Status (ignora o offboarding que não existe no BD)
 	var input struct {
-		OffboardingOnfly   bool   `json:"offboarding_onfly"`
-		OffboardingAdm365  bool   `json:"offboarding_adm365"`
-		OffboardingLicense bool   `json:"offboarding_license"`
-		OffboardingMega    bool   `json:"offboarding_mega"`
-		TermoUrl           string `json:"termo_url"`
+		Status string `json:"status"`
 	}
 
+	// 3. Lê o JSON enviado pelo React
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "Falha ao ler os dados enviados"})
 		return
 	}
 
-	emp.OffboardingOnfly = input.OffboardingOnfly
-	emp.OffboardingAdm365 = input.OffboardingAdm365
-	emp.OffboardingLicense = input.OffboardingLicense
-	emp.OffboardingMega = input.OffboardingMega
-	emp.TermoUrl = strings.TrimSpace(input.TermoUrl)
+	// 4. MÁGICA: Força o banco de dados a fazer o UPDATE APENAS na coluna 'status'
+	if err := config.DB.Model(&employee).Updates(map[string]interface{}{
+		"status": input.Status,
+	}).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Erro ao salvar no banco de dados"})
+		return
+	}
 
-	config.DB.Save(&emp)
-	c.JSON(http.StatusOK, gin.H{"data": emp})
+	// 5. Retorna o sucesso para o React
+	c.JSON(200, gin.H{"message": "Offboarding atualizado com sucesso!"})
 }
 
 func DeleteEmployee(c *gin.Context) {
