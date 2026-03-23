@@ -3,7 +3,7 @@
 
 # Frontend (React/Node)
 frontend/node_modules/
-frontend/dist/
+
 frontend/build/
 .DS_Store
 
