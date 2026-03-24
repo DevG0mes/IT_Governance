@@ -1,0 +1,14 @@
+# Pasta de dependências (NUNCA SUBIR)
+node_modules/
+
+# Arquivo de configurações sensíveis (NUNCA SUBIR)
+.env
+
+# Logs de erro e debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Pastas de sistema
+.DS_Store
+Thumbs.db
