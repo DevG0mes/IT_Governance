@@ -1,53 +1,25 @@
 const express = require('express');
 const router = express.Router();
 
-// ✅ A SOLUÇÃO: Importamos tudo do db.js que centraliza os modelos
-const { 
-  sequelize,
-  Asset, 
-  AssetNotebook, 
-  AssetStarlink, 
-  AssetChip, 
-  AssetCelular, 
-  Employee 
-} = require('../config/db'); 
+const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../config/db');
 
 // ROTA DE LISTAGEM (GET)
 router.get('/', async (req, res) => {
   try {
     const assets = await Asset.findAll({
       include: [
-        { 
-          model: AssetNotebook, 
-          as: 'Notebook', // 🚨 Use o apelido exato definido no db.js (Maiúsculo)
-          attributes: { exclude: ['id'] } 
-        },
-        { 
-          model: AssetStarlink, 
-          as: 'Starlink', 
-          attributes: { exclude: ['id'] } 
-        },
-        { 
-          model: AssetChip, 
-          as: 'Chip', 
-          attributes: { exclude: ['id'] } 
-        },
-        { 
-          model: AssetCelular, 
-          as: 'Celular', 
-          attributes: { exclude: ['id'] } 
-        },
-        { 
-          model: Employee, 
-          as: 'employee' 
-        }
+        { model: AssetNotebook, as: 'Notebook' },
+        { model: AssetStarlink, as: 'Starlink' },
+        { model: AssetChip, as: 'Chip' },
+        { model: AssetCelular, as: 'Celular' },
+        { model: Employee, as: 'employee' } // 🚨 O 'as' tem que ser idêntico ao db.js
       ]
     });
     
-    res.json(assets);
+    return res.status(200).json({ data: assets });
   } catch (error) {
-    console.error("Erro na listagem de ativos:", error);
-    res.status(500).json({ error: "Erro no MySQL: " + error.message });
+    console.error("❌ Erro na listagem de ativos:", error);
+    return res.status(500).json({ error: "Erro no MySQL: " + error.message });
   }
 });
 
