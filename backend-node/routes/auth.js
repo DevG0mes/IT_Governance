@@ -17,18 +17,21 @@ router.post('/login', async (req, res) => {
     const { email, senha } = req.body;
 
     if (!email || !senha) {
-      return res.status(400).json({ error: 'Campos obrigatórios' });
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(400).send(JSON.stringify({ error: 'Campos obrigatórios' }));
     }
 
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(401).send(JSON.stringify({ error: 'Credenciais inválidas' }));
     }
 
     // Compara a senha digitada com o Hash do banco
     const validPassword = await bcrypt.compare(senha, user.senha);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Credenciais inválidas' });
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(401).send(JSON.stringify({ error: 'Credenciais inválidas' }));
     }
 
     // JWT IDENTICO AO GO (Valid. 12h e os mesmos Claims)
@@ -42,14 +45,19 @@ router.post('/login', async (req, res) => {
       { expiresIn: '12h' }
     );
 
-    // Retorna a estrutura exata gin.H{"token": tokenString, "data": user}
-    res.status(200).json({
+    // ==========================================
+    // BLINDAGEM: Forçando o cabeçalho JSON e o formato
+    // ==========================================
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).send(JSON.stringify({
       token: token,
-      data: user
-    });
+      data: user 
+    }));
 
   } catch (error) {
-    res.status(500).json({ error: 'Erro interno no servidor' });
+    console.error("Erro interno no login:", error);
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(500).send(JSON.stringify({ error: 'Erro interno no servidor' }));
   }
 }); // <-- AQUI ENCERRA A ROTA DE LOGIN
 
@@ -59,24 +67,34 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/setup-admin', async (req, res) => {
   try {
-    const adminExists = await User.findOne({ where: { email: 'admin@psi.com.br' } });
+    // Força a sincronização da tabela para garantir que colunas como permissions_json existam
+    await User.sync();
+
+    const adminEmail = 'admin@psi.com.br';
+    const adminExists = await User.findOne({ where: { email: adminEmail } });
+    
     if (adminExists) {
-      return res.send('O Admin já existe no banco!');
+      return res.send(`⚠️ O Admin ${adminEmail} já existe no banco! Tente logar com admin123`);
     }
 
     const hashedPassword = await bcrypt.hash('admin123', 10);
     
     await User.create({
       nome: 'Administrador Root',
-      email: 'admin@psi.com.br',
+      email: adminEmail,
       senha: hashedPassword,
       cargo: 'Administrator',
-      permissionsJSON: '{"dashboard":"edit","inventory":"edit","licenses":"edit","contracts":"edit","catalog":"edit","employees":"edit","maintenance":"edit","offboarding":"edit","export":"edit","import":"edit","admin":"edit"}'
+      permissions_json: JSON.stringify({
+        "dashboard":"edit","inventory":"edit","licenses":"edit",
+        "contracts":"edit","catalog":"edit","employees":"edit",
+        "maintenance":"edit","offboarding":"edit","export":"edit",
+        "import":"edit","admin":"edit"
+      })
     });
 
     res.send('✅ Admin criado com sucesso! Volte para a tela de login e use admin@psi.com.br e admin123');
   } catch (error) {
-    res.status(500).send('Erro ao criar admin: ' + error.message);
+    res.status(500).send('❌ Erro ao criar admin: ' + error.message);
   }
 });
 
