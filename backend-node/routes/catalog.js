@@ -1,8 +1,8 @@
 // Arquivo: routes/catalog.js
 const express = require('express');
-const { CatalogItem } = require('../config/db');
-
 const router = express.Router();
+// ✅ Importação correta centralizada no db.js
+const { CatalogItem } = require('../config/db');
 
 // ==========================================
 // GET: Buscar todos os itens do catálogo
@@ -10,10 +10,11 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const items = await CatalogItem.findAll();
-    // Embrulhando no "data" igualzinho ao gin.H{"data": items}
-    res.status(200).json({ data: items });
+    // Embrulhando no "data" igualzinho ao seu backend em Go
+    return res.status(200).json({ data: items });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar itens do catálogo' });
+    console.error("❌ Erro no Catálogo (GET):", error.message);
+    return res.status(500).json({ error: 'Erro ao buscar itens do catálogo' });
   }
 });
 
@@ -22,11 +23,12 @@ router.get('/', async (req, res) => {
 // ==========================================
 router.post('/', async (req, res) => {
   try {
-    // No Go você retornava StatusOK (200) ao invés de StatusCreated (201), mantive o padrão
+    // No Go você retornava StatusOK (200), mantivemos o padrão para o Frontend não estranhar
     const novoItem = await CatalogItem.create(req.body);
-    res.status(200).json({ data: novoItem });
+    return res.status(200).json({ data: novoItem });
   } catch (error) {
-    res.status(400).json({ error: 'Erro ao cadastrar item no catálogo' });
+    console.error("❌ Erro no Catálogo (POST):", error.message);
+    return res.status(400).json({ error: 'Erro ao cadastrar item no catálogo' });
   }
 });
 
@@ -37,15 +39,15 @@ router.put('/:id', async (req, res) => {
   try {
     const item = await CatalogItem.findByPk(req.params.id);
     
-    // Verificação exata do Go
     if (!item) {
-      return res.status(404).json({ error: 'Item não encontrado' });
+      return res.status(404).json({ error: 'Item não encontrado no catálogo' });
     }
     
     await item.update(req.body);
-    res.status(200).json({ data: item });
+    return res.status(200).json({ data: item });
   } catch (error) {
-    res.status(400).json({ error: 'Erro ao atualizar item do catálogo' });
+    console.error("❌ Erro no Catálogo (PUT):", error.message);
+    return res.status(400).json({ error: 'Erro ao atualizar item do catálogo' });
   }
 });
 
@@ -54,13 +56,16 @@ router.put('/:id', async (req, res) => {
 // ==========================================
 router.delete('/:id', async (req, res) => {
   try {
-    // O Go faz o delete direto usando o ID
-    await CatalogItem.destroy({ where: { id: req.params.id } });
+    const deleted = await CatalogItem.destroy({ where: { id: req.params.id } });
     
-    // Mensagem idêntica ao gin.H{"message": "Item deletado"}
-    res.status(200).json({ message: 'Item deletado' });
+    if (deleted === 0) {
+      return res.status(404).json({ error: 'Item não encontrado para exclusão' });
+    }
+    
+    return res.status(200).json({ message: 'Item deletado' });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao deletar item do catálogo' });
+    console.error("❌ Erro no Catálogo (DELETE):", error.message);
+    return res.status(500).json({ error: 'Erro ao deletar item do catálogo' });
   }
 });
 

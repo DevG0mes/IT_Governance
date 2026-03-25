@@ -1,10 +1,13 @@
 // Arquivo: routes/licenses.js
 const express = require('express');
-// 🚨 AJUSTE DE IMPORTAÇÃO: Garanta que está puxando do local correto
-// Se o seu arquivo de modelos central for ../Models/index.js, use:
-const { sequelize, License, EmployeeLicense, Employee } = require('../Models'); 
-
 const router = express.Router();
+// ✅ AJUSTE DE IMPORTAÇÃO: Centralizado para evitar MODULE_NOT_FOUND
+const { 
+  sequelize, 
+  License, 
+  EmployeeLicense, 
+  Employee 
+} = require('../config/db'); 
 
 // ==========================================
 // 1. LISTAGEM (Com Preload/Include)
@@ -15,17 +18,16 @@ router.get('/', async (req, res) => {
       include: [
         {
           model: EmployeeLicense,
-          as: 'EmployeeLicenses',
+          as: 'EmployeeLicenses', // Certifique-se que o alias no db.js é este
           include: [{ model: Employee, as: 'Employee' }]
         }
       ]
     });
     // Retornamos dentro de data: para manter o padrão do seu Frontend
-    res.status(200).json({ data: licenses });
+    return res.status(200).json({ data: licenses });
   } catch (error) {
-    console.error("Erro na listagem de licenças:", error);
-    // 🚨 REVELANDO O ERRO REAL (Pode ser falta de associação ou coluna errada)
-    res.status(500).json({ error: "Erro real no MySQL: " + error.message });
+    console.error("❌ Erro na listagem de licenças:", error.message);
+    return res.status(500).json({ error: "Erro no banco de dados: " + error.message });
   }
 });
 
@@ -46,14 +48,13 @@ router.post('/', async (req, res) => {
       data_renovacao: input.data_renovacao
     });
 
-    // 🚨 AJUSTE PARA O FRONTEND: O SweetAlert/ImportModule espera encontrar o ID aqui
-    res.status(201).json({ 
+    return res.status(201).json({ 
       message: "Licença criada!",
       data: license 
     });
   } catch (error) {
-    console.error("Erro ao cadastrar licença:", error);
-    res.status(400).json({ error: "Erro real: " + error.message });
+    console.error("❌ Erro ao cadastrar licença:", error.message);
+    return res.status(400).json({ error: "Falha ao criar licença: " + error.message });
   }
 });
 
@@ -70,6 +71,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Licença não encontrada' });
     }
 
+    // Validação de sanidade: não pode ter menos licenças totais do que as já distribuídas
     if (input.quantidade_total < license.quantidade_em_uso) {
       return res.status(400).json({ 
         error: 'A quantidade total não pode ser menor do que a quantidade que já está em uso!' 
@@ -85,9 +87,9 @@ router.put('/:id', async (req, res) => {
       data_renovacao: input.data_renovacao
     });
 
-    res.status(200).json({ message: 'Licença atualizada', data: license });
+    return res.status(200).json({ message: 'Licença atualizada', data: license });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: error.message });
   }
 });
 
@@ -102,10 +104,12 @@ router.post('/assign', async (req, res) => {
     const license = await License.findByPk(license_id, { transaction: t });
     if (!license) throw new Error('Licença não encontrada');
 
+    // Verifica disponibilidade
     if (license.quantidade_em_uso >= license.quantidade_total) {
       return res.status(400).json({ error: 'Todas as licenças deste plano já estão em uso!' });
     }
 
+    // Evita duplicidade (mesma licença para o mesmo colaborador)
     const existing = await EmployeeLicense.findOne({
       where: { EmployeeId: employee_id, LicenseId: license_id },
       transaction: t
@@ -115,22 +119,24 @@ router.post('/assign', async (req, res) => {
       return res.status(400).json({ error: 'Este colaborador já possui esta licença atribuída!' });
     }
 
+    // Cria o vínculo
     await EmployeeLicense.create({
       EmployeeId: employee_id,
       LicenseId: license_id,
       assigned_at: new Date()
     }, { transaction: t });
 
+    // Incrementa o contador na tabela de licenças
     await license.update({ 
       quantidade_em_uso: license.quantidade_em_uso + 1 
     }, { transaction: t });
 
     await t.commit();
-    res.status(200).json({ message: 'Licença atribuída com sucesso!' });
+    return res.status(200).json({ message: 'Licença atribuída com sucesso!' });
 
   } catch (error) {
     if (t) await t.rollback();
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -147,6 +153,7 @@ router.delete('/unassign/:id', async (req, res) => {
 
     const license = await License.findByPk(empLicense.LicenseId, { transaction: t });
     if (license) {
+      // Garante que o contador nunca fique negativo
       await license.update({ 
         quantidade_em_uso: Math.max(0, license.quantidade_em_uso - 1) 
       }, { transaction: t });
@@ -155,11 +162,11 @@ router.delete('/unassign/:id', async (req, res) => {
     await empLicense.destroy({ transaction: t });
 
     await t.commit();
-    res.status(200).json({ message: 'Licença revogada com sucesso!' });
+    return res.status(200).json({ message: 'Licença revogada com sucesso!' });
 
   } catch (error) {
     if (t) await t.rollback();
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 

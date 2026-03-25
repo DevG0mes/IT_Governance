@@ -1,8 +1,8 @@
 // Arquivo: routes/audit.js
 const express = require('express');
-const { AuditLog } = require('../config/db');
-
 const router = express.Router();
+// ✅ Importação correta centralizada no db.js
+const { AuditLog } = require('../config/db');
 
 // ==========================================
 // GET: Busca o histórico de ações no sistema
@@ -10,16 +10,16 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     // Busca os logs ordenados do mais recente para o mais antigo 
-    // (limitado aos últimos 200 para não pesar o painel, igual ao Go)
     const logs = await AuditLog.findAll({
       order: [['createdAt', 'DESC']],
-      limit: 200
+      limit: 200 // Mantém a performance igual ao seu código em Go
     });
 
-    // Retorna no formato exato que o seu Frontend espera
-    res.status(200).json({ data: logs });
+    // Retorna no formato exato que o seu Frontend (silver-monkey) espera
+    return res.status(200).json({ data: logs });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar logs' });
+    console.error("❌ Erro ao buscar logs de auditoria:", error.message);
+    return res.status(500).json({ error: 'Erro ao buscar logs no banco de dados' });
   }
 });
 
@@ -30,14 +30,16 @@ router.post('/', async (req, res) => {
   try {
     const input = req.body;
 
-    // O Sequelize cria o registro e já preenche o 'createdAt' 
-    // com a data/hora exata do momento (equivalente ao time.Now())
-    await AuditLog.create(input);
+    // O Sequelize cria o registro e preenche o 'createdAt' automaticamente
+    const newLog = await AuditLog.create(input);
 
-    res.status(201).json({ message: 'Log registrado com sucesso' });
+    return res.status(201).json({ 
+      message: 'Log registrado com sucesso',
+      data: newLog 
+    });
   } catch (error) {
-    // Retorna erro 400 em caso de falha de validação dos dados
-    res.status(400).json({ error: 'Erro ao salvar o log no banco' });
+    console.error("❌ Erro ao registrar log:", error.message);
+    return res.status(400).json({ error: 'Falha ao salvar o log de auditoria' });
   }
 });
 

@@ -1,43 +1,45 @@
 const express = require('express');
 const router = express.Router();
-// 🚨 O ERRO ESTAVA AQUI: Precisamos importar todos os modelos usados
+
+// ✅ A SOLUÇÃO: Importamos tudo do db.js que centraliza os modelos
 const { 
+  sequelize,
   Asset, 
   AssetNotebook, 
   AssetStarlink, 
   AssetChip, 
   AssetCelular, 
   Employee 
-} = require('../Models'); // Verifique se o caminho da pasta Models está correto
+} = require('../config/db'); 
 
-// ROTA DE LISTAGEM (GET) - Corrigida para não travar
+// ROTA DE LISTAGEM (GET)
 router.get('/', async (req, res) => {
   try {
     const assets = await Asset.findAll({
       include: [
         { 
           model: AssetNotebook, 
-          as: 'notebook',
-          attributes: { exclude: ['id'] } // Evita o erro de Unknown Column Notebook.id
+          as: 'Notebook', // 🚨 Use o apelido exato definido no db.js (Maiúsculo)
+          attributes: { exclude: ['id'] } 
         },
         { 
           model: AssetStarlink, 
-          as: 'starlink', 
+          as: 'Starlink', 
           attributes: { exclude: ['id'] } 
         },
         { 
           model: AssetChip, 
-          as: 'chip', 
+          as: 'Chip', 
           attributes: { exclude: ['id'] } 
         },
         { 
           model: AssetCelular, 
-          as: 'celular', 
+          as: 'Celular', 
           attributes: { exclude: ['id'] } 
         },
         { 
           model: Employee, 
-          as: 'employee' // Agora o Employee está definido no topo, não vai mais dar erro!
+          as: 'employee' 
         }
       ]
     });
@@ -45,14 +47,13 @@ router.get('/', async (req, res) => {
     res.json(assets);
   } catch (error) {
     console.error("Erro na listagem de ativos:", error);
-    res.status(500).json({ error: "Erro real no MySQL: " + error.message });
+    res.status(500).json({ error: "Erro no MySQL: " + error.message });
   }
 });
 
-// ROTA DE CRIAÇÃO (POST) - Ajustada para o ImportModule ler o ID
+// ROTA DE CRIAÇÃO (POST)
 router.post('/', async (req, res) => {
   const input = req.body;
-  const { sequelize } = require('../Models'); // Para a transação
   const t = await sequelize.transaction();
 
   try {
@@ -61,23 +62,22 @@ router.post('/', async (req, res) => {
       status: input.status || 'Disponível'
     }, { transaction: t });
 
-    switch (input.asset_type) {
-      case 'Notebook':
-        await AssetNotebook.create({
-          AssetId: asset.id,
-          serial_number: input.serial_number,
-          patrimonio: input.patrimonio,
-          modelo: input.modelo_notebook,
-          garantia: input.garantia,
-          status_garantia: input.status_garantia
-        }, { transaction: t });
-        break;
-      // ... (Mantenha os outros cases: Starlink, CHIP, Celular como estavam)
+    // Lógica para notebooks
+    if (input.asset_type === 'Notebook') {
+      await AssetNotebook.create({
+        AssetId: asset.id,
+        serial_number: input.serial_number,
+        patrimonio: input.patrimonio,
+        modelo: input.modelo_notebook,
+        garantia: input.garantia,
+        status_garantia: input.status_garantia
+      }, { transaction: t });
     }
+    
+    // Adicione os outros cases (Starlink, CHIP, etc) se necessário aqui
 
     await t.commit();
 
-    // 🚨 RETORNO ESSENCIAL: O Frontend precisa desse 'data' com o ID
     return res.status(201).json({ 
       message: 'Ativo criado com sucesso',
       data: asset 
@@ -85,6 +85,7 @@ router.post('/', async (req, res) => {
 
   } catch (error) {
     if (t) await t.rollback();
+    console.error("Erro ao criar ativo:", error);
     res.status(500).json({ error: error.message });
   }
 });

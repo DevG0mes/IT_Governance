@@ -2,7 +2,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { User } = require('../config/db');
+const { User } = require('../config/db'); // Centralizado no db.js
 
 const router = express.Router();
 
@@ -10,28 +10,27 @@ const router = express.Router();
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
 
 // ==========================================
-// ROTA 1: LOGIN NORMAL
+// ROTA 1: LOGIN (Pública)
 // ==========================================
 router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
 
     if (!email || !senha) {
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(400).send(JSON.stringify({ error: 'Campos obrigatórios' }));
+      return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
     }
 
+    // Busca o usuário pelo e-mail
     const user = await User.findOne({ where: { email } });
+    
     if (!user) {
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(401).send(JSON.stringify({ error: 'Credenciais inválidas' }));
+      return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // Compara a senha digitada com o Hash do banco
     const validPassword = await bcrypt.compare(senha, user.senha);
     if (!validPassword) {
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(401).send(JSON.stringify({ error: 'Credenciais inválidas' }));
+      return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
     // JWT IDENTICO AO GO (Valid. 12h e os mesmos Claims)
@@ -45,31 +44,23 @@ router.post('/login', async (req, res) => {
       { expiresIn: '12h' }
     );
 
-    // ==========================================
-    // BLINDAGEM: Forçando o cabeçalho JSON e o formato
-    // ==========================================
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(200).send(JSON.stringify({
+    // ✅ RESPOSTA LIMPA: O Frontend recebe o token e os dados do usuário (user_id, cargo, etc)
+    return res.status(200).json({
       token: token,
       data: user 
-    }));
+    });
 
   } catch (error) {
-    console.error("Erro interno no login:", error);
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(500).send(JSON.stringify({ error: 'Erro interno no servidor' }));
+    console.error("❌ Erro interno no login:", error.message);
+    return res.status(500).json({ error: 'Erro interno no servidor de autenticação' });
   }
-}); // <-- AQUI ENCERRA A ROTA DE LOGIN
-
+});
 
 // ==========================================
-// ROTA 2: TEMPORÁRIA PARA CRIAR O ADMIN 
+// ROTA 2: SETUP DE EMERGÊNCIA (Cria o Admin Root)
 // ==========================================
 router.get('/setup-admin', async (req, res) => {
   try {
-    // Força a sincronização da tabela para garantir que colunas como permissions_json existam
-    await User.sync();
-
     const adminEmail = 'admin@psi.com.br';
     const adminExists = await User.findOne({ where: { email: adminEmail } });
     
@@ -79,12 +70,13 @@ router.get('/setup-admin', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash('admin123', 10);
     
+    // Criando com a coluna correta 'permissionsJSON' definida no db.js
     await User.create({
       nome: 'Administrador Root',
       email: adminEmail,
       senha: hashedPassword,
       cargo: 'Administrator',
-      permissions_json: JSON.stringify({
+      permissionsJSON: JSON.stringify({
         "dashboard":"edit","inventory":"edit","licenses":"edit",
         "contracts":"edit","catalog":"edit","employees":"edit",
         "maintenance":"edit","offboarding":"edit","export":"edit",
@@ -92,8 +84,9 @@ router.get('/setup-admin', async (req, res) => {
       })
     });
 
-    res.send('✅ Admin criado com sucesso! Volte para a tela de login e use admin@psi.com.br e admin123');
+    res.send('✅ Admin criado com sucesso! Use admin@psi.com.br / admin123');
   } catch (error) {
+    console.error("❌ Erro no setup-admin:", error.message);
     res.status(500).send('❌ Erro ao criar admin: ' + error.message);
   }
 });
