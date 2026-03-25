@@ -19,7 +19,8 @@ router.get('/', async (req, res) => {
     });
     res.status(200).json({ data: assets });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao buscar hardwares' });
+    // 👇 Mudamos aqui para ver a verdade!
+    res.status(500).json({ error: "Erro real do MySQL: " + error.message });
   }
 });
 
