@@ -11,11 +11,11 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
 
   // Filtra apenas os que estão em manutenção ou inativos
   const maintenanceAssets = assets.filter(a => ['Manutenção', 'Descartado', 'Bloqueado', 'Inutilizado', 'Extraviado/Roubado'].includes(a.status));
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   const resolveMaintenance = (assetId) => { 
     requestConfirm('Finalizar Manutenção', 'Deseja devolver este equipamento para o estoque?', async () => { 
       try {
-        const res = await fetch(`http://localhost:8080/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT', headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT', headers: getAuthHeaders() });
         if(!res.ok) throw new Error("Erro");
         registerLog('UPDATE', 'Manutenção', `Retornou ativo ID ${assetId} p/ estoque`); 
         setOpenActionMenu(null); 
@@ -34,7 +34,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
   const submitEditMaintenance = async (e) => { 
     e.preventDefault(); 
     try {
-      const res = await fetch(`http://localhost:8080/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ chamado: editMaintenanceForm.chamado, observacao: editMaintenanceForm.observacao }) });
+      const res = await fetch(`${API_BASE_URL}/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ chamado: editMaintenanceForm.chamado, observacao: editMaintenanceForm.observacao }) });
       if(!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Manutenção', `Atualizou log do ativo ID ${editMaintenanceForm.assetId}`); 
       setIsEditMaintenanceModalOpen(false); 

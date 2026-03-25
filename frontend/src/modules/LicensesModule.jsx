@@ -7,12 +7,12 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
   const [editLicenseData, setEditLicenseData] = useState(null);
   const [newLicense, setNewLicense] = useState({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' });
   const [viewLicenseUsers, setViewLicenseUsers] = useState(null);
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   const handleCreateLicense = async (e) => { 
     e.preventDefault(); 
     const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; 
     try {
-      const res = await fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_BASE_URL}/api/licenses`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
       if(!res.ok) throw new Error("Erro");
       registerLog('CREATE', 'Licenças', `Cadastrou licença ${payload.nome}`); 
       setIsLicenseModalOpen(false); 
@@ -25,7 +25,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
     e.preventDefault(); 
     const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; 
     try {
-      const res = await fetch(`http://localhost:8080/api/licenses/${editLicenseData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_BASE_URL}/api/licenses/${editLicenseData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
       if(!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Licenças', `Atualizou licença ${payload.nome}`); 
       setEditLicenseData(null); 
@@ -35,7 +35,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
 
   const unassignLicense = async (assignmentId) => { 
     try {
-      const res = await fetch(`http://localhost:8080/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if(!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); 
       fetchData(); 

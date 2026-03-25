@@ -18,13 +18,13 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   // 👇 Funções de Checkbox e Exclusão em Lote 👇
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredContracts.length && filteredContracts.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredContracts.map(item => item.id));
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} medições?`, async () => {
         try {
             await Promise.all(selectedIds.map(async (id) => { 
-              const res = await fetch(`http://localhost:8080/api/contracts/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
+              const res = await fetch(`${API_BASE_URL}/api/contracts/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
               if (!res.ok) throw new Error(`Falha no ID ${id}`); 
             }));
             registerLog('DELETE BULK', 'CONTRATOS', `Excluiu ${selectedIds.length} medições de contratos.`); 
@@ -37,7 +37,7 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   const handleSubmit = async (e) => {
     e.preventDefault();
     const isEdit = !!editData;
-    const url = isEdit ? `http://localhost:8080/api/contracts/${editData.id}` : 'http://localhost:8080/api/contracts';
+    const url = isEdit ? `${API_BASE_URL}/api/contracts/${editData.id}` : `${API_BASE_URL}/api/contracts`;
     const method = isEdit ? 'PUT' : 'POST';
 
     const payload = {

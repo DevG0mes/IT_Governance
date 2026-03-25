@@ -12,17 +12,18 @@ import ExportModule from './modules/ExportModule';
 import LicensesModule from './modules/LicensesModule';
 import ContractsModule from './modules/ContractsModule';
 import CatalogModule from './modules/CatalogModule';
-// 👇 AQUI: Importação do módulo de Revogação adicionada 👇
 import OffboardingModule from './modules/OffboardingModule'; 
 
 import { roleTemplates } from './constants/permissions';
 import { getAuthHeaders, formatCurrency } from './utils/helpers';
 
+// 👇 AQUI ESTÁ A MÁGICA: Pega do .env ou usa localhost como fallback
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
   
-  // Estado Global de Loading adicionado
   const [isLoading, setIsLoading] = useState(false);
   
   const [assets, setAssets] = useState([]);
@@ -46,21 +47,21 @@ export default function App() {
     if (savedUser && token) setCurrentUser(JSON.parse(savedUser));
   }, []);
 
-  // LÓGICA DE CARREGAMENTO (DELAY DE 1 SEGUNDO GARANTIDO NA NAVEGAÇÃO)
   const fetchData = () => {
     setIsLoading(true);
-    const startTime = Date.now(); // Marca o tempo que começou a buscar
+    const startTime = Date.now(); 
     
+    // 👇 TODOS OS FETCHS AGORA USAM A VARIÁVEL API_BASE_URL 👇
     Promise.all([
-      fetch('http://localhost:8080/api/assets', { headers: getAuthHeaders() })
+      fetch(`${API_BASE_URL}/api/assets`, { headers: getAuthHeaders() })
         .then(res => { if(res.status===401) handleLogout(); return res.json(); }).catch(() => ({data: []})),
-      fetch('http://localhost:8080/api/employees', { headers: getAuthHeaders() })
+      fetch(`${API_BASE_URL}/api/employees`, { headers: getAuthHeaders() })
         .then(res => res.json()).catch(() => ({data: []})),
-      fetch('http://localhost:8080/api/licenses', { headers: getAuthHeaders() })
+      fetch(`${API_BASE_URL}/api/licenses`, { headers: getAuthHeaders() })
         .then(res => res.json()).catch(() => ({data: []})),
-      fetch('http://localhost:8080/api/contracts', { headers: getAuthHeaders() })
+      fetch(`${API_BASE_URL}/api/contracts`, { headers: getAuthHeaders() })
         .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []})),
-      fetch('http://localhost:8080/api/catalog', { headers: getAuthHeaders() })
+      fetch(`${API_BASE_URL}/api/catalog`, { headers: getAuthHeaders() })
         .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []}))
     ])
     .then(([assetsData, empData, licData, contData, catData]) => {
@@ -71,8 +72,6 @@ export default function App() {
       setCatalogItems(catData.data || []);
     })
     .finally(() => {
-      // Calcula quanto tempo a API demorou. Se foi rápido demais, segura o loading 
-      // até completar 1000ms (1 segundo) para o efeito visual da tela.
       const elapsedTime = Date.now() - startTime;
       const delayRequired = Math.max(1000 - elapsedTime, 0);
       
@@ -83,13 +82,13 @@ export default function App() {
   };
 
   const fetchAdminData = () => {
-    fetch('http://localhost:8080/api/users', { headers: getAuthHeaders() }).then(res => res.json()).then(data => { const usersFromDB = (data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) })); setSystemUsers(usersFromDB); }).catch(e => { if(e.message.includes('401')) handleLogout(); });
-    fetch('http://localhost:8080/api/audit-logs', { headers: getAuthHeaders() }).then(res => res.json()).then(data => setAuditLogs(data.data || []));
+    fetch(`${API_BASE_URL}/api/users`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => { const usersFromDB = (data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) })); setSystemUsers(usersFromDB); }).catch(e => { if(e.message.includes('401')) handleLogout(); });
+    fetch(`${API_BASE_URL}/api/audit-logs`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => setAuditLogs(data.data || []));
   };
 
   const registerLog = (action, module, details) => {
     const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
-    fetch('http://localhost:8080/api/audit-logs', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(logEntry) }).then(() => { if (currentUser?.cargo === 'Administrator') fetchAdminData(); });
+    fetch(`${API_BASE_URL}/api/audit-logs`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(logEntry) }).then(() => { if (currentUser?.cargo === 'Administrator') fetchAdminData(); });
   };
 
   useEffect(() => { 
@@ -99,7 +98,7 @@ export default function App() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    fetch('http://localhost:8080/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
+    fetch(`${API_BASE_URL}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
     .then(async res => { if(!res.ok) throw new Error((await res.json()).error); return res.json(); })
     .then(data => {
         const loggedUser = data.data; 
@@ -121,13 +120,13 @@ export default function App() {
     e.preventDefault(); 
     const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; 
     try {
-      const res = await fetch('http://localhost:8080/api/users', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_BASE_URL}/api/users`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
       if(!res.ok) throw new Error("Erro");
       setIsUserModalOpen(false); fetchAdminData(); registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
     } catch(err){ alert(err.message); }
   };
   
-  const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', () => { fetch(`http://localhost:8080/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); }); }, true, 'Excluir'); };
+  const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', () => { fetch(`${API_BASE_URL}/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); }); }, true, 'Excluir'); };
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] font-sans selection:bg-brandGreen selection:text-white pb-32">
@@ -192,15 +191,12 @@ export default function App() {
             {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
             {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
             {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
-            
-            {/* 👇 AQUI: O módulo de Revogação finalmente vai renderizar na tela! 👇 */}
             {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
-            
             {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
             {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
           </main>
 
-          {/* MODAIS GLOBAIS (Avisos e Segurança) */}
+          {/* MODAIS GLOBAIS */}
           {confirmDialog.isOpen && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[110] animate-fade-in">
               <div className={`bg-gray-900 border ${confirmDialog.isDanger ? 'border-red-900/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'border-gray-700 shadow-2xl'} rounded-3xl p-6 w-full max-w-md`}>

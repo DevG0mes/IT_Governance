@@ -27,7 +27,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
   const [statusModalData, setStatusModalData] = useState(null);
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   const extractError = async (res, defaultMsg) => {
     try { const data = await res.json(); return data.error || defaultMsg; } 
     catch (e) { return `${defaultMsg} (Erro no Servidor. Verifique o terminal do Go ou Banco de Dados)`, e; }
@@ -105,7 +105,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     const statusInicial = newAsset.grupo?.trim() && !['Renovação', 'Manutenção'].includes(newAsset.status) ? 'Em uso' : newAsset.status; 
     try {
-      const res = await fetch('http://localhost:8080/api/assets', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({...newAsset, status: statusInicial}) });
+      const res = await fetch(`${API_BASE_URL}/api/assets`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({...newAsset, status: statusInicial}) });
       if(!res.ok) throw new Error(await extractError(res, 'Erro ao criar equipamento'));
       
       registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); 
@@ -117,7 +117,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const handleUpdateAsset = async (e) => {
     e.preventDefault();
     try {
-        const res = await fetch(`http://localhost:8080/api/assets/${activeAsset.id}`, { 
+        const res = await fetch(`${API_BASE_URL}/api/assets/${activeAsset.id}`, { 
             method: 'PUT', 
             headers: getAuthHeaders(), 
             body: JSON.stringify(newAsset) 
@@ -135,7 +135,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     setOpenActionMenu(null); 
     requestConfirm('Confirmar Ação', `Deseja aplicar esta ação no equipamento?`, async () => { 
       try {
-        const res = await fetch(`http://localhost:8080/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
         if(!res.ok) throw new Error(await extractError(res, 'Erro ao aplicar ação'));
         
         registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); 
@@ -150,7 +150,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
       let targetEmpId = selectedItemForAssign;
 
       if (targetEmpId === 'NEW') {
-          const createRes = await fetch('http://localhost:8080/api/employees', { 
+          const createRes = await fetch(`${API_BASE_URL}/api/employees`, { 
               method: 'POST', 
               headers: getAuthHeaders(), 
               body: JSON.stringify(newEmployeeForAssign) 
@@ -161,7 +161,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployeeForAssign.nome} via Atribuição`);
       }
 
-      const res = await fetch(`http://localhost:8080/api/employees/${targetEmpId}/assign`, { 
+      const res = await fetch(`${API_BASE_URL}/api/employees/${targetEmpId}/assign`, { 
           method: 'PUT', 
           headers: getAuthHeaders(), 
           body: JSON.stringify({ asset_id: activeAsset.id }) 
@@ -179,7 +179,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const submitMaintenance = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:8080/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(maintenanceForm) });
+      const res = await fetch(`${API_BASE_URL}/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(maintenanceForm) });
       if(!res.ok) throw new Error(await extractError(res, 'Erro ao enviar para manutenção'));
       
       registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); 
@@ -198,7 +198,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } 
     try {
-      const res = await fetch(`http://localhost:8080/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) });
+      const res = await fetch(`${API_BASE_URL}/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) });
       if(!res.ok) throw new Error(await extractError(res, 'Erro ao alterar status'));
       
       registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); 
@@ -212,7 +212,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} itens?`, async () => {
         try {
             await Promise.all(selectedIds.map(async (id) => { 
-              const res = await fetch(`http://localhost:8080/api/assets/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
+              const res = await fetch(`${API_BASE_URL}/api/assets/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
               if (!res.ok) throw new Error(`Falha no ID ${id}`); 
             }));
             registerLog('DELETE BULK', 'INVENTÁRIO', `Excluiu ${selectedIds.length} ativos.`); 

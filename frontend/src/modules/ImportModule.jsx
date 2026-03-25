@@ -8,6 +8,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
   const [previewData, setPreviewData] = useState(null);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
   const downloadTemplate = () => {
     let headers = "";
@@ -62,7 +63,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
       formData.append('file', file);
 
       try {
-        const res = await fetch('http://localhost:8080/api/contracts/analyze-pdf', {
+        const res = await fetch(`${API_BASE_URL}/api/contracts/analyze-pdf`, {
           method: 'POST',
           headers: { 'Authorization': getAuthHeaders().Authorization },
           body: formData
@@ -183,7 +184,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
             if (importCategory === 'Colaboradores') {
               const nome = getVal(row, 'nome', 'name'); const email = getVal(row, 'email', 'e-mail'); const depto = getVal(row, 'departamento', 'depto', 'setor');
               if (!nome || !email) throw new Error("Falta Nome ou E-mail");
-              const res = await fetch('http://localhost:8080/api/employees', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ nome: nome, email: email, departamento: depto }) }); if (!res.ok) throw new Error();
+              const res = await fetch(`${API_BASE_URL}/api/employees`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ nome: nome, email: email, departamento: depto }) }); if (!res.ok) throw new Error();
 
             } else if (importCategory === 'Medições de Contratos' || importCategory === 'Lote PDFs') {
               const servico = importCategory === 'Lote PDFs' ? row.Servico : getVal(row, 'serviço', 'servico', 'nome');
@@ -204,20 +205,20 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                   url_contrato: baseContract ? baseContract.url_contrato : ''
               };
 
-              const res = await fetch('http://localhost:8080/api/contracts', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+              const res = await fetch(`${API_BASE_URL}/api/contracts`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
               if (!res.ok) throw new Error("Falha ao salvar no banco");
 
             } else if (importCategory === 'Licenças (Cadastro)') {
               const software = getVal(row, 'software', 'nome'); const fornecedor = getVal(row, 'fornecedor'); const plano = getVal(row, 'plano') || 'Mensal'; const custo = parseCurrencyToFloat(getVal(row, 'custo', 'valor')); const qtd = parseInt(getVal(row, 'quantidade', 'qtd')) || 1;
               if (!software) throw new Error("Falta o nome do Software");
               const payload = { nome: software, fornecedor: fornecedor, plano: plano, custo: custo, quantidade_total: qtd };
-              const res = await fetch('http://localhost:8080/api/licenses', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
+              const res = await fetch(`${API_BASE_URL}/api/licenses`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
 
             } else if (importCategory === 'Vínculos de Licenças') {
               const emailColab = normalizeEmail(getVal(row, 'email_colaborador', 'email')); const software = getVal(row, 'software', 'nome');
               const emp = employees.find(e => normalizeEmail(e.email) === emailColab); const lic = licenses.find(l => l.nome.toLowerCase() === software.toLowerCase());
               if (!emp) throw new Error(`Colaborador ${emailColab} não encontrado`); if (!lic) throw new Error(`Licença ${software} não encontrada`);
-              const res = await fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: emp.id, license_id: lic.id }) }); if (!res.ok) throw new Error("Falha ao vincular");
+              const res = await fetch(`${API_BASE_URL}/api/licenses/assign`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: emp.id, license_id: lic.id }) }); if (!res.ok) throw new Error("Falha ao vincular");
 
             } else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let payload = {};
@@ -256,7 +257,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                 payload = { asset_type: 'CHIP', numero: safeVal(getVal(row, 'numero', 'linha')), iccid: safeVal(getVal(row, 'iccid')), plano: safeVal(getVal(row, 'plano')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), vencimento_plano: safeVal(getVal(row, 'vencimento_plano', 'vencimento')), status: creationStatus };
               }
 
-              const res = await fetch('http://localhost:8080/api/assets', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+              const res = await fetch(`${API_BASE_URL}/api/assets`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
               const resData = await res.json().catch(() => ({}));
 
               if (!res.ok) { throw new Error(resData.error || "Falha ao gravar equipamento no banco."); }
@@ -264,7 +265,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
               if (willAssign) {
                 const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
                 if (!emp) { throw new Error(`Salvo no Estoque/Obra, pois o E-mail '${emailColab}' não existe no sistema.`); }
-                const assignRes = await fetch(`http://localhost:8080/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: resData.data.id }) });
+                const assignRes = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: resData.data.id }) });
                 if (!assignRes.ok) throw new Error(`Salvo no Estoque, erro ao vincular a '${emailColab}'.`);
               }
             }

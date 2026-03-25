@@ -16,7 +16,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
   const [selectedLicenseToAssign, setSelectedLicenseToAssign] = useState('');
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
   const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
   const [offboardingTarget, setOffboardingTarget] = useState(null);
@@ -55,7 +55,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} colaboradores?`, async () => {
       try {
         await Promise.all(selectedIds.map(async (id) => {
-          const res = await fetch(`http://localhost:8080/api/employees/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+          const res = await fetch(`${API_BASE_URL}/api/employees/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
           if (!res.ok) throw new Error(`Falha no ID ${id}`);
         }));
         registerLog('DELETE BULK', 'COLABORADORES', `Excluiu ${selectedIds.length} cols.`);
@@ -68,7 +68,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8080/api/employees', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(newEmployee) });
+      const res = await fetch(`${API_BASE_URL}/api/employees`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(newEmployee) });
       if (!res.ok) throw new Error("Erro ao salvar");
       registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployee.nome}`);
       setIsEmployeeModalOpen(false);
@@ -80,7 +80,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const saveEditEmployee = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:8080/api/employees/${editEmployeeData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(editEmployeeData) });
+      const res = await fetch(`${API_BASE_URL}/api/employees/${editEmployeeData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(editEmployeeData) });
       if (!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Colaboradores', `Editou dados do colab ID ${editEmployeeData.id}`);
       setEditEmployeeData(null);
@@ -91,7 +91,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const handleDeleteEmployee = (empId) => {
     requestConfirm('Excluir Colaborador', '🔴 EXCLUIR DEFINITIVAMENTE este colaborador? Esta ação não pode ser desfeita.', async () => {
       try {
-        const res = await fetch(`http://localhost:8080/api/employees/${empId}`, { method: 'DELETE', headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/api/employees/${empId}`, { method: 'DELETE', headers: getAuthHeaders() });
         if (!res.ok) throw new Error("Erro");
         registerLog('DELETE', 'Colaboradores', `Deletou colab ID ${empId}`);
         setOpenActionMenu(null);
@@ -123,7 +123,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
     setIsSubmittingOffboarding(true);
     try {
-      const res = await fetch(`http://localhost:8080/api/employees/${offboardingTarget.id}/offboarding`, {
+      const res = await fetch(`${API_BASE_URL}/api/employees/${offboardingTarget.id}/offboarding`, {
         method: 'PUT',
         headers: {
           ...getAuthHeaders(),
@@ -157,7 +157,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const submitAssignment = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:8080/api/employees/${activeEmployee.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: parseInt(selectedItemForAssign) }) });
+      const res = await fetch(`${API_BASE_URL}/api/employees/${activeEmployee.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: parseInt(selectedItemForAssign) }) });
       if (!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${selectedItemForAssign} ao colab ID ${activeEmployee.id}`);
       setIsAssignEmployeeModalOpen(false);
@@ -169,7 +169,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const handleAction = (assetId, action) => {
     requestConfirm('Confirmar Ação', `Tem certeza que deseja devolver este equipamento?`, async () => {
       try {
-        const res = await fetch(`http://localhost:8080/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
         if (!res.ok) throw new Error("Erro");
         registerLog('UPDATE', 'Inventário', `Devolveu o ativo ID ${assetId}`);
         fetchData();
@@ -179,7 +179,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
   const assignLicenseToEmployee = async (empId, licenseId) => {
     try {
-      const res = await fetch('http://localhost:8080/api/licenses/assign', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: empId, license_id: parseInt(licenseId) }) });
+      const res = await fetch(`${API_BASE_URL}/api/licenses/assign`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: empId, license_id: parseInt(licenseId) }) });
       if (!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Licenças', `Atribuiu licença ${licenseId} ao colab ${empId}`);
       fetchData();
@@ -188,7 +188,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
   const unassignLicense = async (assignmentId) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erro");
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`);
       fetchData();

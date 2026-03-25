@@ -8,7 +8,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
   const [showAllDesligados, setShowAllDesligados] = useState(false);
 
   const getActiveAssets = (empId) => (assets || []).filter(a => a.status === 'Em uso' && a.assignments?.some(asg => asg.employee_id === empId && !asg.returned_at));
-  
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   const getActiveLicenses = (empId) => {
     const empLics = [];
     (licenses || []).forEach(lic => {
@@ -40,7 +40,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
   const handleReturnAsset = (assetId) => {
     requestConfirm('Devolver Hardware', 'Confirmar a devolução deste equipamento para o estoque?', async () => {
       try {
-        const res = await fetch(`http://localhost:8080/api/assets/${assetId}/unassign`, { method: 'PUT', headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/unassign`, { method: 'PUT', headers: getAuthHeaders() });
         if (!res.ok) throw new Error("Erro ao devolver ativo");
         registerLog('UPDATE', 'Revogação', `Devolveu hardware ID ${assetId} ao estoque`);
         fetchData();
@@ -50,7 +50,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
 
   const handleRevokeLicense = async (assignmentId) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error("Erro ao revogar licença");
       registerLog('UPDATE', 'Revogação', `Revogou licença ID ${assignmentId}`);
       fetchData();
@@ -72,7 +72,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
         // Agora usamos a rota /offboarding passando exatamente a string "Desligado"
         const payload = { status: 'Desligado' };
         
-        const res = await fetch(`http://localhost:8080/api/employees/${emp.id}/offboarding`, { 
+        const res = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/offboarding`, { 
             method: 'PUT', 
             headers: {
                 ...getAuthHeaders(),

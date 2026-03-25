@@ -11,7 +11,7 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
 
   const selectedCategory = editCatalogData ? editCatalogData.category : newCatalogItem.category;
   const currentNome = editCatalogData ? editCatalogData.nome : newCatalogItem.nome;
-
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
   // Filtro Inteligente e Rigoroso: Puxa modelos distintos APENAS de suas tabelas reais
   const availableModels = useMemo(() => {
     const models = new Set();
@@ -56,7 +56,7 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
     e.preventDefault(); 
     const payload = { ...newCatalogItem, valor: parseCurrencyToFloat(newCatalogItem.valor) }; 
     try {
-      const res = await fetch('http://localhost:8080/api/catalog', { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_BASE_URL}/api/catalog`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
       if(!res.ok) throw new Error("Erro ao salvar");
       registerLog('CREATE', 'Catálogo', `Cadastrou item: ${payload.nome}`); 
       setIsCatalogModalOpen(false); 
@@ -70,7 +70,7 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
     e.preventDefault(); 
     const payload = { ...editCatalogData, valor: parseCurrencyToFloat(editCatalogData.valor) }; 
     try {
-      const res = await fetch(`http://localhost:8080/api/catalog/${editCatalogData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
+      const res = await fetch(`${API_BASE_URL}/api/catalog/${editCatalogData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
       if(!res.ok) throw new Error("Erro ao atualizar");
       registerLog('UPDATE', 'Catálogo', `Atualizou item no catálogo ID ${payload.id}`); 
       setEditCatalogData(null); 
@@ -82,7 +82,7 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
   const handleDeleteCatalogItem = (id) => { 
     requestConfirm('Excluir do Catálogo', 'Certeza que deseja remover este item do catálogo base?', async () => { 
       try {
-        await fetch(`http://localhost:8080/api/catalog/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        await fetch(`${API_BASE_URL}/api/catalog/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
         fetchData(); 
       } catch (err) { alert("Erro ao excluir.", err); }
     }, true); 
