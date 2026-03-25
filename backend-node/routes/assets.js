@@ -46,7 +46,7 @@ router.post('/', async (req, res) => {
     switch (input.asset_type) {
       case 'Notebook':
         await AssetNotebook.create({
-          AssetId: asset.id,
+          AssetId: asset.id, // Garante o vínculo com a tabela pai
           serial_number: input.serial_number,
           patrimonio: input.patrimonio,
           modelo: input.modelo_notebook,
@@ -90,15 +90,26 @@ router.post('/', async (req, res) => {
         break;
     }
 
-    // Comita a transação se tudo deu certo (O tx.Commit do Go)
+    // Comita a transação se tudo deu certo
     await t.commit();
-    res.status(201).json({ data: asset });
+
+    // 🚨 AJUSTE DE RESPOSTA: Retorna o asset dentro de 'data' para o Frontend ler o ID corretamente
+    return res.status(201).json({ 
+      message: 'Ativo criado com sucesso',
+      data: asset 
+    });
 
   } catch (error) {
-    // Cancela tudo se der erro (O tx.Rollback do Go)
-    await t.rollback();
-    console.error(error);
-    res.status(500).json({ error: 'Erro ao criar detalhes do ativo' });
+    // Cancela tudo se der erro (Rollback)
+    if (t) await t.rollback();
+    
+    console.error("Erro no cadastro de ativos:", error);
+    
+    // 🚨 AJUSTE DE DEBUG: Agora ele te conta o erro real do MySQL/Sequelize
+    return res.status(500).json({ 
+      error: 'Erro ao criar detalhes do ativo',
+      details: error.message 
+    });
   }
 });
 
