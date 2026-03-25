@@ -52,6 +52,11 @@ AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId' });
 Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'employee' });
 Employee.hasMany(Asset, { foreignKey: 'EmployeeId', as: 'Assets' });
 
+
+// Um ativo tem um detalhe de notebook
+Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook', onDelete: 'CASCADE' });
+AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId' });
+
 // ==========================================
 // 4. Sincronização e Setup Inicial
 // ==========================================
