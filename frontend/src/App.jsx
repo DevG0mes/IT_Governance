@@ -97,54 +97,41 @@ export default function App() {
   }, [currentUser, activeTab]);
 
   const handleLogin = (e) => {
-    e.preventDefault();
-    setIsLoading(true); // Opcional: Ativa o loading se você tiver esse estado
+  e.preventDefault();
+  
+  fetch(`${API_BASE_URL}/api/login`, { 
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify(loginForm) 
+  })
+  .then(async res => {
+    // 🔍 VERIFICAÇÃO DE SEGURANÇA:
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro de login");
+      return data;
+    } else {
+      // Se não for JSON, lê como texto para a gente saber o que o servidor mandou
+      const text = await res.text();
+      console.error("Servidor mandou algo que não é JSON:", text);
+      throw new Error("O servidor não respondeu em formato JSON. Verifique o console.");
+    }
+  })
+  .then(data => {
+    const loggedUser = data.data;
+    // Processamento das permissões (como fizemos antes)
+    const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
+    loggedUser.permissions = rawPerms ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) : (roleTemplates[loggedUser.cargo] || {});
 
-    fetch(`${API_BASE_URL}/api/login`, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(loginForm) 
-    })
-    .then(async res => { 
-      const responseData = await res.json();
-      if (!res.ok) throw new Error(responseData.error || "Erro desconhecido"); 
-      return responseData; 
-    })
-    .then(data => {
-        const loggedUser = data.data; 
-
-        // 🛡️ TRATAMENTO DE PERMISSÕES BLINDADO
-        // Tenta ler com underscore (padrão banco) ou camelCase (padrão antigo)
-        const rawPermissions = loggedUser.permissions_json || loggedUser.permissionsJSON;
-        
-        try {
-          loggedUser.permissions = rawPermissions ? JSON.parse(rawPermissions) : (roleTemplates[loggedUser.cargo] || {});
-        } catch (e) {
-          console.error("Erro ao processar permissões:", e);
-          loggedUser.permissions = roleTemplates[loggedUser.cargo] || {};
-        }
-
-        // Grava no Storage para persistência
-        sessionStorage.setItem('jwt_token', data.token);
-        sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
-        
-        // 🔥 GATILHO DE ENTRADA: Isso faz o React trocar a tela
-        setCurrentUser(loggedUser); 
-
-        // Log de auditoria em background
-        setTimeout(() => { 
-          registerLog('LOGIN', 'Autenticação', `Acessou o sistema.`); 
-        }, 500);
-
-    })
-    .catch(err => { 
-      console.error("Erro no login:", err);
-      alert("Acesso Negado: " + err.message); 
-    })
-    .finally(() => {
-      setIsLoading(false);
-    });
-  };
+    sessionStorage.setItem('jwt_token', data.token);
+    sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
+    setCurrentUser(loggedUser);
+  })
+  .catch(err => {
+    alert("Erro no Login: " + err.message);
+  });
+};
 
   const handleLogout = () => { registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); sessionStorage.clear(); setCurrentUser(null); setLoginForm({ email: '', senha: '' }); };
 
