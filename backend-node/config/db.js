@@ -33,6 +33,8 @@ const AssetCelular = require('../Models/AssetCelular')(sequelize, DataTypes);
 // ==========================================
 // 3. RELACIONAMENTOS (As "amarras" do banco)
 // ==========================================
+
+// Ligação Ativo -> Notebooks/Celulares (Caminho de ida)
 Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook', onDelete: 'CASCADE' });
 AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId' });
 
@@ -44,6 +46,11 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId' });
 
 Asset.hasOne(AssetCelular, { foreignKey: 'AssetId', as: 'Celular', onDelete: 'CASCADE' });
 AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId' });
+
+// 🚨 A LIGAÇÃO QUE FALTAVA: Ativo -> Colaborador
+// Um Ativo pode pertencer a um Colaborador (através do campo EmployeeId na tabela Assets)
+Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'employee' });
+Employee.hasMany(Asset, { foreignKey: 'EmployeeId', as: 'Assets' });
 
 // ==========================================
 // 4. Sincronização e Setup Inicial
