@@ -10,7 +10,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
   
-  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';
+  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
   
   const downloadTemplate = () => {
     let headers = "";

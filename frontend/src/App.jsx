@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck } from 'lucide-react';
-
+import Swal from 'sweetalert2';
 import DashboardModule from './modules/DashboardModule';
 import AdminModule from './modules/AdminModule';
 import InventoryModule from './modules/InventoryModule';
@@ -96,41 +96,66 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
 
-  const handleLogin = (e) => {
-  e.preventDefault();
+  const handleLogin = async (e) => {
+  e.preventDefault(); // 🛡️ Evita o refresh da página
   
-  fetch(`${API_BASE_URL}/api/login`, { 
-    method: 'POST', 
-    headers: { 'Content-Type': 'application/json' }, 
-    body: JSON.stringify(loginForm) 
-  })
-  .then(async res => {
-    // 🔍 VERIFICAÇÃO DE SEGURANÇA:
+  // 1. Mostrar um loading pro usuário (Opcional, mas profissional)
+  Swal.fire({
+    title: 'Autenticando...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/login`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(loginForm) 
+    });
+
     const contentType = res.headers.get("content-type");
+    
     if (contentType && contentType.indexOf("application/json") !== -1) {
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro de login");
-      return data;
-    } else {
-      // Se não for JSON, lê como texto para a gente saber o que o servidor mandou
-      const text = await res.text();
-      console.error("Servidor mandou algo que não é JSON:", text);
-      throw new Error("O servidor não respondeu em formato JSON. Verifique o console.");
-    }
-  })
-  .then(data => {
-    const loggedUser = data.data;
-    // Processamento das permissões (como fizemos antes)
-    const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
-    loggedUser.permissions = rawPerms ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) : (roleTemplates[loggedUser.cargo] || {});
+      
+      if (!res.ok) throw new Error(data.error || "E-mail ou senha incorretos.");
 
-    sessionStorage.setItem('jwt_token', data.token);
-    sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
-    setCurrentUser(loggedUser);
-  })
-  .catch(err => {
-    alert("Erro no Login: " + err.message);
-  });
+      // 2. Sucesso no Login
+      const loggedUser = data.data;
+      
+      // Processamento das permissões (sua lógica original mantida)
+      const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
+      loggedUser.permissions = rawPerms 
+        ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
+        : (roleTemplates[loggedUser.cargo] || {});
+
+      // 3. Persistência
+      sessionStorage.setItem('jwt_token', data.token);
+      sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
+      
+      // 4. Fecha o loading e entra no sistema
+      Swal.close();
+      setCurrentUser(loggedUser);
+
+    } else {
+      const text = await res.text();
+      console.error("Resposta não-JSON do servidor:", text);
+      throw new Error("O servidor respondeu com erro de configuração (HTML). Verifique o console.");
+    }
+
+  } catch (err) {
+    console.error("Erro no Login:", err);
+    
+    // 5. Alerta de Erro Personalizado (Substituindo o alert feio)
+    Swal.fire({
+      title: 'Erro no Login',
+      text: err.message,
+      icon: 'error',
+      background: '#1f2937',
+      color: '#ffffff',
+      confirmButtonColor: '#ef4444'
+    });
+  }
 };
 
   const handleLogout = () => { registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); sessionStorage.clear(); setCurrentUser(null); setLoginForm({ email: '', senha: '' }); };
