@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck } from 'lucide-react';
 
@@ -19,7 +19,7 @@ import { getAuthHeaders, formatCurrency } from './utils/helpers';
 
 // 👇 AQUI ESTÁ A MÁGICA: Pega do .env ou usa localhost como fallback
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';
+const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
