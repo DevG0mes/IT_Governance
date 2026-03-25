@@ -9,7 +9,7 @@ const { sanitizeBody } = require('./utils/sanitizer');
 const verificarToken = require('./middlewares/auth'); 
 const verificarAdmin = require('./middlewares/admin'); 
 
-// Rotas
+// Rotas (Certifique-se que os nomes dos arquivos na pasta 'routes' são exatamente esses)
 const authRoutes = require('./routes/auth'); 
 const employeeRoutes = require('./routes/employees'); 
 const assetRoutes = require('./routes/assets'); 
@@ -21,7 +21,7 @@ const userRoutes = require('./routes/users');
 
 const app = express();
 
-// --- CONFIGURAÇÃO DE CORS (Idêntico ao Go) ---
+// --- CONFIGURAÇÃO DE CORS ---
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -29,39 +29,47 @@ app.use(cors({
 }));
 
 app.use(express.json());
+// Comente o sanitizer temporariamente se o erro 503 persistir para testar
 app.use(sanitizeBody); 
 
-app.get('/api/health', (req, res) => res.json({ status: 'OK' }));
+// Rota de Health Check (Mova para antes de qualquer middleware de segurança!)
+app.get('/api/health', (req, res) => res.json({ status: 'OK', message: 'Servidor PSI Energy Online' }));
 
-// ==========================================
-// 🌐 SETUP ROUTER (Espelho do router.go)
-// ==========================================
+// 🔓 ROTAS PÚBLICAS
+app.use('/api', authRoutes); // Login deve ser acessível sem token!
 
-// 🔓 ROTA PÚBLICA
-app.use('/api', authRoutes); // Contém o /login
-
-// 🛡️ MIDDLEWARE DE SEGURANÇA (Intercepta tudo daqui pra baixo)
+// 🛡️ MIDDLEWARE DE SEGURANÇA (Só bloqueia o que vem abaixo)
 app.use('/api', verificarToken);
 
 // --- Rotas de Módulos ---
 app.use('/api/assets', assetRoutes);
 app.use('/api/licenses', licenseRoutes);
 app.use('/api/employees', employeeRoutes);
-app.use('/api/contracts', contractRoutes); // Agora possui o /analyze-pdf
+app.use('/api/contracts', contractRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
 
-// 👑 BLOCO DE ACESSO RESTRITO (Apenas Administradores)
-// Como no Go você criou um admin.Group("/"), aqui usamos o app.use nas rotas vitais
+// 👑 BLOCO DE ACESSO RESTRITO
 app.use('/api/users', verificarAdmin, userRoutes);
+
+// 🚨 TRATAMENTO GLOBAL DE ERROS (Evita que o servidor morra e dê 503)
+app.use((err, req, res, next) => {
+  console.error('Erro não tratado:', err);
+  res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
+});
 
 const PORT = process.env.PORT || 8080;
 
 const startServer = async () => {
-  await connectDatabase();
-  app.listen(PORT, () => {
-    console.log(`🚀 API GovTI Node.js rodando na porta ${PORT} (Arquitetura Go Espelhada)!`);
-  });
+  try {
+    await connectDatabase();
+    app.listen(PORT, () => {
+      console.log(`🚀 API GovTI rodando na porta ${PORT}!`);
+    });
+  } catch (err) {
+    console.error('Falha ao iniciar o servidor:', err);
+    // Não damos process.exit(1) aqui para o log poder ser lido no painel
+  }
 };
 
 startServer();

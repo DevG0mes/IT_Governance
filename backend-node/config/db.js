@@ -50,16 +50,19 @@ AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId' });
 // ==========================================
 const connectDatabase = async () => {
   try {
+    console.log('--- 📡 Tentando conectar ao banco: ' + process.env.DB_HOST);
     await sequelize.authenticate();
     console.log('✅ Conexão com o MySQL Hostinger estabelecida!');
 
-    // 🚨 CUIDADO: sync() sem parâmetros é seguro, mas certifique-se que as tabelas já existem
-    await sequelize.sync(); 
-    console.log('✅ Tabelas sincronizadas!');
-
-    // Criação do Admin Root (Sua lógica original perfeita)
+    // Tente rodar apenas o Sync se o banco estiver vazio. 
+    // Se as tabelas já existem, o sync() pode causar timeout na Hostinger.
+    // await sequelize.sync(); 
+    
+    console.log('✅ Verificando usuário administrador...');
     const adminExists = await User.findOne({ where: { email: 'admin@psi.com.br' } });
+    
     if (!adminExists) {
+      console.log('🛠️ Criando usuário Root...');
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await User.create({
         nome: 'Administrador Root',
@@ -71,8 +74,9 @@ const connectDatabase = async () => {
       console.log('✅ Usuário Root criado!');
     }
   } catch (error) {
-    console.error('❌ ERRO NO BANCO:', error.message);
-    // Removemos o process.exit(1) para o servidor não "desmaiar" e podermos ver o erro no Log
+    // 🚨 Esse log vai aparecer no arquivo 'stderr.log' ou no console do painel Hostinger
+    console.error('❌ ERRO NO BOOT DO BANCO:', error.message);
+    // Não mate o processo, deixe ele ligado para podermos ver o erro no /api/health
   }
 };
 
