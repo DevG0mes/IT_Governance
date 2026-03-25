@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
+import Swal from 'sweetalert2';
 import { getAuthHeaders, normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
 
 export default function ImportModule({ hasAccess, employees, contracts, licenses, requestConfirm, registerLog, fetchData }) {
@@ -8,8 +9,9 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
   const [previewData, setPreviewData] = useState(null);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+  
   const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';
+  
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";
@@ -36,7 +38,19 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
         header: true, skipEmptyLines: true, delimiter: csvText.includes(';') ? ';' : ',', transformHeader: h => h ? h.replace(/^\uFEFF/g, '').replace(/['"]/g, '').trim() : '', transform: v => typeof v === 'string' ? v.trim() : v,
         complete: function(results) {
           const cleanData = results.data.filter(row => { return Object.keys(row).length > 1 && Object.values(row).some(val => val && String(val).trim() !== ''); });
-          if (cleanData.length === 0) { alert("⚠️ Erro: Planilha vazia."); return; }
+          
+          if (cleanData.length === 0) { 
+            Swal.fire({
+              title: 'Atenção!',
+              text: 'A planilha enviada está vazia ou possui formato inválido.',
+              icon: 'warning',
+              background: '#1f2937',
+              color: '#ffffff',
+              confirmButtonColor: '#f59e0b',
+              customClass: { popup: 'rounded-xl' }
+            });
+            return; 
+          }
           setPreviewData(cleanData);
         }
       });
@@ -52,7 +66,6 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
     setPdfFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // 👇 MOTOR DE EXTRAÇÃO OCR (GLOBAL MAX ALGORITHM) 👇
   const processPdfImport = async () => {
     if (pdfFiles.length === 0) return;
     setIsImporting(true);
@@ -80,11 +93,9 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
         const textNoSpaces = textUpper.replace(/\s+/g, '');
         const filenameUpper = file.name.toUpperCase();
 
-        // 1. Identificação Blindada de Fornecedor
         let isDell = textUpper.includes("DELL") || textNoSpaces.includes("DELL") || filenameUpper.includes("DELL");
         let fornecedor = isDell ? "DELL COMPUTADORES DO BRASIL LTDA" : "Fornecedor Não Identificado";
 
-        // 2. Classificação de Serviço
         let servico = "Aquisição de Hardware";
         if (textNoSpaces.includes("DANFSE") || textNoSpaces.includes("NFSE") || textNoSpaces.includes("SERVIÇOS") || filenameUpper.includes("NFS")) {
             servico = "Suporte e Serviços TI";
@@ -92,7 +103,6 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
             servico = "Pedido de Compra (PDC)";
         }
 
-        // 3. Captura de Data Universal
         let dataEmissao = "";
         const dateMatch = textNoSpaces.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
         if (dateMatch) {
@@ -105,12 +115,11 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
             }
         }
 
-        // 4. Captura de Valor (GLOBAL MAX) - Procura o maior valor monetário em todo o PDF
         let bestMatch = 0;
         const regex = /(?:^|[^\d.,])(\d{1,3}(?:[.,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?=[^\d.,]|$)/g;
         let match;
         
-        while ((match = regex.exec(textUpper)) !== null) { // Usa textUpper original para evitar que os números se colem
+        while ((match = regex.exec(textUpper)) !== null) { 
             let numStr = match[1];
             let cleanStr = numStr.replace(/[^\d.,]/g, '');
             let lastDot = cleanStr.lastIndexOf('.');
@@ -126,7 +135,6 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                 floatVal = parseFloat(cleanStr);
             }
             
-            // Bloqueia aberrações (> 1.000.000 são CNPJs)
             if (floatVal > bestMatch && floatVal < 1000000) {
                 bestMatch = floatVal;
             }
@@ -173,7 +181,6 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
         for (let i = 0; i < previewData.length; i++) {
           const row = previewData[i];
 
-          // Evita salvar faturas com leitura zerada
           if (importCategory === 'Lote PDFs' && row.Valor_Realizado === "0,00") {
               errorCount++;
               errorDetails.push(`Linha ignorada: Valor zerado (${row.Arquivo_Origem})`);
@@ -265,7 +272,12 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
               if (willAssign) {
                 const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
                 if (!emp) { throw new Error(`Salvo no Estoque/Obra, pois o E-mail '${emailColab}' não existe no sistema.`); }
-                const assignRes = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: resData.data.id }) });
+                
+                // 🚨 AQUI ESTÁ A CORREÇÃO DA LEITURA DO ID 🚨
+                const assetIdToAssign = resData?.data?.id || resData?.id; 
+                if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas o backend não devolveu o ID para vincular.`);
+
+                const assignRes = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: assetIdToAssign }) });
                 if (!assignRes.ok) throw new Error(`Salvo no Estoque, erro ao vincular a '${emailColab}'.`);
               }
             }
@@ -278,7 +290,36 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
         setPreviewData(null);
         fetchData();
 
-        if (errorCount > 0) { alert(`⚠️ Operação Concluída com ressalvas!\n\n✅ Sucesso: ${successCount}\n❌ Avisos: ${errorCount}\n\nÚltimos Avisos:\n${errorDetails.slice(-6).join('\n')}`); } else { alert(`✅ Dados registrados no sistema com sucesso!`); }
+        if (errorCount > 0) { 
+          Swal.fire({
+            title: 'Concluído com ressalvas!',
+            html: `
+              <div style="text-align: left;">
+                <p>✅ <b>Sucesso:</b> ${successCount} registros</p>
+                <p>❌ <b>Avisos/Erros:</b> ${errorCount}</p>
+                <br/>
+                <p><b>Detalhes dos últimos erros:</b></p>
+                <pre style="font-size: 12px; white-space: pre-wrap; color: #ef4444; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">${errorDetails.slice(-6).join('\n')}</pre>
+              </div>
+            `,
+            icon: 'warning',
+            background: '#1f2937',
+            color: '#ffffff',
+            confirmButtonColor: '#f59e0b',
+            confirmButtonText: 'Entendi',
+            customClass: { popup: 'rounded-xl' }
+          });
+        } else { 
+          Swal.fire({
+            title: 'Sucesso!',
+            text: 'Dados registrados no sistema com sucesso!',
+            icon: 'success',
+            background: '#1f2937',
+            color: '#ffffff',
+            confirmButtonColor: '#10b981', 
+            customClass: { popup: 'rounded-xl' }
+          });
+        }
     }, true, 'Confirmar e Salvar');
   };
 
