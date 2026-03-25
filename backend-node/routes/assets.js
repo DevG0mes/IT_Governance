@@ -10,20 +10,25 @@ router.get('/', async (req, res) => {
   try {
     const assets = await Asset.findAll({
       include: [
-        { model: AssetNotebook, as: 'Notebook' },
-        { model: AssetStarlink, as: 'Starlink' },
-        { model: AssetChip, as: 'Chip' },
-        { model: AssetCelular, as: 'Celular' },
-        // Futuramente, você adiciona os includes de MaintenanceLogs e Assignments aqui
+        { 
+          model: AssetNotebook, 
+          as: 'notebook',
+          attributes: { exclude: ['id'] } // 🚨 AQUI ESTÁ A SOLUÇÃO: Ignora o campo 'id' que não existe
+        },
+        { model: AssetStarlink, as: 'starlink', attributes: { exclude: ['id'] } },
+        { model: AssetChip, as: 'chip', attributes: { exclude: ['id'] } },
+        { model: AssetCelular, as: 'celular', attributes: { exclude: ['id'] } },
+        { model: Employee, as: 'employee' }
       ]
     });
-    res.status(200).json({ data: assets });
+    
+    res.json(assets);
   } catch (error) {
-    // 👇 Mudamos aqui para ver a verdade!
-    res.status(500).json({ error: "Erro real do MySQL: " + error.message });
+    console.error(error);
+    // Continuamos com o nosso "Soro da Verdade" para qualquer outro detalhe
+    res.status(500).json({ error: "Erro real no MySQL: " + error.message });
   }
 });
-
 // POST: Criar novo hardware (Com Transação / tx.Begin)
 router.post('/', async (req, res) => {
   const input = req.body;
