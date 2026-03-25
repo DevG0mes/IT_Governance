@@ -98,16 +98,52 @@ export default function App() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    fetch(`${API_BASE_URL}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
-    .then(async res => { if(!res.ok) throw new Error((await res.json()).error); return res.json(); })
+    setIsLoading(true); // Opcional: Ativa o loading se você tiver esse estado
+
+    fetch(`${API_BASE_URL}/api/login`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(loginForm) 
+    })
+    .then(async res => { 
+      const responseData = await res.json();
+      if (!res.ok) throw new Error(responseData.error || "Erro desconhecido"); 
+      return responseData; 
+    })
     .then(data => {
         const loggedUser = data.data; 
-        loggedUser.permissions = loggedUser.permissions_json ? JSON.parse(loggedUser.permissions_json) : (roleTemplates[loggedUser.cargo] || {});
+
+        // 🛡️ TRATAMENTO DE PERMISSÕES BLINDADO
+        // Tenta ler com underscore (padrão banco) ou camelCase (padrão antigo)
+        const rawPermissions = loggedUser.permissions_json || loggedUser.permissionsJSON;
+        
+        try {
+          loggedUser.permissions = rawPermissions ? JSON.parse(rawPermissions) : (roleTemplates[loggedUser.cargo] || {});
+        } catch (e) {
+          console.error("Erro ao processar permissões:", e);
+          loggedUser.permissions = roleTemplates[loggedUser.cargo] || {};
+        }
+
+        // Grava no Storage para persistência
         sessionStorage.setItem('jwt_token', data.token);
         sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
+        
+        // 🔥 GATILHO DE ENTRADA: Isso faz o React trocar a tela
         setCurrentUser(loggedUser); 
-        setTimeout(() => { registerLog('LOGIN', 'Autenticação', `Acessou o sistema.`); }, 500);
-    }).catch(err => { alert("Acesso Negado: E-mail ou senha incorretos."); });
+
+        // Log de auditoria em background
+        setTimeout(() => { 
+          registerLog('LOGIN', 'Autenticação', `Acessou o sistema.`); 
+        }, 500);
+
+    })
+    .catch(err => { 
+      console.error("Erro no login:", err);
+      alert("Acesso Negado: " + err.message); 
+    })
+    .finally(() => {
+      setIsLoading(false);
+    });
   };
 
   const handleLogout = () => { registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); sessionStorage.clear(); setCurrentUser(null); setLoginForm({ email: '', senha: '' }); };

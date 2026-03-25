@@ -19,7 +19,8 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredContracts.length && filteredContracts.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredContracts.map(item => item.id));
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const handleBulkDelete = () => {
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com'; 
+ const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} medições?`, async () => {
         try {

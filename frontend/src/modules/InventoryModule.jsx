@@ -28,7 +28,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
   const [statusModalData, setStatusModalData] = useState(null);
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const extractError = async (res, defaultMsg) => {
+  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  
+  const extractError = async (res, defaultMsg) => {
     try { const data = await res.json(); return data.error || defaultMsg; } 
     catch (e) { return `${defaultMsg} (Erro no Servidor. Verifique o terminal do Go ou Banco de Dados)`, e; }
   };

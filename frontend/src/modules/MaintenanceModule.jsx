@@ -12,7 +12,8 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
   // Filtra apenas os que estão em manutenção ou inativos
   const maintenanceAssets = assets.filter(a => ['Manutenção', 'Descartado', 'Bloqueado', 'Inutilizado', 'Extraviado/Roubado'].includes(a.status));
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const resolveMaintenance = (assetId) => { 
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  
+const resolveMaintenance = (assetId) => { 
     requestConfirm('Finalizar Manutenção', 'Deseja devolver este equipamento para o estoque?', async () => { 
       try {
         const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT', headers: getAuthHeaders() });
