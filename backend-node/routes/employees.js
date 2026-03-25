@@ -18,15 +18,24 @@ const { standardizeText, standardizeEmail } = require('../utils/sanitizer');
 
 router.get('/', async (req, res) => {
   try {
+    // 1. Tente buscar primeiro SEM o include para garantir que a conexão está OK
     const employees = await Employee.findAll({ 
-      order: [['nome', 'ASC']],
-      // Opcional: incluir ativos atuais na listagem
-      include: [{ model: Asset, as: 'Assets', through: { where: { returned_at: null } } }] 
+      order: [['nome', 'ASC']] 
     });
+
+    // 2. Log de Depuração (Aparecerá no stderr.log da Hostinger)
+    console.log(`✅ Sucesso: Encontrados ${employees.length} colaboradores.`);
+
+    // 3. Retorno no padrão que o seu Frontend em React espera
     return res.status(200).json({ data: employees });
+
   } catch (error) {
+    // 🚨 Log detalhado para você saber se o erro é no SQL ou no Sequelize
     console.error("❌ Erro ao buscar colaboradores:", error.message);
-    return res.status(500).json({ error: 'Erro ao buscar colaboradores' });
+    return res.status(500).json({ 
+      error: 'Erro interno no servidor',
+      details: error.message 
+    });
   }
 });
 
