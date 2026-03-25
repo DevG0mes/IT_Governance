@@ -18,8 +18,8 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   // 👇 Funções de Checkbox e Exclusão em Lote 👇
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredContracts.length && filteredContracts.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredContracts.map(item => item.id));
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const handleBulkDelete = () => {
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} medições?`, async () => {
         try {

@@ -16,8 +16,8 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
   const [selectedLicenseToAssign, setSelectedLicenseToAssign] = useState('');
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
   const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
   const [offboardingTarget, setOffboardingTarget] = useState(null);
   const [offboardingChecks, setOffboardingChecks] = useState({

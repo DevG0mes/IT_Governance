@@ -8,8 +8,8 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
   const [previewData, setPreviewData] = useState(null);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";

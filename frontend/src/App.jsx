@@ -18,8 +18,8 @@ import { roleTemplates } from './constants/permissions';
 import { getAuthHeaders, formatCurrency } from './utils/helpers';
 
 // 👇 AQUI ESTÁ A MÁGICA: Pega do .env ou usa localhost como fallback
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });

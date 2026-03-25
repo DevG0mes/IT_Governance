@@ -8,8 +8,8 @@ export default function OffboardingModule({ employees = [], assets = [], license
   const [showAllDesligados, setShowAllDesligados] = useState(false);
 
   const getActiveAssets = (empId) => (assets || []).filter(a => a.status === 'Em uso' && a.assignments?.some(asg => asg.employee_id === empId && !asg.returned_at));
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const getActiveLicenses = (empId) => {
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const getActiveLicenses = (empId) => {
     const empLics = [];
     (licenses || []).forEach(lic => {
       if (lic.assignments) {

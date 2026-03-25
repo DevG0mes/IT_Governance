@@ -7,8 +7,8 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
   const [editLicenseData, setEditLicenseData] = useState(null);
   const [newLicense, setNewLicense] = useState({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' });
   const [viewLicenseUsers, setViewLicenseUsers] = useState(null);
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-  const handleCreateLicense = async (e) => { 
+// Substitua temporariamente a linha por esta (com a URL real do seu backend):
+const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  const handleCreateLicense = async (e) => { 
     e.preventDefault(); 
     const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; 
     try {
