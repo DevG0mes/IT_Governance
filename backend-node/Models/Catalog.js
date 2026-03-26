@@ -9,9 +9,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING, 
       allowNull: false 
     },
-    categoria: { 
+    category: { 
       type: DataTypes.STRING 
-    }
+    },
+    valor: { 
+      type: DataTypes.FLOAT 
+    },
   }, { 
     tableName: 'catalog_items', 
     timestamps: false // 🚨 CORRIGIDO: Desligando a busca por createdAt e updatedAt

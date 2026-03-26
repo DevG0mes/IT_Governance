@@ -33,9 +33,28 @@ module.exports = (sequelize, DataTypes) => {
     offboarding_onfly: { 
       type: DataTypes.INTEGER, 
       defaultValue: 0 
+    },
+    offboarding_adm365: { 
+      type: DataTypes.INTEGER, 
+      defaultValue: 0 
+    },
+    offboarding_licenses: { 
+      type: DataTypes.INTEGER, 
+      defaultValue: 0
+    },
+    offboarding_mega: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    offboarding_date: {
+      type:DataTypes.DATE,
+      allowNull: true
     }
+
   }, { 
     tableName: 'employees', 
-    timestamps: false // 🚨 DESLIGADO: Impede o erro do createdAt/updatedAt 🚨
+    timestamps: false, // 🚨 DESLIGADO: Impede o erro do createdAt/updatedAt 🚨
+    createAt: 'created_at',
+    updatedAt: 'updated_at'
   });
 };

@@ -5,11 +5,11 @@ module.exports = (sequelize, DataTypes) => {
             primaryKey: true,
             autoIncrement: true
         },
-        EmployeeId: {
+        employee_id: {
             type: DataTypes.INTEGER,
             allowNull: false
         },
-        LicenseId: {
+        license_id: {
             type: DataTypes.INTEGER,
             allowNull: false
         },
@@ -19,7 +19,12 @@ module.exports = (sequelize, DataTypes) => {
         }
     }, {
         tableName: 'employee_licenses', // O nome da tabela no seu DBeaver
-        timestamps: false
+        timestamps: true, // 🚨 ATIVADO: Permite que o Sequelize gerencie as datas
+        paranoid: true,
+        createdAt: 'created_at', // Mapeando o nome exato do banco
+        updatedAt: 'updated_at',
+        deletedAt: 'deleted_at'
+
     });
 
     return EmployeeLicense;

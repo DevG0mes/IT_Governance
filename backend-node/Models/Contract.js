@@ -5,21 +5,32 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true, 
       autoIncrement: true 
     },
+    servico: { 
+      type: DataTypes.STRING, 
+      allowNull: false 
+    },
     fornecedor: { 
       type: DataTypes.STRING, 
       allowNull: false 
     },
-    numero_contrato: { 
-      type: DataTypes.STRING 
+    mes_competencia: { 
+      type: DataTypes.STRING, 
+      allowNull: false 
     },
-    valor: { 
+    valor_previsto: { 
       type: DataTypes.FLOAT 
     },
-    data_fim: { 
-      type: DataTypes.DATEONLY 
-    }
+    valor_realizado: { 
+      type: DataTypes.FLOAT 
+    },
+    url_contrato: { 
+      type: DataTypes.STRING 
+    },
+    
   }, { 
     tableName: 'contracts', 
-    timestamps: false // 🚨 CORRIGIDO: Desligando a busca por createdAt e updatedAt
+    timestamps: false,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
   });
 };

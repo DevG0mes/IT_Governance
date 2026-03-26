@@ -5,21 +5,34 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true, 
       autoIncrement: true 
     },
-    nome_software: { 
+    nome: { 
       type: DataTypes.STRING, 
       allowNull: false 
     },
-    chave_licenca: { 
+    fornecedor: { 
       type: DataTypes.STRING 
     },
-    quantidade: { 
-      type: DataTypes.INTEGER 
+    plano: { 
+      type: DataTypes.STRING 
     },
-    data_expiracao: { 
+    custo: { 
+      type: DataTypes.DECIMAL(10, 2) // Usamos DECIMAL para valores financeiros (moeda)
+    },
+    quantidade_total: { 
+      type: DataTypes.INTEGER,
+      defaultValue: 1
+    },
+    quantidade_em_uso: { 
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    data_renovacao: { 
       type: DataTypes.DATEONLY 
     }
   }, { 
     tableName: 'licenses', 
-    timestamps: false // 🚨 CORRIGIDO: O último vilão dos Erros 500 foi desativado!
+    timestamps: true, // 🚨 Reativamos para o Sequelize preencher as datas sozinho
+    createdAt: 'created_at', // Mapeando o nome exato do banco
+    updatedAt: 'updated_at'  // Mapeando o nome exato do banco
   });
 };

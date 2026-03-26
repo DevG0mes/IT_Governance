@@ -1,25 +1,46 @@
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define('AuditLog', {
+  const AuditLog = sequelize.define('AuditLog', {
     id: { 
       type: DataTypes.INTEGER, 
       primaryKey: true, 
       autoIncrement: true 
     },
-    user_email: { 
+    table_name: { 
       type: DataTypes.STRING 
     },
     action: { 
       type: DataTypes.STRING, 
       allowNull: false 
     },
-    details: { 
+    record_id: { 
+      type: DataTypes.INTEGER 
+    },
+    old_data: { 
+      type: DataTypes.TEXT // TEXT é mais seguro aqui para evitar problemas de codificação do JSON
+    },
+    new_data: { 
       type: DataTypes.TEXT 
     },
-    ip_address: { 
+    changed_at: { 
+      type: DataTypes.DATE 
+    },
+    timestamp: { 
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    },
+    user: { 
       type: DataTypes.STRING 
+    },
+    module: { 
+      type: DataTypes.STRING 
+    },
+    details: { 
+      type: DataTypes.TEXT 
     }
   }, { 
     tableName: 'audit_logs', 
-    timestamps: false // 🚨 CORRIGIDO: Desligando a busca automática de datas
+    timestamps: false // Deixamos false porque já mapeamos 'changed_at' e 'timestamp' manualmente acima
   });
+
+  return AuditLog;
 };
