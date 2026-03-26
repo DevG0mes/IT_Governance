@@ -1,5 +1,5 @@
 const pdfParse = require('pdf-parse');
-const { Contract } = require('../config/db');
+const { Contract } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {

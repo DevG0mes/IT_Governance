@@ -1,4 +1,4 @@
-const { CatalogItem } = require('../config/db');
+const { CatalogItem } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {

@@ -5,7 +5,7 @@ const {
   AssetAssignment, 
   License, 
   EmployeeLicense 
-} = require('../config/db');
+} = require('../../config/db');
 const { standardizeText, standardizeEmail } = require('../utils/sanitizer');
 
 exports.getAll = async (req, res) => {

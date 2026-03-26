@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { User } = require('../config/db');
+const { User } = require('../../config/db');
 
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
 

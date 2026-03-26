@@ -1,4 +1,4 @@
-const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../config/db');
+const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {

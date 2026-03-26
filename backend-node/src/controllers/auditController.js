@@ -1,5 +1,5 @@
 // ✅ Importação centralizada no db.js
-const { AuditLog } = require('../config/db');
+const { AuditLog } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {

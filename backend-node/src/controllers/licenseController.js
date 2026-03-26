@@ -3,7 +3,7 @@ const {
   License, 
   EmployeeLicense, 
   Employee 
-} = require('../config/db');
+} = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {

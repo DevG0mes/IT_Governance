@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const { User } = require('../config/db');
+const { User } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {
