@@ -3,18 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const timeout = require('connect-timeout'); 
 const compression = require('compression'); 
-// 🚨 NOVO: Escudos de proteção
 const helmet = require('helmet'); 
 const rateLimit = require('express-rate-limit'); 
 require('dotenv').config();
+
+// Conexão com o Banco (Caminho relativo à raiz)
 const { connectDatabase } = require('./config/db');
 
-// Ferramentas e Segurança
-const { sanitizeBody } = require('./utils/sanitizer');
-const verificarToken = require('./middlewares/auth'); 
-const verificarAdmin = require('./middlewares/admin'); 
+// Middlewares de Segurança
+const verificarToken = require('./src/middlewares/auth'); 
+const verificarAdmin = require('./src/middlewares/admin'); 
 
-// Rotas
+// Rotas (Certifique-se que os arquivos existem nestes caminhos)
 const authRoutes = require('./src/routes/auth'); 
 const employeeRoutes = require('./src/routes/employees'); 
 const assetRoutes = require('./src/routes/assets'); 
@@ -26,59 +26,47 @@ const userRoutes = require('./src/routes/users');
 
 const app = express();
 
-// --- PROTEÇÃO DE CABEÇALHOS (HELMET) ---
-// Esconde que a API é feita em Node/Express e protege contra XSS/Clickjacking
+// --- 1. PROTEÇÃO DE INFRAESTRUTURA ---
 app.use(helmet()); 
-
-// --- PROTEÇÃO DE PROCESSOS (HOSTINGER NPROC) ---
-app.use(timeout('10s'));
-
-// --- COMPRESSÃO DE DADOS ---
+app.use(timeout('15s')); // Aumentado para 15s para dar folga ao PDF Parse
 app.use(compression()); 
 
-// --- CONFIGURAÇÃO DE CORS ---
+// --- 2. CONFIGURAÇÃO DE CORS (Ajustado para produção) ---
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'Content-Type', 'Accept', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limite de JSON aumentado para logs/lotes
+app.use(express.urlencoded({ extended: true }));
 
-// --- MIDDLEWARE DE BLINDAGEM DE CONEXÃO ---
-app.use((req, res, next) => {
-  res.setHeader('Connection', 'close');
-  if (!req.timedout) next();
-});
-
-app.use(sanitizeBody); 
-
-// Rota de Health Check
-app.get('/api/health', (req, res) => {
-  if (req.timedout) return;
-  res.json({ status: 'OK', message: 'Servidor PSI Energy Online' });
-});
-
-// --- RATE LIMIT (TRAVA CONTRA FORÇA BRUTA) ---
-// Se um mesmo IP tentar fazer Login 5 vezes seguidas e errar, fica bloqueado por 15 minutos.
+// --- 3. RATE LIMIT (Proteção contra Brute Force) ---
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 5, // Limite de 5 requisições por IP na janela de tempo
-  message: { error: "Muitas tentativas de login fracassadas. Por segurança, tente novamente em 15 minutos." },
+  windowMs: 15 * 60 * 1000, 
+  max: 10, // Aumentado para 10 para evitar bloqueios por erro do usuário
+  message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
   standardHeaders: true, 
   legacyHeaders: false,
 });
 
-// Aplica a trava EXCLUSIVAMENTE na rota de login antes de chamar as rotas públicas
-app.use('/api/login', loginLimiter);
+// --- 4. DEFINIÇÃO DAS ROTAS ---
 
-// 🔓 ROTAS PÚBLICAS
-app.use('/api', authRoutes);
+// Rota de Health Check (Sempre aberta)
+app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI Node.js' }));
 
-// 🛡️ MIDDLEWARE DE SEGURANÇA GLOBAL
-app.use('/api', verificarToken);
+// Rotas de Autenticação (Login/Setup)
+app.use('/api/auth', loginLimiter, authRoutes); 
+// Nota: Se o seu authRoutes já tem router.post('/login'), a URL será /api/auth/login
 
-// --- Rotas de Módulos (Protegidas) ---
+// --- 🛡️ FILTRO DE SEGURANÇA GLOBAL (Daqui para baixo precisa de Token) ---
+app.use('/api', (req, res, next) => {
+    // Pula a verificação se for rota de login ou health
+    if (req.path.includes('/auth') || req.path.includes('/health')) return next();
+    verificarToken(req, res, next);
+});
+
+// Rotas Protegidas
 app.use('/api/assets', assetRoutes);
 app.use('/api/licenses', licenseRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -86,21 +74,16 @@ app.use('/api/contracts', contractRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
 
-// 👑 BLOCO DE ACESSO RESTRITO
+// Acesso Restrito ao Admin
 app.use('/api/users', verificarAdmin, userRoutes);
 
-// 🚨 TRATAMENTO GLOBAL DE ERROS E TIMEOUTS
+// --- 5. TRATAMENTO DE ERROS (O "Pára-raios") ---
 app.use((err, req, res, next) => {
   if (req.timedout) {
-    return res.status(503).json({ 
-      error: 'Tempo limite da requisição excedido. Processo liberado por segurança.' 
-    });
+    return res.status(503).json({ error: 'Timeout: O servidor demorou muito para responder.' });
   }
-
-  console.error('Erro não tratado:', err);
-  if (!res.headersSent) {
-    res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
-  }
+  console.error('❌ Erro Crítico:', err.stack);
+  res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
 });
 
 const PORT = process.env.PORT || 8080;
@@ -110,16 +93,16 @@ const startServer = async () => {
     await connectDatabase();
     
     const server = app.listen(PORT, () => {
-      console.log(`🚀 API GovTI rodando na porta ${PORT}!`);
+      console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });
 
-    // Ajustes de rede nativos para Hostinger
-    server.keepAliveTimeout = 0; 
-    server.headersTimeout = 15000; 
-    server.timeout = 10000; 
+    // Ajustes para evitar o erro "OS can't spawn worker thread"
+    server.keepAliveTimeout = 60000; 
+    server.headersTimeout = 65000; 
 
   } catch (err) {
-    console.error('Falha ao iniciar o servidor:', err);
+    console.error('❌ Falha catastrófica no boot:', err);
+    process.exit(1); // Força o encerramento para a Hostinger reiniciar o processo limpo
   }
 };
 
