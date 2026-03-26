@@ -11,8 +11,8 @@ require('dotenv').config();
 const { connectDatabase } = require('./config/db');
 
 // Middlewares de Segurança
-const verificarToken = require('./src/middlewares/auth'); 
-const verificarAdmin = require('./src/middlewares/admin'); 
+const verificarToken = require('./middlewares/auth'); 
+const verificarAdmin = require('./middlewares/admin'); 
 
 // Rotas (Certifique-se que os arquivos existem nestes caminhos)
 const authRoutes = require('./src/routes/auth'); 
