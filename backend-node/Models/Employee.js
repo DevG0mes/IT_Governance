@@ -38,7 +38,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER, 
       defaultValue: 0 
     },
-    offboarding_licenses: { 
+    offboarding_license: { 
       type: DataTypes.INTEGER, 
       defaultValue: 0
     },
