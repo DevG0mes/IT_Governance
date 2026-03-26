@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Wrench, Monitor, MoreVertical, Edit2, CheckCircle, X } from 'lucide-react';
-import { getAuthHeaders } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function MaintenanceModule({ assets, hasAccess, fetchData, requestConfirm, registerLog }) {
   const [openActionMenu, setOpenActionMenu] = useState(null);
@@ -11,17 +12,20 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
 
   // Filtra apenas os que estão em manutenção ou inativos
   const maintenanceAssets = assets.filter(a => ['Manutenção', 'Descartado', 'Bloqueado', 'Inutilizado', 'Extraviado/Roubado'].includes(a.status));
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  
-const resolveMaintenance = (assetId) => { 
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
+
+  const resolveMaintenance = (assetId) => { 
     requestConfirm('Finalizar Manutenção', 'Deseja devolver este equipamento para o estoque?', async () => { 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/resolve-maintenance`, { method: 'PUT', headers: getAuthHeaders() });
-        if(!res.ok) throw new Error("Erro");
+        // 🚨 NOVO: api.put limpo
+        await api.put(`/api/assets/${assetId}/resolve-maintenance`);
+        
         registerLog('UPDATE', 'Manutenção', `Retornou ativo ID ${assetId} p/ estoque`); 
         setOpenActionMenu(null); 
         fetchData(); 
-      } catch(err) { alert(err.message); }
+      } catch(err) { alert(getAxiosError(err, 'Erro ao finalizar manutenção')); }
     }, false, 'Devolver ao Estoque'); 
   };
 
@@ -35,12 +39,16 @@ const resolveMaintenance = (assetId) => {
   const submitEditMaintenance = async (e) => { 
     e.preventDefault(); 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ chamado: editMaintenanceForm.chamado, observacao: editMaintenanceForm.observacao }) });
-      if(!res.ok) throw new Error("Erro");
+      // 🚨 NOVO: api.put limpo
+      await api.put(`/api/assets/${editMaintenanceForm.assetId}/update-maintenance`, { 
+          chamado: editMaintenanceForm.chamado, 
+          observacao: editMaintenanceForm.observacao 
+      });
+      
       registerLog('UPDATE', 'Manutenção', `Atualizou log do ativo ID ${editMaintenanceForm.assetId}`); 
       setIsEditMaintenanceModalOpen(false); 
       fetchData(); 
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao atualizar histórico de manutenção')); }
   };
 
   return (

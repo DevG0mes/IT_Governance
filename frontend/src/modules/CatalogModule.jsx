@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Tag, X } from 'lucide-react';
-import { getAuthHeaders, parseCurrencyToFloat } from '../utils/helpers';
+import { parseCurrencyToFloat } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function CatalogModule({ catalogItems, assets = [], hasAccess, fetchData, formatCurrency, requestConfirm, registerLog }) {
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
@@ -11,13 +13,16 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
 
   const selectedCategory = editCatalogData ? editCatalogData.category : newCatalogItem.category;
   const currentNome = editCatalogData ? editCatalogData.nome : newCatalogItem.nome;
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  // Filtro Inteligente e Rigoroso: Puxa modelos distintos APENAS de suas tabelas reais
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
+
+  // Filtro Inteligente e Rigoroso: Puxa modelos distintos APENAS de suas tabelas reais
   const availableModels = useMemo(() => {
     const models = new Set();
     const targetCategory = (selectedCategory || '').trim().toLowerCase();
 
-    // 1. Busca no Estoque Físico com Dupla Validação (Garante que a tabela não está nula)
+    // 1. Busca no Estoque Físico com Dupla Validação
     if (assets && assets.length > 0) {
       assets.forEach(a => {
         const type = (a.asset_type || '').trim().toLowerCase();
@@ -56,35 +61,38 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
     e.preventDefault(); 
     const payload = { ...newCatalogItem, valor: parseCurrencyToFloat(newCatalogItem.valor) }; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/catalog`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if(!res.ok) throw new Error("Erro ao salvar");
+      // 🚨 NOVO: api.post
+      await api.post('/api/catalog', payload);
+      
       registerLog('CREATE', 'Catálogo', `Cadastrou item: ${payload.nome}`); 
       setIsCatalogModalOpen(false); 
       setNewCatalogItem({ category: 'Notebook', nome: '', valor: '' });
       setIsManualMode(false);
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao salvar no catálogo')); }
   };
 
   const handleUpdateCatalogItem = async (e) => { 
     e.preventDefault(); 
     const payload = { ...editCatalogData, valor: parseCurrencyToFloat(editCatalogData.valor) }; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/catalog/${editCatalogData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if(!res.ok) throw new Error("Erro ao atualizar");
+      // 🚨 NOVO: api.put
+      await api.put(`/api/catalog/${editCatalogData.id}`, payload);
+      
       registerLog('UPDATE', 'Catálogo', `Atualizou item no catálogo ID ${payload.id}`); 
       setEditCatalogData(null); 
       setIsManualMode(false);
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao atualizar no catálogo')); }
   };
 
   const handleDeleteCatalogItem = (id) => { 
     requestConfirm('Excluir do Catálogo', 'Certeza que deseja remover este item do catálogo base?', async () => { 
       try {
-        await fetch(`${API_BASE_URL}/api/catalog/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+        // 🚨 NOVO: api.delete
+        await api.delete(`/api/catalog/${id}`);
         fetchData(); 
-      } catch (err) { alert("Erro ao excluir.", err); }
+      } catch (err) { alert(`Erro ao excluir: ${getAxiosError(err, 'Falha')}`); }
     }, true); 
   };
 

@@ -1,46 +1,53 @@
 import React, { useState } from 'react';
 import { CreditCard, Edit2, X, Users } from 'lucide-react';
-import { getAuthHeaders, parseCurrencyToFloat } from '../utils/helpers';
+import { parseCurrencyToFloat } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function LicensesModule({ licenses, hasAccess, fetchData, registerLog, formatCurrency }) {
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
   const [editLicenseData, setEditLicenseData] = useState(null);
   const [newLicense, setNewLicense] = useState({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' });
   const [viewLicenseUsers, setViewLicenseUsers] = useState(null);
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  
-const handleCreateLicense = async (e) => { 
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
+
+  const handleCreateLicense = async (e) => { 
     e.preventDefault(); 
     const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if(!res.ok) throw new Error("Erro");
+      // 🚨 NOVO: api.post limpo
+      await api.post('/api/licenses', payload);
+      
       registerLog('CREATE', 'Licenças', `Cadastrou licença ${payload.nome}`); 
       setIsLicenseModalOpen(false); 
       setNewLicense({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' }); 
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao criar licença')); }
   };
 
   const handleUpdateLicense = async (e) => { 
     e.preventDefault(); 
     const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses/${editLicenseData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if(!res.ok) throw new Error("Erro");
+      // 🚨 NOVO: api.put limpo
+      await api.put(`/api/licenses/${editLicenseData.id}`, payload);
+      
       registerLog('UPDATE', 'Licenças', `Atualizou licença ${payload.nome}`); 
       setEditLicenseData(null); 
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao atualizar licença')); }
   };
 
   const unassignLicense = async (assignmentId) => { 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      if(!res.ok) throw new Error("Erro");
+      // 🚨 NOVO: api.delete limpo
+      await api.delete(`/api/licenses/unassign/${assignmentId}`);
+      
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); 
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao revogar licença')); }
   };
 
   return (

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edit2, Printer, Laptop, Smartphone, Cpu, Wifi, Database, Users, ExternalLink, AlertTriangle, Link } from 'lucide-react';
-import { getAuthHeaders } from '../utils/helpers';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog }) {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -16,8 +17,8 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [activeEmployee, setActiveEmployee] = useState(null);
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
   const [selectedLicenseToAssign, setSelectedLicenseToAssign] = useState('');
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
+  
+  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
   const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
   const [offboardingTarget, setOffboardingTarget] = useState(null);
   const [offboardingChecks, setOffboardingChecks] = useState({
@@ -29,6 +30,9 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [offboardingTermoUrl, setOffboardingTermoUrl] = useState('');
   const [isSubmittingOffboarding, setIsSubmittingOffboarding] = useState(false);
   // ─────────────────────────────────────────────────────────────────────────────
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
   const activeEmployees = employees.filter(e =>
     e.status !== 'Desligado' &&
@@ -55,52 +59,48 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} colaboradores?`, async () => {
       try {
         await Promise.all(selectedIds.map(async (id) => {
-          const res = await fetch(`${API_BASE_URL}/api/employees/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-          if (!res.ok) throw new Error(`Falha no ID ${id}`);
+          await api.delete(`/api/employees/${id}`);
         }));
         registerLog('DELETE BULK', 'COLABORADORES', `Excluiu ${selectedIds.length} cols.`);
         setSelectedIds([]);
         fetchData();
-      } catch (err) { alert(`❌ Erro: ${err.message}`); }
+      } catch (err) { alert(`❌ Erro: ${getAxiosError(err, 'Falha na exclusão em massa')}`); }
     }, true, 'Excluir');
   };
 
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE_URL}/api/employees`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(newEmployee) });
-      if (!res.ok) throw new Error("Erro ao salvar");
+      await api.post('/api/employees', newEmployee);
       registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployee.nome}`);
       setIsEmployeeModalOpen(false);
       setNewEmployee({ nome: '', email: '', departamento: '', url_termo: '' });
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao salvar colaborador')); }
   };
 
   const saveEditEmployee = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE_URL}/api/employees/${editEmployeeData.id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(editEmployeeData) });
-      if (!res.ok) throw new Error("Erro");
+      await api.put(`/api/employees/${editEmployeeData.id}`, editEmployeeData);
       registerLog('UPDATE', 'Colaboradores', `Editou dados do colab ID ${editEmployeeData.id}`);
       setEditEmployeeData(null);
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao editar colaborador')); }
   };
 
   const handleDeleteEmployee = (empId) => {
     requestConfirm('Excluir Colaborador', '🔴 EXCLUIR DEFINITIVAMENTE este colaborador? Esta ação não pode ser desfeita.', async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/employees/${empId}`, { method: 'DELETE', headers: getAuthHeaders() });
-        if (!res.ok) throw new Error("Erro");
+        await api.delete(`/api/employees/${empId}`);
         registerLog('DELETE', 'Colaboradores', `Deletou colab ID ${empId}`);
         setOpenActionMenu(null);
         fetchData();
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(getAxiosError(err, 'Erro ao excluir colaborador')); }
     }, true, 'Excluir Colaborador');
   };
 
-  // ─── ABRE O MODAL DE CHECKLIST (não chama API ainda) ─────────────────────────
+  // ─── ABRE O MODAL DE CHECKLIST ─────────────────────────
   const startOffboarding = (emp) => {
     setOpenActionMenu(null);
     setOffboardingTarget(emp);
@@ -123,31 +123,18 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
     setIsSubmittingOffboarding(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/employees/${offboardingTarget.id}/offboarding`, {
-        method: 'PUT',
-        headers: {
-          ...getAuthHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'Em Desligamento',
-          offboarding: true,
-          // Envia o link do termo de devolução junto para persistir no registro
-          url_termo_devolucao: offboardingTermoUrl.trim(),
-        }),
+      await api.put(`/api/employees/${offboardingTarget.id}/offboarding`, {
+        status: 'Em Desligamento',
+        offboarding: true,
+        url_termo_devolucao: offboardingTermoUrl.trim(),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Erro na rota de offboarding do servidor.');
-      }
 
       registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${offboardingTarget.id} — Checks: Onfly✓ MegaERP✓ Admin365✓ Equipamentos✓`);
       setIsOffboardingModalOpen(false);
       setOffboardingTarget(null);
       fetchData();
     } catch (err) {
-      alert(`❌ Erro Crítico: ${err.message}`);
+      alert(`❌ Erro Crítico: ${getAxiosError(err, 'Erro na rota de offboarding do servidor.')}`);
     } finally {
       setIsSubmittingOffboarding(false);
     }
@@ -157,42 +144,38 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const submitAssignment = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE_URL}/api/employees/${activeEmployee.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: parseInt(selectedItemForAssign) }) });
-      if (!res.ok) throw new Error("Erro");
+      await api.put(`/api/employees/${activeEmployee.id}/assign`, { asset_id: parseInt(selectedItemForAssign) });
       registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${selectedItemForAssign} ao colab ID ${activeEmployee.id}`);
       setIsAssignEmployeeModalOpen(false);
       setSelectedItemForAssign('');
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao atribuir equipamento')); }
   };
 
   const handleAction = (assetId, action) => {
     requestConfirm('Confirmar Ação', `Tem certeza que deseja devolver este equipamento?`, async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
-        if (!res.ok) throw new Error("Erro");
+        await api.put(`/api/assets/${assetId}/${action}`);
         registerLog('UPDATE', 'Inventário', `Devolveu o ativo ID ${assetId}`);
         fetchData();
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(getAxiosError(err, 'Erro ao devolver equipamento')); }
     }, true, 'Devolver');
   };
 
   const assignLicenseToEmployee = async (empId, licenseId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses/assign`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: empId, license_id: parseInt(licenseId) }) });
-      if (!res.ok) throw new Error("Erro");
+      await api.post('/api/licenses/assign', { employee_id: empId, license_id: parseInt(licenseId) });
       registerLog('UPDATE', 'Licenças', `Atribuiu licença ${licenseId} ao colab ${empId}`);
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao atribuir licença')); }
   };
 
   const unassignLicense = async (assignmentId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Erro");
+      await api.delete(`/api/licenses/unassign/${assignmentId}`);
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`);
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao revogar licença')); }
   };
 
   const generateTermoPDF = (employee) => {

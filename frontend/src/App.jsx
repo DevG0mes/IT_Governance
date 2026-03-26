@@ -1,29 +1,33 @@
-
-import React, { useState, useEffect } from 'react';
-import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck } from 'lucide-react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
-import DashboardModule from './modules/DashboardModule';
-import AdminModule from './modules/AdminModule';
-import InventoryModule from './modules/InventoryModule';
-import EmployeesModule from './modules/EmployeesModule';
-import MaintenanceModule from './modules/MaintenanceModule';
-import ImportModule from './modules/ImportModule';
-import ExportModule from './modules/ExportModule';
-import LicensesModule from './modules/LicensesModule';
-import ContractsModule from './modules/ContractsModule';
-import CatalogModule from './modules/CatalogModule';
-import OffboardingModule from './modules/OffboardingModule'; 
 
 import { roleTemplates } from './constants/permissions';
-import { getAuthHeaders, formatCurrency } from './utils/helpers';
+import { formatCurrency } from './utils/helpers'; 
+import api from './services/api';
 
-// 👇 AQUI ESTÁ A MÁGICA: Pega do .env ou usa localhost como fallback
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
+// 🚨 NOVO: LAZY LOADING DE COMPONENTES (Code Splitting)
+// O JS de cada módulo só será baixado quando o usuário clicar na aba!
+const DashboardModule = React.lazy(() => import('./modules/DashboardModule'));
+const AdminModule = React.lazy(() => import('./modules/AdminModule'));
+const InventoryModule = React.lazy(() => import('./modules/InventoryModule'));
+const EmployeesModule = React.lazy(() => import('./modules/EmployeesModule'));
+const MaintenanceModule = React.lazy(() => import('./modules/MaintenanceModule'));
+const ImportModule = React.lazy(() => import('./modules/ImportModule'));
+const ExportModule = React.lazy(() => import('./modules/ExportModule'));
+const LicensesModule = React.lazy(() => import('./modules/LicensesModule'));
+const ContractsModule = React.lazy(() => import('./modules/ContractsModule'));
+const CatalogModule = React.lazy(() => import('./modules/CatalogModule'));
+const OffboardingModule = React.lazy(() => import('./modules/OffboardingModule')); 
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('logged_user');
+    const token = localStorage.getItem('token');
+    return (savedUser && token) ? JSON.parse(savedUser) : null;
+  });
   
+  const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
   const [isLoading, setIsLoading] = useState(false);
   
   const [assets, setAssets] = useState([]);
@@ -41,124 +45,120 @@ export default function App() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ nome: '', email: '', senha: '', cargo: 'Gestor' });
 
-  useEffect(() => {
-    const savedUser = sessionStorage.getItem('logged_user');
-    const token = sessionStorage.getItem('jwt_token');
-    if (savedUser && token) setCurrentUser(JSON.parse(savedUser));
-  }, []);
-
-  const fetchData = () => {
-    setIsLoading(true);
-    const startTime = Date.now(); 
+  function handleLogout() { 
+    const userName = currentUser ? currentUser.nome : 'Sistema';
+    api.post('/api/audit-logs', { user: userName, action: 'LOGOUT', module: 'Autenticação', details: 'Saiu do sistema.' }).catch(() => {});
     
-    // 👇 TODOS OS FETCHS AGORA USAM A VARIÁVEL API_BASE_URL 👇
-    Promise.all([
-      fetch(`${API_BASE_URL}/api/assets`, { headers: getAuthHeaders() })
-        .then(res => { if(res.status===401) handleLogout(); return res.json(); }).catch(() => ({data: []})),
-      fetch(`${API_BASE_URL}/api/employees`, { headers: getAuthHeaders() })
-        .then(res => res.json()).catch(() => ({data: []})),
-      fetch(`${API_BASE_URL}/api/licenses`, { headers: getAuthHeaders() })
-        .then(res => res.json()).catch(() => ({data: []})),
-      fetch(`${API_BASE_URL}/api/contracts`, { headers: getAuthHeaders() })
-        .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []})),
-      fetch(`${API_BASE_URL}/api/catalog`, { headers: getAuthHeaders() })
-        .then(res => res.ok ? res.json() : {data: []}).catch(() => ({data: []}))
-    ])
-    .then(([assetsData, empData, licData, contData, catData]) => {
-      setAssets(assetsData.data || []);
-      setEmployees(empData.data || []);
-      setLicenses(licData.data || []);
-      setContracts(contData.data || []);
-      setCatalogItems(catData.data || []);
-    })
-    .finally(() => {
-      const elapsedTime = Date.now() - startTime;
-      const delayRequired = Math.max(1000 - elapsedTime, 0);
-      
-      setTimeout(() => {
-        setIsLoading(false);
-      }, delayRequired);
-    });
-  };
+    localStorage.clear(); 
+    setCurrentUser(null); 
+    setLoginForm({ email: '', senha: '' }); 
+  }
 
-  const fetchAdminData = () => {
-    fetch(`${API_BASE_URL}/api/users`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => { const usersFromDB = (data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) })); setSystemUsers(usersFromDB); }).catch(e => { if(e.message.includes('401')) handleLogout(); });
-    fetch(`${API_BASE_URL}/api/audit-logs`, { headers: getAuthHeaders() }).then(res => res.json()).then(data => setAuditLogs(data.data || []));
-  };
+  async function fetchAdminData() {
+    try {
+      const [usersRes, logsRes] = await Promise.all([
+          api.get('/api/users'),
+          api.get('/api/audit-logs')
+      ]);
+      const usersFromDB = (usersRes.data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) }));
+      setSystemUsers(usersFromDB);
+      setAuditLogs(logsRes.data.data || []);
+    } catch (e) {
+      if(e.response?.status === 401) handleLogout();
+    }
+  }
 
-  const registerLog = (action, module, details) => {
+  async function registerLog(action, module, details) {
     const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
-    fetch(`${API_BASE_URL}/api/audit-logs`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(logEntry) }).then(() => { if (currentUser?.cargo === 'Administrator') fetchAdminData(); });
-  };
+    try {
+      await api.post('/api/audit-logs', logEntry);
+      if (currentUser?.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData();
+    } catch (e) {e.response?.status === 401 && handleLogout();}
+  }
+
+  function fetchData() {
+    setIsLoading(true);
+    const requests = [];
+
+    if (['dashboard', 'export', 'import'].includes(activeTab)) {
+        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
+        requests.push(api.get('/api/contracts').then(res => setContracts(res.data.data || [])));
+        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
+    } 
+    else if (['inventory', 'maintenance'].includes(activeTab)) {
+        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
+    } 
+    else if (['employees', 'offboarding'].includes(activeTab)) {
+        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
+    } 
+    else if (activeTab === 'contracts') {
+        requests.push(api.get('/api/contracts').then(res => setContracts(res.data.data || [])));
+    } 
+    else if (activeTab === 'licenses') {
+        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
+    } 
+    else if (activeTab === 'catalog') {
+        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
+        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
+    }
+
+    Promise.all(requests)
+      .catch(err => {
+        if (err.response?.status === 401) handleLogout();
+      })
+      .finally(() => setIsLoading(false));
+  }
 
   useEffect(() => { 
-    if (currentUser) { fetchData(); if (currentUser.cargo === 'Administrator') fetchAdminData(); } 
+    if (currentUser) { 
+      fetchData(); 
+      if (currentUser.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData(); 
+    } 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
 
   const handleLogin = async (e) => {
-  e.preventDefault(); // 🛡️ Evita o refresh da página
-  
-  // 1. Mostrar um loading pro usuário (Opcional, mas profissional)
-  Swal.fire({
-    title: 'Autenticando...',
-    allowOutsideClick: false,
-    didOpen: () => { Swal.showLoading(); }
-  });
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/login`, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(loginForm) 
+    e.preventDefault(); 
+    Swal.fire({
+      title: 'Autenticando...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
     });
 
-    const contentType = res.headers.get("content-type");
-    
-    if (contentType && contentType.indexOf("application/json") !== -1) {
-      const data = await res.json();
+    try {
+      const res = await api.post('/api/login', loginForm);
+      const data = res.data;
       
-      if (!res.ok) throw new Error(data.error || "E-mail ou senha incorretos.");
-
-      // 2. Sucesso no Login
       const loggedUser = data.data;
       
-      // Processamento das permissões (sua lógica original mantida)
       const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
       loggedUser.permissions = rawPerms 
         ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
         : (roleTemplates[loggedUser.cargo] || {});
 
-      // 3. Persistência
-      sessionStorage.setItem('jwt_token', data.token);
-      sessionStorage.setItem('logged_user', JSON.stringify(loggedUser));
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('logged_user', JSON.stringify(loggedUser));
       
-      // 4. Fecha o loading e entra no sistema
       Swal.close();
       setCurrentUser(loggedUser);
 
-    } else {
-      const text = await res.text();
-      console.error("Resposta não-JSON do servidor:", text);
-      throw new Error("O servidor respondeu com erro de configuração (HTML). Verifique o console.");
+    } catch (err) {
+      Swal.fire({
+        title: 'Erro no Login',
+        text: err.response?.data?.error || "E-mail ou senha incorretos.",
+        icon: 'error',
+        background: '#1f2937',
+        color: '#ffffff',
+        confirmButtonColor: '#ef4444'
+      });
     }
-
-  } catch (err) {
-    console.error("Erro no Login:", err);
-    
-    // 5. Alerta de Erro Personalizado (Substituindo o alert feio)
-    Swal.fire({
-      title: 'Erro no Login',
-      text: err.message,
-      icon: 'error',
-      background: '#1f2937',
-      color: '#ffffff',
-      confirmButtonColor: '#ef4444'
-    });
-  }
-};
-
-  const handleLogout = () => { registerLog('LOGOUT', 'Autenticação', `Saiu do sistema.`); sessionStorage.clear(); setCurrentUser(null); setLoginForm({ email: '', senha: '' }); };
+  };
 
   const hasAccess = (module, requiredLevel = 'read') => { if (!currentUser) return false; if (currentUser.cargo === 'Administrator') return true; const perm = currentUser.permissions[module]; if (!perm || perm === 'none') return false; if (requiredLevel === 'read') return perm === 'read' || perm === 'edit'; if (requiredLevel === 'edit') return perm === 'edit'; return false; };
 
@@ -168,13 +168,30 @@ export default function App() {
     e.preventDefault(); 
     const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-      if(!res.ok) throw new Error("Erro");
-      setIsUserModalOpen(false); fetchAdminData(); registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
-    } catch(err){ alert(err.message); }
+      await api.post('/api/users', payload);
+      setIsUserModalOpen(false); 
+      fetchAdminData(); 
+      registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
+    } catch(err){ alert(err.response?.data?.error || err.message); }
   };
   
-  const deleteSystemUser = (id) => { requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', () => { fetch(`${API_BASE_URL}/api/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() }).then(() => { fetchAdminData(); registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); }); }, true, 'Excluir'); };
+  const deleteSystemUser = (id) => { 
+    requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', async () => { 
+      try {
+        await api.delete(`/api/users/${id}`);
+        fetchAdminData(); 
+        registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); 
+      } catch(err) { alert(err.response?.data?.error || err.message); }
+    }, true, 'Excluir'); 
+  };
+
+  // Componente de Loading visual enquanto o JS do módulo é baixado
+  const FallbackLoader = () => (
+    <div className="flex flex-col items-center justify-center py-32">
+      <Loader2 className="w-12 h-12 text-brandGreen animate-spin mb-4" />
+      <p className="text-gray-400 font-bold animate-pulse">Carregando módulo...</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] font-sans selection:bg-brandGreen selection:text-white pb-32">
@@ -231,17 +248,20 @@ export default function App() {
           </div>
 
           <main className="max-w-7xl mx-auto p-6 mt-4">
-            {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} isLoading={isLoading} />}
-            {activeTab === 'admin' && hasAccess('admin', 'read') && <AdminModule hasAccess={hasAccess} systemUsers={systemUsers} auditLogs={auditLogs} deleteSystemUser={deleteSystemUser} setNewUser={setNewUser} setIsUserModalOpen={setIsUserModalOpen} roleTemplates={roleTemplates} />}
-            {activeTab === 'inventory' && hasAccess('inventory', 'read') && <InventoryModule assets={assets} catalogItems={catalogItems} employees={employees} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
-            {activeTab === 'employees' && hasAccess('employees', 'read') && <EmployeesModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
-            {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && <MaintenanceModule assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
-            {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
-            {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
-            {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
-            {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
-            {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
-            {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
+            {/* 🚨 NOVO: <Suspense> envolve os componentes. Enquanto baixa, mostra o FallbackLoader */}
+            <Suspense fallback={<FallbackLoader />}>
+              {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} isLoading={isLoading} />}
+              {activeTab === 'admin' && hasAccess('admin', 'read') && <AdminModule hasAccess={hasAccess} systemUsers={systemUsers} auditLogs={auditLogs} deleteSystemUser={deleteSystemUser} setNewUser={setNewUser} setIsUserModalOpen={setIsUserModalOpen} roleTemplates={roleTemplates} />}
+              {activeTab === 'inventory' && hasAccess('inventory', 'read') && <InventoryModule assets={assets} catalogItems={catalogItems} employees={employees} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
+              {activeTab === 'employees' && hasAccess('employees', 'read') && <EmployeesModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
+              {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && <MaintenanceModule assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
+              {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
+              {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
+              {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
+              {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
+              {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
+              {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
+            </Suspense>
           </main>
 
           {/* MODAIS GLOBAIS */}

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Database, Laptop, Smartphone, Wifi, Cpu, Search, X, ArrowDownAZ, ArrowUpZA, Trash2, MoreVertical, Info, Clock, CheckCircle, LogOut, ShieldAlert, AlertTriangle, Users, Wrench, RefreshCw, Loader2, Edit2, UserPlus } from 'lucide-react';
-import { getAuthHeaders, formatCurrency } from '../utils/helpers';
+import { formatCurrency } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading }) {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -27,12 +29,9 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
   const [statusModalData, setStatusModalData] = useState(null);
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  
-  const extractError = async (res, defaultMsg) => {
-    try { const data = await res.json(); return data.error || defaultMsg; } 
-    catch (e) { return `${defaultMsg} (Erro no Servidor. Verifique o terminal do Go ou Banco de Dados)`, e; }
-  };
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
   const safeAssets = assets || [];
   
@@ -106,42 +105,38 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     const statusInicial = newAsset.grupo?.trim() && !['Renovação', 'Manutenção'].includes(newAsset.status) ? 'Em uso' : newAsset.status; 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/assets`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({...newAsset, status: statusInicial}) });
-      if(!res.ok) throw new Error(await extractError(res, 'Erro ao criar equipamento'));
+      // 🚨 NOVO: api.post super limpo
+      await api.post('/api/assets', { ...newAsset, status: statusInicial });
       
       registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); 
       setIsAssetModalOpen(false); 
       fetchData(); 
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao criar equipamento')); }
   };
 
   const handleUpdateAsset = async (e) => {
     e.preventDefault();
     try {
-        const res = await fetch(`${API_BASE_URL}/api/assets/${activeAsset.id}`, { 
-            method: 'PUT', 
-            headers: getAuthHeaders(), 
-            body: JSON.stringify(newAsset) 
-        });
-        if (!res.ok) throw new Error(await extractError(res, 'Erro ao atualizar equipamento'));
+        // 🚨 NOVO: api.put no lugar do fetch
+        await api.put(`/api/assets/${activeAsset.id}`, newAsset);
         
         registerLog('UPDATE', 'Inventário', `Atualizou os dados do ativo ID ${activeAsset.id}`);
         setIsAssetModalOpen(false);
         setIsEditingAsset(false);
         fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao atualizar equipamento')); }
   };
 
   const handleAction = (assetId, action) => { 
     setOpenActionMenu(null); 
     requestConfirm('Confirmar Ação', `Deseja aplicar esta ação no equipamento?`, async () => { 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/${action}`, { method: 'PUT', headers: getAuthHeaders() });
-        if(!res.ok) throw new Error(await extractError(res, 'Erro ao aplicar ação'));
+        // 🚨 NOVO: api.put
+        await api.put(`/api/assets/${assetId}/${action}`);
         
         registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); 
         fetchData(); 
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(getAxiosError(err, 'Erro ao aplicar ação')); }
     }, action === 'unassign' || action === 'discard', action === 'unassign' ? 'Devolver' : 'Confirmar'); 
   };
 
@@ -151,43 +146,34 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
       let targetEmpId = selectedItemForAssign;
 
       if (targetEmpId === 'NEW') {
-          const createRes = await fetch(`${API_BASE_URL}/api/employees`, { 
-              method: 'POST', 
-              headers: getAuthHeaders(), 
-              body: JSON.stringify(newEmployeeForAssign) 
-          });
-          if (!createRes.ok) throw new Error(await extractError(createRes, "Erro ao cadastrar o novo colaborador."));
-          const createData = await createRes.json();
-          targetEmpId = createData.data.id; 
+          // 🚨 NOVO: api.post
+          const createRes = await api.post('/api/employees', newEmployeeForAssign);
+          targetEmpId = createRes.data.data.id || createRes.data.id; 
           registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployeeForAssign.nome} via Atribuição`);
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/employees/${targetEmpId}/assign`, { 
-          method: 'PUT', 
-          headers: getAuthHeaders(), 
-          body: JSON.stringify({ asset_id: activeAsset.id }) 
-      });
-      if(!res.ok) throw new Error(await extractError(res, "Erro ao atribuir equipamento"));
+      // 🚨 NOVO: api.put
+      await api.put(`/api/employees/${targetEmpId}/assign`, { asset_id: activeAsset.id });
       
       registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${activeAsset.id} ao colab ID ${targetEmpId}`); 
       setIsAssignAssetModalOpen(false); 
       setSelectedItemForAssign(''); 
       setNewEmployeeForAssign({nome: '', email: '', departamento: ''});
       fetchData(); 
-    } catch(err) { alert(err.message); }
+    } catch(err) { alert(getAxiosError(err, 'Erro ao atribuir equipamento')); }
   };
 
   const submitMaintenance = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE_URL}/api/assets/${activeAsset.id}/maintenance`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(maintenanceForm) });
-      if(!res.ok) throw new Error(await extractError(res, 'Erro ao enviar para manutenção'));
+      // 🚨 NOVO: api.put
+      await api.put(`/api/assets/${activeAsset.id}/maintenance`, maintenanceForm);
       
       registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); 
       setIsMaintenanceModalOpen(false); 
       setMaintenanceForm({chamado: '', observacao: ''}); 
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao enviar para manutenção')); }
   };
 
   const openStatusModal = (asset, newStatus) => { 
@@ -199,13 +185,16 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/assets/${statusModalData.asset.id}/discard`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ status: statusModalData.status, observacao: statusModalData.observacao }) });
-      if(!res.ok) throw new Error(await extractError(res, 'Erro ao alterar status'));
+      // 🚨 NOVO: api.put
+      await api.put(`/api/assets/${statusModalData.asset.id}/discard`, { 
+          status: statusModalData.status, 
+          observacao: statusModalData.observacao 
+      });
       
       registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); 
       setStatusModalData(null); 
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao alterar status')); }
   };
 
   const handleBulkDelete = () => {
@@ -213,14 +202,14 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} itens?`, async () => {
         try {
             await Promise.all(selectedIds.map(async (id) => { 
-              const res = await fetch(`${API_BASE_URL}/api/assets/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
-              if (!res.ok) throw new Error(`Falha no ID ${id}`); 
+              // 🚨 NOVO: api.delete
+              await api.delete(`/api/assets/${id}`); 
             }));
             registerLog('DELETE BULK', 'INVENTÁRIO', `Excluiu ${selectedIds.length} ativos.`); 
             setSelectedIds([]); 
             fetchData(); 
             alert('✅ Exclusão concluída!');
-        } catch (err) { alert(`❌ Erro: ${err.message}`); }
+        } catch (err) { alert(`❌ Erro: ${getAxiosError(err, 'Falha na exclusão')}`); }
     }, true, 'Excluir Selecionados');
   };
 
@@ -266,7 +255,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           </div>
         )}
 
-        {/* Removido o overflow-hidden para não cortar o menu */}
         <div className="bg-gray-900/80 border border-gray-800 rounded-3xl min-h-[400px] relative">
           {isLoading ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm z-20">
@@ -291,7 +279,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                 let catModel = asset.notebook?.modelo || asset.celular?.modelo || asset.starlink?.modelo || asset.chip?.plano || '';
                 const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
 
-                // 👇 Lógica Inteligente: Se for uma das últimas linhas da tabela, o menu abre para CIMA 👇
                 const isLastRows = idx >= filteredAssets.length - 2 && filteredAssets.length > 2;
                 const menuPositionClass = isLastRows ? "bottom-10 right-8 origin-bottom-right" : "top-10 right-8 origin-top-right";
 
@@ -317,7 +304,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                     <td className="px-6 py-4 text-center relative">
                       <button onClick={() => setOpenActionMenu(openActionMenu === asset.id ? null : asset.id)} className="p-2 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-white transition-colors"><MoreVertical className="w-5 h-5" /></button>
                       
-                      {/* 👇 Menu 3 Pontos com Posicionamento Inteligente (menuPositionClass) 👇 */}
                       {openActionMenu === asset.id && (
                         <div className={`absolute ${menuPositionClass} w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[100] py-2 text-left animate-fade-in-up`}>
                           <button onClick={() => { setOpenActionMenu(null); setViewAssetDetails({...asset, catalogValue: mappedCatalog?.valor}); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Info className="w-4 h-4 text-blue-400"/> Detalhes</button>
@@ -332,7 +318,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                             <>
                               <div className="border-t border-gray-700 my-1"></div>
                               
-                              {/* 👇 Botão de Atribuir agora liberado para Starlinks e todos os disponíveis 👇 */}
                               {asset.status === 'Disponível' && <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsAssignAssetModalOpen(true); setSelectedItemForAssign(''); setNewEmployeeForAssign({nome:'', email:'', departamento:''}); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><CheckCircle className="w-4 h-4 text-brandGreen"/> Atribuir a Alguém</button>}
                               
                               {asset.status === 'Em uso' && <button onClick={() => handleAction(asset.id, 'unassign')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><LogOut className="w-4 h-4 text-red-400"/> Devolver para Estoque</button>}
@@ -385,7 +370,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
               {newAsset.asset_type === 'Celular' && (<input type="text" placeholder="IMEI (Opcional)" value={newAsset.imei} onChange={(e) => setNewAsset({...newAsset, imei: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />)}
               {newAsset.asset_type === 'CHIP' && (<><input type="text" required placeholder="Número da Linha" value={newAsset.numero} onChange={(e) => setNewAsset({...newAsset, numero: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="text" placeholder="ICCID (Opcional)" value={newAsset.iccid} onChange={(e) => setNewAsset({...newAsset, iccid: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="date" placeholder="Vencimento do Plano" value={newAsset.vencimento_plano} onChange={(e) => setNewAsset({...newAsset, vencimento_plano: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-gray-400 outline-none" title="Vencimento do Plano"/></>)}
               
-              {/* Box de Edição da Starlink com Projeto acessível */}
               {newAsset.asset_type === 'Starlink' && (
                 <>
                   <input type="text" required placeholder="Modelo (Ex: Kit V2, Actuated)" value={newAsset.modelo_starlink || ''} onChange={(e) => setNewAsset({...newAsset, modelo_starlink: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />

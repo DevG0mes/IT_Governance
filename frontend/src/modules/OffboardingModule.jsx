@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { Search, X, CheckCircle, AlertTriangle, Laptop, Key, PowerOff, ShieldAlert, ChevronRight, Users, History } from 'lucide-react';
-import { getAuthHeaders } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function OffboardingModule({ employees = [], assets = [], licenses = [], hasAccess, fetchData, registerLog, requestConfirm }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showAllDesligados, setShowAllDesligados] = useState(false);
 
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
+
   const getActiveAssets = (empId) => (assets || []).filter(a => a.status === 'Em uso' && a.assignments?.some(asg => asg.employee_id === empId && !asg.returned_at));
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  
-const getActiveLicenses = (empId) => {
+  
+  const getActiveLicenses = (empId) => {
     const empLics = [];
     (licenses || []).forEach(lic => {
       if (lic.assignments) {
@@ -41,24 +44,25 @@ const getActiveLicenses = (empId) => {
   const handleReturnAsset = (assetId) => {
     requestConfirm('Devolver Hardware', 'Confirmar a devolução deste equipamento para o estoque?', async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/assets/${assetId}/unassign`, { method: 'PUT', headers: getAuthHeaders() });
-        if (!res.ok) throw new Error("Erro ao devolver ativo");
+        // 🚨 NOVO: api.put limpo
+        await api.put(`/api/assets/${assetId}/unassign`);
+        
         registerLog('UPDATE', 'Revogação', `Devolveu hardware ID ${assetId} ao estoque`);
         fetchData();
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(getAxiosError(err, 'Erro ao devolver ativo')); }
     }, true, 'Devolver Equipamento');
   };
 
   const handleRevokeLicense = async (assignmentId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/licenses/unassign/${assignmentId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Erro ao revogar licença");
+      // 🚨 NOVO: api.delete limpo
+      await api.delete(`/api/licenses/unassign/${assignmentId}`);
+      
       registerLog('UPDATE', 'Revogação', `Revogou licença ID ${assignmentId}`);
       fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao revogar licença')); }
   };
 
-  // 👇 GOLPE FINAL: Usando a nossa rota especial no Go para forçar a palavra "Desligado" 👇
   const finalizeOffboarding = (emp) => {
     const remainingAssets = getActiveAssets(emp.id).length;
     const remainingLicenses = getActiveLicenses(emp.id).length;
@@ -70,24 +74,13 @@ const getActiveLicenses = (empId) => {
 
     requestConfirm('Finalizar Desligamento', `Confirmar o desligamento definitivo de ${emp.nome}? O status mudará para "Desligado" no sistema.`, async () => {
       try {
-        // Agora usamos a rota /offboarding passando exatamente a string "Desligado"
-        const payload = { status: 'Desligado' };
-        
-        const res = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/offboarding`, { 
-            method: 'PUT', 
-            headers: {
-                ...getAuthHeaders(),
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload) 
-        });
-        
-        if (!res.ok) throw new Error("Erro ao finalizar desligamento no servidor.");
+        // 🚨 NOVO: api.put enviando o JSON automaticamente
+        await api.put(`/api/employees/${emp.id}/offboarding`, { status: 'Desligado' });
         
         registerLog('UPDATE', 'Revogação', `Finalizou o desligamento de ${emp.nome}`);
         setSelectedEmployee(null);
         fetchData();
-      } catch (err) { alert(err.message); }
+      } catch (err) { alert(getAxiosError(err, 'Erro ao finalizar desligamento no servidor.')); }
     }, true, 'Concluir Desligamento');
   };
 

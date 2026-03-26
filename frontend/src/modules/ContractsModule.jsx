@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Search, X, Trash2, Edit2, FileText, CheckCircle, ExternalLink, Plus } from 'lucide-react';
-import { getAuthHeaders, formatCurrency, parseCurrencyToFloat } from '../utils/helpers';
+import { formatCurrency, parseCurrencyToFloat } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua API centralizada e blindada
+import api from '../services/api';
 
 export default function ContractsModule({ contracts, hasAccess, fetchData, requestConfirm, registerLog }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -8,6 +10,9 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
   const [formData, setFormData] = useState({ servico: '', fornecedor: '', mes_competencia: '', valor_previsto: '', valor_realizado: '', url_contrato: '' });
+
+  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
+  const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
   const filteredContracts = contracts.filter(c => 
     c.servico.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -18,29 +23,26 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
   // 👇 Funções de Checkbox e Exclusão em Lote 👇
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredContracts.length && filteredContracts.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredContracts.map(item => item.id));
-// Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
- const handleBulkDelete = () => {
+
+  const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} medições?`, async () => {
         try {
             await Promise.all(selectedIds.map(async (id) => { 
-              const res = await fetch(`${API_BASE_URL}/api/contracts/${id}`, { method: 'DELETE', headers: getAuthHeaders() }); 
-              if (!res.ok) throw new Error(`Falha no ID ${id}`); 
+              // 🚨 NOVO: api.delete limpo
+              await api.delete(`/api/contracts/${id}`); 
             }));
             registerLog('DELETE BULK', 'CONTRATOS', `Excluiu ${selectedIds.length} medições de contratos.`); 
             setSelectedIds([]); 
             fetchData(); 
-        } catch (err) { alert(`❌ Erro: ${err.message}`); }
+        } catch (err) { alert(`❌ Erro: ${getAxiosError(err, 'Falha na exclusão em massa')}`); }
     }, true, 'Excluir Selecionados');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const isEdit = !!editData;
-    const url = isEdit ? `${API_BASE_URL}/api/contracts/${editData.id}` : `${API_BASE_URL}/api/contracts`;
-    const method = isEdit ? 'PUT' : 'POST';
-
+    
     const payload = {
         ...formData,
         valor_previsto: parseCurrencyToFloat(formData.valor_previsto),
@@ -48,13 +50,19 @@ export default function ContractsModule({ contracts, hasAccess, fetchData, reque
     };
 
     try {
-        const res = await fetch(url, { method, headers: getAuthHeaders(), body: JSON.stringify(payload) });
-        if (!res.ok) throw new Error("Erro ao salvar medição");
+        if (isEdit) {
+            // 🚨 NOVO: api.put
+            await api.put(`/api/contracts/${editData.id}`, payload);
+        } else {
+            // 🚨 NOVO: api.post
+            await api.post('/api/contracts', payload);
+        }
+        
         registerLog(isEdit ? 'UPDATE' : 'CREATE', 'Contratos', `${isEdit ? 'Editou' : 'Registrou'} medição de ${payload.servico}`);
         setIsModalOpen(false);
         setEditData(null);
         fetchData();
-    } catch (err) { alert(err.message); }
+    } catch (err) { alert(getAxiosError(err, 'Erro ao salvar medição')); }
   };
 
   const openEdit = (contract) => {

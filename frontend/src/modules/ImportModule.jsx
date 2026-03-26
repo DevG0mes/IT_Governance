@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
-import { getAuthHeaders, normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
+import { normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
+// 🚨 NOVO: Importando a sua nova API blindada
+import api from '../services/api';
 
 export default function ImportModule({ hasAccess, employees, contracts, licenses, requestConfirm, registerLog, fetchData }) {
   const [importCategory, setImportCategory] = useState('Lote PDFs');
@@ -10,8 +12,8 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
   
-  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
-  
+  // A const API_BASE_URL foi removida, pois a api já sabe para onde apontar!
+
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";
@@ -76,18 +78,15 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
       formData.append('file', file);
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/contracts/analyze-pdf`, {
-          method: 'POST',
-          headers: { 'Authorization': getAuthHeaders().Authorization },
-          body: formData
+        // 🚨 NOVO: Chamada Axios blindada. O cabeçalho 'Authorization' vai sozinho.
+        // E usamos headers customizados para enviar o FormData.
+        const res = await api.post('/api/contracts/analyze-pdf', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 20000 // Para PDFs damos mais tempo (20s) se precisar
         });
 
-        const rawResponse = await res.text();
-        let text = rawResponse;
-        try {
-            const jsonObj = JSON.parse(rawResponse);
-            text = jsonObj.text || jsonObj.texto || jsonObj.data || rawResponse;
-        } catch (e) {e}
+        // O axios já devolve o json ou a string em res.data
+        let text = typeof res.data === 'string' ? res.data : (res.data.text || res.data.texto || res.data.data || JSON.stringify(res.data));
 
         const textUpper = text.toUpperCase();
         const textNoSpaces = textUpper.replace(/\s+/g, '');
@@ -158,7 +157,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
           Mes_Competencia: "YYYY-MM",
           Valor_Realizado: "0,00",
           Arquivo_Origem: file.name,
-          error: err.message
+          error: err.response?.data?.error || err.message
         });
       }
     }
@@ -191,7 +190,9 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
             if (importCategory === 'Colaboradores') {
               const nome = getVal(row, 'nome', 'name'); const email = getVal(row, 'email', 'e-mail'); const depto = getVal(row, 'departamento', 'depto', 'setor');
               if (!nome || !email) throw new Error("Falta Nome ou E-mail");
-              const res = await fetch(`${API_BASE_URL}/api/employees`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ nome: nome, email: email, departamento: depto }) }); if (!res.ok) throw new Error();
+              
+              // 🚨 NOVO: Axios já converte para JSON
+              await api.post('/api/employees', { nome: nome, email: email, departamento: depto });
 
             } else if (importCategory === 'Medições de Contratos' || importCategory === 'Lote PDFs') {
               const servico = importCategory === 'Lote PDFs' ? row.Servico : getVal(row, 'serviço', 'servico', 'nome');
@@ -212,20 +213,24 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                   url_contrato: baseContract ? baseContract.url_contrato : ''
               };
 
-              const res = await fetch(`${API_BASE_URL}/api/contracts`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-              if (!res.ok) throw new Error("Falha ao salvar no banco");
+              // 🚨 NOVO: Axios
+              await api.post('/api/contracts', payload);
 
             } else if (importCategory === 'Licenças (Cadastro)') {
               const software = getVal(row, 'software', 'nome'); const fornecedor = getVal(row, 'fornecedor'); const plano = getVal(row, 'plano') || 'Mensal'; const custo = parseCurrencyToFloat(getVal(row, 'custo', 'valor')); const qtd = parseInt(getVal(row, 'quantidade', 'qtd')) || 1;
               if (!software) throw new Error("Falta o nome do Software");
               const payload = { nome: software, fornecedor: fornecedor, plano: plano, custo: custo, quantidade_total: qtd };
-              const res = await fetch(`${API_BASE_URL}/api/licenses`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) }); if (!res.ok) throw new Error("Falha ao salvar");
+              
+              // 🚨 NOVO: Axios
+              await api.post('/api/licenses', payload);
 
             } else if (importCategory === 'Vínculos de Licenças') {
               const emailColab = normalizeEmail(getVal(row, 'email_colaborador', 'email')); const software = getVal(row, 'software', 'nome');
               const emp = employees.find(e => normalizeEmail(e.email) === emailColab); const lic = licenses.find(l => l.nome.toLowerCase() === software.toLowerCase());
               if (!emp) throw new Error(`Colaborador ${emailColab} não encontrado`); if (!lic) throw new Error(`Licença ${software} não encontrada`);
-              const res = await fetch(`${API_BASE_URL}/api/licenses/assign`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ employee_id: emp.id, license_id: lic.id }) }); if (!res.ok) throw new Error("Falha ao vincular");
+              
+              // 🚨 NOVO: Axios
+              await api.post('/api/licenses/assign', { employee_id: emp.id, license_id: lic.id });
 
             } else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let payload = {};
@@ -264,25 +269,26 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                 payload = { asset_type: 'CHIP', numero: safeVal(getVal(row, 'numero', 'linha')), iccid: safeVal(getVal(row, 'iccid')), plano: safeVal(getVal(row, 'plano')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), vencimento_plano: safeVal(getVal(row, 'vencimento_plano', 'vencimento')), status: creationStatus };
               }
 
-              const res = await fetch(`${API_BASE_URL}/api/assets`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload) });
-              const resData = await res.json().catch(() => ({}));
-
-              if (!res.ok) { throw new Error(resData.error || "Falha ao gravar equipamento no banco."); }
+              // 🚨 NOVO: Axios
+              const res = await api.post('/api/assets', payload);
+              const resData = res.data;
 
               if (willAssign) {
                 const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
                 if (!emp) { throw new Error(`Salvo no Estoque/Obra, pois o E-mail '${emailColab}' não existe no sistema.`); }
                 
-                // 🚨 AQUI ESTÁ A CORREÇÃO DA LEITURA DO ID 🚨
                 const assetIdToAssign = resData?.data?.id || resData?.id; 
                 if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas o backend não devolveu o ID para vincular.`);
 
-                const assignRes = await fetch(`${API_BASE_URL}/api/employees/${emp.id}/assign`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify({ asset_id: assetIdToAssign }) });
-                if (!assignRes.ok) throw new Error(`Salvo no Estoque, erro ao vincular a '${emailColab}'.`);
+                // 🚨 NOVO: Axios (usando put)
+                await api.put(`/api/employees/${emp.id}/assign`, { asset_id: assetIdToAssign });
               }
             }
             successCount++;
-          } catch (err) { errorCount++; errorDetails.push(`Linha ${i+1}: ${err.message}`); }
+          } catch (err) { 
+              errorCount++; 
+              errorDetails.push(`Linha ${i+1}: ${err.response?.data?.error || err.message}`); 
+          }
         }
 
         registerLog('IMPORT', 'ETL', `Importou ${successCount} registros de ${importCategory}`);

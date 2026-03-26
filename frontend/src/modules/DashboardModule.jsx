@@ -5,14 +5,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 export default function DashboardModule({ assets, employees, licenses, contracts, catalogItems, formatCurrency, isLoading }) {
   
   const [filtroAtivo, setFiltroAtivo] = useState('Todos');
-  
-  // Controle do modal de grupos/obras
   const [selectedGroupForModal, setSelectedGroupForModal] = useState(null);
-
-  // 👇 NOVO ESTADO: Filtro do Gráfico FinOps 👇
   const [filtroFornecedor, setFiltroFornecedor] = useState('Todos');
 
-  // FILTRO BLINDADO E DUPLA VALIDAÇÃO (ATIVOS)
   const ativosFiltrados = useMemo(() => {
     if (!assets) return [];
     if (filtroAtivo === 'Todos') return assets;
@@ -30,7 +25,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     });
   }, [assets, filtroAtivo]);
 
-  // MATEMÁTICA DO DASHBOARD
   const stats = useMemo(() => {
     const totalAssets = ativosFiltrados.length;
     
@@ -41,17 +35,12 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     const availableAssets = ativosFiltrados.filter(a => {
       const statusStr = (a.status || '').trim().toLowerCase();
       const isAvailable = statusStr === 'disponível' || statusStr === 'disponivel';
-      
       const aType = (a.asset_type || '').trim().toLowerCase();
       
-      if (aType === 'notebook') {
-         return isAvailable;
-      }
+      if (aType === 'notebook') return isAvailable;
       
       const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
-      const groupStr = rawGroup.trim().toLowerCase();
-      
-      return isAvailable && groupStr === 'estoque';
+      return isAvailable && rawGroup.trim().toLowerCase() === 'estoque';
     }).length;
     
     const maintenanceAssets = ativosFiltrados.filter(a => 
@@ -73,7 +62,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return { totalAssets, activeAssets, availableAssets, maintenanceAssets, expiringChips, totalEmployees, activeEmployees, activeLicensesCount, monthlyLicenseCost };
   }, [ativosFiltrados, employees, licenses]);
 
-  // AGRUPAMENTO DE OBRAS
   const groupStats = useMemo(() => {
     const groups = {};
     if (assets) {
@@ -94,7 +82,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return Object.entries(groups).sort((a,b) => b[1].total - a[1].total);
   }, [assets]);
 
-  // FILTRA OS ATIVOS ESPECÍFICOS DO GRUPO CLICADO PARA O MODAL
   const assetsInSelectedGroup = useMemo(() => {
     if (!selectedGroupForModal || !assets) return [];
     return assets.filter(a => {
@@ -103,19 +90,15 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     });
   }, [assets, selectedGroupForModal]);
 
-  // 👇 EXTRAÇÃO DE FORNECEDORES ÚNICOS PARA O SELECT 👇
   const fornecedoresUnicos = useMemo(() => {
     if (!contracts) return ['Todos'];
     const list = contracts.map(c => (c.fornecedor || 'Desconhecido').trim()).filter(Boolean);
     return ['Todos', ...new Set(list)].sort();
   }, [contracts]);
 
-  // 👇 CÁLCULO DE CONTRATOS (AGORA COM FILTRO DE FORNECEDOR) 👇
   const contractChartData = useMemo(() => {
     const dataMap = {};
     if (contracts) {
-      
-      // Aplica o filtro selecionado pelo usuário
       let dadosFiltrados = contracts;
       if (filtroFornecedor !== 'Todos') {
           dadosFiltrados = dadosFiltrados.filter(c => (c.fornecedor || 'Desconhecido').trim() === filtroFornecedor);
@@ -130,7 +113,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return Object.values(dataMap).sort((a, b) => a.name.localeCompare(b.name));
   }, [contracts, filtroFornecedor]);
 
-  // VALUATION CRUZADO
   const valuationTotal = useMemo(() => {
     let total = 0;
     ativosFiltrados.forEach(a => {
@@ -156,7 +138,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   return (
     <div className="space-y-8 animate-fade-in pb-12 relative">
       
-      {/* OVERLAY DE LOADING DA TELA INTEIRA */}
       {isLoading && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0f]/80 backdrop-blur-sm rounded-3xl min-h-[600px]">
           <Loader2 className="w-16 h-16 text-brandGreen animate-spin mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
@@ -164,7 +145,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {/* CABEÇALHO E FILTROS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -195,7 +175,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       </div>
 
-      {/* CARDS SUPERIORES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-gray-900/80 border border-gray-800 p-6 rounded-3xl shadow-xl hover:-translate-y-1 hover:shadow-brandGreen/10 hover:border-brandGreen/30 transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
@@ -234,10 +213,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       </div>
 
-      {/* GRÁFICOS E LICENÇAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* 👇 GRÁFICO FINOPS (AGORA COM FILTRO) 👇 */}
         <div className="lg:col-span-2 bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl flex flex-col transition-all duration-300">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -317,7 +294,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       </div>
 
-      {/* SESSÃO DINÂMICA DE OBRAS / GRUPOS */}
       <div className="mt-8">
         <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><Building className="w-7 h-7 text-brandGreen"/> Distribuição por Grupos / Obras</h3>
         {groupStats.length > 0 ? (
@@ -348,7 +324,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         )}
       </div>
 
-      {/* MODAL DE DETALHAMENTO DO GRUPO */}
       {selectedGroupForModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-4xl shadow-2xl max-h-[80vh] flex flex-col">
@@ -428,6 +403,3 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   );
 
 }
-
-
-
