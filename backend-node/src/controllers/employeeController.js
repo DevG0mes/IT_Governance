@@ -14,7 +14,24 @@ const { standardizeText, standardizeEmail } = require('../../utils/sanitizer');
 
 exports.getAll = async (req, res) => {
   try {
-    const employees = await Employee.findAll({ order: [['nome', 'ASC']] });
+    const employees = await Employee.findAll({ 
+      order: [['nome', 'ASC']],
+      include: [
+        { 
+          // 🛡️ Traz o contador de Hardwares usando o Alias EXATO do db.js
+          model: AssetAssignment, 
+          as: 'AssetAssignments', 
+          where: { returned_at: null }, // Conta apenas o que ele tem em mãos agora
+          required: false // LEFT JOIN: Traz o João mesmo se ele não tiver nada
+        },
+        {
+          // 🛡️ Traz o contador de Softwares
+          model: EmployeeLicense,
+          as: 'EmployeeLicenses',
+          required: false
+        }
+      ]
+    });
     return res.status(200).json({ data: employees });
   } catch (error) {
     console.error("❌ Erro ao buscar colaboradores:", error.message);
@@ -47,7 +64,6 @@ exports.create = async (req, res) => {
   }
 };
 
-// 🌟 ATRIBUIDOR UNIVERSAL DE HARDWARES
 exports.assignAsset = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -57,33 +73,24 @@ exports.assignAsset = async (req, res) => {
     if (!employee) throw new Error('Colaborador não encontrado');
     if (employee.status === 'Desligado') throw new Error('Não é possível atribuir equipamento a um colaborador desligado');
 
-    // 1. Busca o Ativo Genérico primeiro (Serve para Notebook, Celular, Chip, etc)
     const asset = await Asset.findByPk(asset_id, { transaction: t });
 
     if (!asset) throw new Error('Equipamento não encontrado');
     if (asset.status !== 'Disponível') throw new Error(`Equipamento não disponível (Status: ${asset.status})`);
 
-    // 2. Muda o status para Em Uso
-    await asset.update({ status: 'Em Uso' }, { transaction: t });
+    // Atualiza status do Ativo
+    await asset.update({ status: 'Em Uso', EmployeeId: employee.id }, { transaction: t });
 
-    // 3. Denormalização (Atalhos visuais para o Dashboard)
-    // Se for Notebook, salva o patrimônio na tabela do funcionário
+    // Atualiza campo visual do funcionário de acordo com o tipo
     if (asset.asset_type === 'Notebook') {
       const note = await AssetNotebook.findOne({ where: { AssetId: asset.id }, transaction: t });
       if (note) await employee.update({ notebook: note.patrimonio }, { transaction: t });
     } 
-    // Se você tiver uma coluna "celular" no model Employee, já fica pronto:
-    else if (asset.asset_type === 'Celular') {
-      const cel = await AssetCelular.findOne({ where: { AssetId: asset.id }, transaction: t });
-      if (cel && employee.celular !== undefined) {
-         await employee.update({ celular: cel.numero }, { transaction: t });
-      }
-    }
 
-    // 4. Registra no Histórico de Atribuições (O mais importante para Auditoria)
+    // 🛡️ Registra a atribuição usando o PascalCase do seu banco de dados
     await AssetAssignment.create({
-      employee_id: employee.id,
-      asset_id: asset.id,
+      EmployeeId: employee.id,
+      AssetId: asset.id,
       assigned_at: new Date()
     }, { transaction: t });
 
@@ -104,18 +111,18 @@ exports.toggleStatus = async (req, res) => {
     const now = new Date();
     if (employee.status === 'Ativo' || !employee.status) {
       
-      // Revogar Hardwares (Notebooks, Celulares, Chips, Starlinks)
+      // 1. Revoga Hardwares (Usando EmployeeId e AssetId conforme seu DB)
       const activeAssignments = await AssetAssignment.findAll({
-        where: { employee_id: employee.id, returned_at: null },
+        where: { EmployeeId: employee.id, returned_at: null },
         transaction: t
       });
 
       for (let asg of activeAssignments) {
         await asg.update({ returned_at: now }, { transaction: t });
-        await Asset.update({ status: 'Disponível' }, { where: { id: asg.asset_id }, transaction: t });
+        await Asset.update({ status: 'Disponível', EmployeeId: null }, { where: { id: asg.AssetId }, transaction: t });
       }
 
-      // Revogar Licenças de Software
+      // 2. Revoga Licenças (Usando employee_id e license_id conforme seu DB)
       const empLicenses = await EmployeeLicense.findAll({ where: { employee_id: employee.id }, transaction: t });
       for (let el of empLicenses) {
         const lic = await License.findByPk(el.license_id, { transaction: t });
@@ -128,7 +135,7 @@ exports.toggleStatus = async (req, res) => {
       await employee.update({ 
         status: 'Desligado', 
         offboarding_date: now, 
-        notebook: "" // Limpa o atalho visual
+        notebook: "" 
       }, { transaction: t });
 
     } else {
@@ -150,12 +157,12 @@ exports.delete = async (req, res) => {
     if (!employee) throw new Error('Colaborador não encontrado');
 
     const activeAssignments = await AssetAssignment.findAll({
-      where: { employee_id: employee.id, returned_at: null },
+      where: { EmployeeId: employee.id, returned_at: null },
       transaction: t
     });
 
     for (let asg of activeAssignments) {
-      await Asset.update({ status: 'Disponível' }, { where: { id: asg.asset_id }, transaction: t });
+      await Asset.update({ status: 'Disponível', EmployeeId: null }, { where: { id: asg.AssetId }, transaction: t });
       await asg.update({ returned_at: new Date() }, { transaction: t });
     }
 
@@ -168,7 +175,6 @@ exports.delete = async (req, res) => {
   }
 };
 
-// 🗑️ EXCLUSÃO EM MASSA (Para não travar a Hostinger ao apagar 50 de uma vez)
 exports.bulkDelete = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -176,12 +182,12 @@ exports.bulkDelete = async (req, res) => {
     if (!ids || !ids.length) throw new Error('Nenhum ID fornecido');
 
     const activeAssignments = await AssetAssignment.findAll({
-      where: { employee_id: ids, returned_at: null },
+      where: { EmployeeId: ids, returned_at: null },
       transaction: t
     });
 
     for (let asg of activeAssignments) {
-      await Asset.update({ status: 'Disponível' }, { where: { id: asg.asset_id }, transaction: t });
+      await Asset.update({ status: 'Disponível', EmployeeId: null }, { where: { id: asg.AssetId }, transaction: t });
       await asg.update({ returned_at: new Date() }, { transaction: t });
     }
 

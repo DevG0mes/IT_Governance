@@ -49,24 +49,12 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
 AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
-// LIGAÇÃO COM O FUNCIONÁRIO (Refletindo a coluna EmployeeId da tabela assets)
-Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'employee' });
-Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets' });
+// 2. Colaborador -> Histórico de Ativos (Para contar Hardwares e Softwares)
+Employee.hasMany(AssetAssignment, { foreignKey: 'employee_id', as: 'Assignments' });
+AssetAssignment.belongsTo(Employee, { foreignKey: 'employee_id' });
 
-// 🚨 CORREÇÃO: Ligações com Licenças (Ajustado para o snake_case exato do seu banco: employee_id e license_id)
-Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'EmployeeLicenses' });
-EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id', as: 'Employee' });
-
-License.hasMany(EmployeeLicense, { foreignKey: 'license_id', as: 'EmployeeLicenses' });
-EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
-
-// 🚨 NOVO: Ligações do Histórico de Atribuições (AssetAssignment)
-// Garante o rastreio de entregas e devoluções para a governança
-Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
-AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
-
-Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'Assignments' });
-AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
+Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'Licenses' });
+EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id' });
 
 // ==========================================
 // 4. Sincronização e Setup Inicial
