@@ -4,7 +4,11 @@ const {
   Asset, 
   AssetAssignment, 
   License, 
-  EmployeeLicense 
+  EmployeeLicense,
+  AssetNotebook,
+  AssetCelular,
+  AssetChip,
+  AssetStarlink
 } = require('../../config/db');
 const { standardizeText, standardizeEmail } = require('../../utils/sanitizer');
 
@@ -22,7 +26,6 @@ exports.create = async (req, res) => {
   try {
     let { nome, email, departamento } = req.body;
 
-    // Padronização e Limpeza
     nome = standardizeText(nome);
     email = standardizeEmail(email);
     departamento = standardizeText(departamento);
@@ -31,7 +34,6 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: 'Nome e E-mail válido são obrigatórios.' });
     }
 
-    // 🛡️ TRAVA ANTI-DUPLICAÇÃO (O Escudo Anti-Abner)
     const existing = await Employee.findOne({ where: { email } });
     if (existing) {
       return res.status(400).json({ error: `O e-mail ${email} já pertence ao colaborador ${existing.nome}.` });
@@ -45,6 +47,7 @@ exports.create = async (req, res) => {
   }
 };
 
+// 🌟 ATRIBUIDOR UNIVERSAL DE HARDWARES
 exports.assignAsset = async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -54,21 +57,30 @@ exports.assignAsset = async (req, res) => {
     if (!employee) throw new Error('Colaborador não encontrado');
     if (employee.status === 'Desligado') throw new Error('Não é possível atribuir equipamento a um colaborador desligado');
 
-    const asset = await Asset.findByPk(asset_id, { 
-      include: [{ model: Asset, as: 'Notebook' }], 
-      transaction: t 
-    });
+    // 1. Busca o Ativo Genérico primeiro (Serve para Notebook, Celular, Chip, etc)
+    const asset = await Asset.findByPk(asset_id, { transaction: t });
 
     if (!asset) throw new Error('Equipamento não encontrado');
     if (asset.status !== 'Disponível') throw new Error(`Equipamento não disponível (Status: ${asset.status})`);
 
-    // Atualiza Ativo e Employee (Denormalização para Dashboard)
+    // 2. Muda o status para Em Uso
     await asset.update({ status: 'Em Uso' }, { transaction: t });
-    if (asset.asset_type === 'Notebook' && asset.Notebook) {
-      await employee.update({ notebook: asset.Notebook.patrimonio }, { transaction: t });
+
+    // 3. Denormalização (Atalhos visuais para o Dashboard)
+    // Se for Notebook, salva o patrimônio na tabela do funcionário
+    if (asset.asset_type === 'Notebook') {
+      const note = await AssetNotebook.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (note) await employee.update({ notebook: note.patrimonio }, { transaction: t });
+    } 
+    // Se você tiver uma coluna "celular" no model Employee, já fica pronto:
+    else if (asset.asset_type === 'Celular') {
+      const cel = await AssetCelular.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (cel && employee.celular !== undefined) {
+         await employee.update({ celular: cel.numero }, { transaction: t });
+      }
     }
 
-    // 🛡️ Registro no Histórico (Chaves em snake_case para bater com o banco)
+    // 4. Registra no Histórico de Atribuições (O mais importante para Auditoria)
     await AssetAssignment.create({
       employee_id: employee.id,
       asset_id: asset.id,
@@ -76,7 +88,7 @@ exports.assignAsset = async (req, res) => {
     }, { transaction: t });
 
     await t.commit();
-    return res.status(200).json({ message: 'Equipamento atribuído com sucesso!' });
+    return res.status(200).json({ message: `${asset.asset_type} atribuído com sucesso!` });
   } catch (error) {
     if (t) await t.rollback();
     return res.status(400).json({ error: error.message });
@@ -91,7 +103,8 @@ exports.toggleStatus = async (req, res) => {
 
     const now = new Date();
     if (employee.status === 'Ativo' || !employee.status) {
-      // 1. Revogar Hardwares
+      
+      // Revogar Hardwares (Notebooks, Celulares, Chips, Starlinks)
       const activeAssignments = await AssetAssignment.findAll({
         where: { employee_id: employee.id, returned_at: null },
         transaction: t
@@ -102,7 +115,7 @@ exports.toggleStatus = async (req, res) => {
         await Asset.update({ status: 'Disponível' }, { where: { id: asg.asset_id }, transaction: t });
       }
 
-      // 2. Revogar Licenças (Compliance FinOps)
+      // Revogar Licenças de Software
       const empLicenses = await EmployeeLicense.findAll({ where: { employee_id: employee.id }, transaction: t });
       for (let el of empLicenses) {
         const lic = await License.findByPk(el.license_id, { transaction: t });
@@ -115,7 +128,7 @@ exports.toggleStatus = async (req, res) => {
       await employee.update({ 
         status: 'Desligado', 
         offboarding_date: now, 
-        notebook: "" 
+        notebook: "" // Limpa o atalho visual
       }, { transaction: t });
 
     } else {
@@ -154,13 +167,14 @@ exports.delete = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+// 🗑️ EXCLUSÃO EM MASSA (Para não travar a Hostinger ao apagar 50 de uma vez)
 exports.bulkDelete = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { ids } = req.body; // Recebe um array: [1, 2, 3]
+    const { ids } = req.body; 
     if (!ids || !ids.length) throw new Error('Nenhum ID fornecido');
 
-    // Libera os ativos vinculados a essas pessoas
     const activeAssignments = await AssetAssignment.findAll({
       where: { employee_id: ids, returned_at: null },
       transaction: t
@@ -171,11 +185,10 @@ exports.bulkDelete = async (req, res) => {
       await asg.update({ returned_at: new Date() }, { transaction: t });
     }
 
-    // Deleta todo mundo de uma vez só!
     await Employee.destroy({ where: { id: ids }, transaction: t });
     
     await t.commit();
-    return res.status(200).json({ message: `${ids.length} colaboradores removidos com sucesso.` });
+    return res.status(200).json({ message: `${ids.length} colaboradores removidos.` });
   } catch (error) {
     if (t) await t.rollback();
     return res.status(500).json({ error: error.message });

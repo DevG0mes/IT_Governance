@@ -38,16 +38,16 @@ const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataType
 
 // Ligação Ativo -> Detalhes (Refletindo a coluna AssetId que criamos no DBeaver)
 Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook' });
-AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId' });
-
-Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
-AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId' });
-
-Asset.hasOne(AssetChip, { foreignKey: 'AssetId', as: 'Chip' });
-AssetChip.belongsTo(Asset, { foreignKey: 'AssetId' });
+AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
 Asset.hasOne(AssetCelular, { foreignKey: 'AssetId', as: 'Celular' });
-AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId' });
+AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
+
+Asset.hasOne(AssetChip, { foreignKey: 'AssetId', as: 'Chip' });
+AssetChip.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
+
+Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
+AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
 // LIGAÇÃO COM O FUNCIONÁRIO (Refletindo a coluna EmployeeId da tabela assets)
 Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'employee' });
