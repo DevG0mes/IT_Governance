@@ -1,32 +1,23 @@
-// Arquivo: routes/audit.js
-const express = require('express');
-const router = express.Router();
-// ✅ Importação correta centralizada no db.js
+// ✅ Importação centralizada no db.js
 const { AuditLog } = require('../config/db');
 
-// ==========================================
-// GET: Busca o histórico de ações no sistema
-// ==========================================
-router.get('/', async (req, res) => {
+exports.getAll = async (req, res) => {
   try {
     // Busca os logs ordenados do mais recente para o mais antigo 
     const logs = await AuditLog.findAll({
       order: [['createdAt', 'DESC']],
-      limit: 200 // Mantém a performance igual ao seu código em Go
+      limit: 200 // Proteção de performance para a Hostinger
     });
 
-    // Retorna no formato exato que o seu Frontend (silver-monkey) espera
+    // Retorna no formato data: [] para o seu Axios no React
     return res.status(200).json({ data: logs });
   } catch (error) {
     console.error("❌ Erro ao buscar logs de auditoria:", error.message);
     return res.status(500).json({ error: 'Erro ao buscar logs no banco de dados' });
   }
-});
+};
 
-// ==========================================
-// POST: Registra uma nova ação feita por um usuário
-// ==========================================
-router.post('/', async (req, res) => {
+exports.create = async (req, res) => {
   try {
     const input = req.body;
 
@@ -41,6 +32,4 @@ router.post('/', async (req, res) => {
     console.error("❌ Erro ao registrar log:", error.message);
     return res.status(400).json({ error: 'Falha ao salvar o log de auditoria' });
   }
-});
-
-module.exports = router;
+};

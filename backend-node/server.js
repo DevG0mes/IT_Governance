@@ -15,14 +15,14 @@ const verificarToken = require('./middlewares/auth');
 const verificarAdmin = require('./middlewares/admin'); 
 
 // Rotas
-const authRoutes = require('./routes/auth'); 
-const employeeRoutes = require('./routes/employees'); 
-const assetRoutes = require('./routes/assets'); 
-const licenseRoutes = require('./routes/licenses'); 
-const contractRoutes = require('./routes/contracts'); 
-const catalogRoutes = require('./routes/catalog');    
-const auditRoutes = require('./routes/audit'); 
-const userRoutes = require('./routes/users'); 
+const authRoutes = require('./src/routes/auth'); 
+const employeeRoutes = require('./src/routes/employees'); 
+const assetRoutes = require('./src/routes/assets'); 
+const licenseRoutes = require('./src/routes/licenses'); 
+const contractRoutes = require('./src/routes/contracts'); 
+const catalogRoutes = require('./src/routes/catalog');    
+const auditRoutes = require('./src/routes/audit'); 
+const userRoutes = require('./src/routes/users'); 
 
 const app = express();
 
