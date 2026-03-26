@@ -3,17 +3,17 @@ import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText,
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
 import { normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
-// 🚨 NOVO: Importando a sua nova API blindada
+
+// 🚨 API Blindada
 import api from '../services/api';
 
-export default function ImportModule({ hasAccess, employees, contracts, licenses, requestConfirm, registerLog, fetchData }) {
+// Adicionado assets = [] nas props para podermos checar hardwares duplicados também!
+export default function ImportModule({ hasAccess, employees = [], contracts = [], licenses = [], assets = [], requestConfirm, registerLog, fetchData }) {
   const [importCategory, setImportCategory] = useState('Lote PDFs');
   const [previewData, setPreviewData] = useState(null);
   const [pdfFiles, setPdfFiles] = useState([]);
   const [isImporting, setIsImporting] = useState(false);
   
-  // A const API_BASE_URL foi removida, pois a api já sabe para onde apontar!
-
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";
@@ -78,14 +78,11 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
       formData.append('file', file);
 
       try {
-        // 🚨 NOVO: Chamada Axios blindada. O cabeçalho 'Authorization' vai sozinho.
-        // E usamos headers customizados para enviar o FormData.
         const res = await api.post('/api/contracts/analyze-pdf', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 20000 // Para PDFs damos mais tempo (20s) se precisar
+          timeout: 20000 
         });
 
-        // O axios já devolve o json ou a string em res.data
         let text = typeof res.data === 'string' ? res.data : (res.data.text || res.data.texto || res.data.data || JSON.stringify(res.data));
 
         const textUpper = text.toUpperCase();
@@ -187,20 +184,43 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
           }
 
           try {
+            // =========================================================
+            // 🛡️ MÓDULO DE COLABORADORES
+            // =========================================================
             if (importCategory === 'Colaboradores') {
-              const nome = getVal(row, 'nome', 'name'); const email = getVal(row, 'email', 'e-mail'); const depto = getVal(row, 'departamento', 'depto', 'setor');
+              const nome = getVal(row, 'nome', 'name'); 
+              const email = getVal(row, 'email', 'e-mail'); 
+              const depto = getVal(row, 'departamento', 'depto', 'setor');
+              
               if (!nome || !email) throw new Error("Falta Nome ou E-mail");
               
-              // 🚨 NOVO: Axios já converte para JSON
-              await api.post('/api/employees', { nome: nome, email: email, departamento: depto });
+              // 🛡️ CHECAGEM DE DUPLICAÇÃO
+              const exists = employees.some(e => 
+                normalizeEmail(e.email) === normalizeEmail(email) || 
+                e.nome.trim().toLowerCase() === nome.trim().toLowerCase()
+              );
+              if (exists) throw new Error(`Ignorado: Colaborador '${nome}' já existe no sistema.`);
 
-            } else if (importCategory === 'Medições de Contratos' || importCategory === 'Lote PDFs') {
+              await api.post('/api/employees', { nome: nome, email: email, departamento: depto });
+            } 
+            
+            // =========================================================
+            // 🛡️ MÓDULO DE MEDIÇÕES/CONTRATOS
+            // =========================================================
+            else if (importCategory === 'Medições de Contratos' || importCategory === 'Lote PDFs') {
               const servico = importCategory === 'Lote PDFs' ? row.Servico : getVal(row, 'serviço', 'servico', 'nome');
               const mes = importCategory === 'Lote PDFs' ? row.Mes_Competencia : getVal(row, 'mês', 'mes', 'competencia', 'mes_competencia');
               const realizadoStr = importCategory === 'Lote PDFs' ? row.Valor_Realizado : getVal(row, 'valor_realizado', 'realizado', 'pago');
               const fornecedorLido = importCategory === 'Lote PDFs' ? row.Fornecedor : getVal(row, 'fornecedor');
 
               if (!servico || !mes || mes === 'YYYY-MM') throw new Error("Falta Serviço ou Mês Válido");
+
+              // 🛡️ CHECAGEM DE DUPLICAÇÃO
+              const exists = contracts.some(c => 
+                c.servico.toLowerCase() === servico.toLowerCase() && 
+                c.mes_competencia === mes
+              );
+              if (exists) throw new Error(`Ignorado: Medição de '${servico}' para '${mes}' já existe.`);
 
               const baseContract = contracts.find(c => c.servico.toLowerCase() === servico.toLowerCase());
 
@@ -213,26 +233,53 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                   url_contrato: baseContract ? baseContract.url_contrato : ''
               };
 
-              // 🚨 NOVO: Axios
               await api.post('/api/contracts', payload);
-
-            } else if (importCategory === 'Licenças (Cadastro)') {
-              const software = getVal(row, 'software', 'nome'); const fornecedor = getVal(row, 'fornecedor'); const plano = getVal(row, 'plano') || 'Mensal'; const custo = parseCurrencyToFloat(getVal(row, 'custo', 'valor')); const qtd = parseInt(getVal(row, 'quantidade', 'qtd')) || 1;
+            } 
+            
+            // =========================================================
+            // 🛡️ MÓDULO DE LICENÇAS (CADASTRO)
+            // =========================================================
+            else if (importCategory === 'Licenças (Cadastro)') {
+              const software = getVal(row, 'software', 'nome'); 
+              const fornecedor = getVal(row, 'fornecedor'); 
+              const plano = getVal(row, 'plano') || 'Mensal'; 
+              const custo = parseCurrencyToFloat(getVal(row, 'custo', 'valor')); 
+              const qtd = parseInt(getVal(row, 'quantidade', 'qtd')) || 1;
+              
               if (!software) throw new Error("Falta o nome do Software");
+
+              // 🛡️ CHECAGEM DE DUPLICAÇÃO
+              const exists = licenses.some(l => l.nome.trim().toLowerCase() === software.trim().toLowerCase());
+              if (exists) throw new Error(`Ignorado: Software '${software}' já está cadastrado.`);
+
               const payload = { nome: software, fornecedor: fornecedor, plano: plano, custo: custo, quantidade_total: qtd };
-              
-              // 🚨 NOVO: Axios
               await api.post('/api/licenses', payload);
-
-            } else if (importCategory === 'Vínculos de Licenças') {
-              const emailColab = normalizeEmail(getVal(row, 'email_colaborador', 'email')); const software = getVal(row, 'software', 'nome');
-              const emp = employees.find(e => normalizeEmail(e.email) === emailColab); const lic = licenses.find(l => l.nome.toLowerCase() === software.toLowerCase());
-              if (!emp) throw new Error(`Colaborador ${emailColab} não encontrado`); if (!lic) throw new Error(`Licença ${software} não encontrada`);
+            } 
+            
+            // =========================================================
+            // 🛡️ MÓDULO DE VÍNCULO DE LICENÇAS
+            // =========================================================
+            else if (importCategory === 'Vínculos de Licenças') {
+              const emailColab = normalizeEmail(getVal(row, 'email_colaborador', 'email')); 
+              const software = getVal(row, 'software', 'nome');
               
-              // 🚨 NOVO: Axios
-              await api.post('/api/licenses/assign', { employee_id: emp.id, license_id: lic.id });
+              const emp = employees.find(e => normalizeEmail(e.email) === emailColab); 
+              const lic = licenses.find(l => l.nome.toLowerCase() === software.toLowerCase());
+              
+              if (!emp) throw new Error(`Colaborador ${emailColab} não encontrado`); 
+              if (!lic) throw new Error(`Licença ${software} não encontrada`);
+              
+              // 🛡️ CHECAGEM DE DUPLICAÇÃO
+              const alreadyAssigned = lic.assignments?.some(a => a.employee_id === emp.id && !a.revoked_at);
+              if (alreadyAssigned) throw new Error(`Ignorado: ${emp.nome} já possui a licença '${lic.nome}'.`);
 
-            } else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
+              await api.post('/api/licenses/assign', { employee_id: emp.id, license_id: lic.id });
+            } 
+            
+            // =========================================================
+            // 🛡️ MÓDULO DE ATIVOS FÍSICOS
+            // =========================================================
+            else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let payload = {};
               const emailColab = normalizeEmail(getVal(row, 'email_responsavel', 'email_colaborador', 'usuario'));
               const hasValidEmail = emailColab && emailColab.length > 3 && emailColab !== 'n/a' && emailColab !== '0' && emailColab !== '-';
@@ -259,17 +306,32 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                   willAssign = true;
               }
 
-              if (importCategory === 'Starlinks') {
+              // 🛡️ CHECAGEM DE DUPLICAÇÃO DE HARDWARE
+              if (importCategory === 'Notebooks') {
+                const patrimonio = safeVal(getVal(row, 'patrimonio'));
+                if (patrimonio && assets.some(a => a.asset_type === 'Notebook' && a.notebook?.patrimonio === patrimonio)) {
+                    throw new Error(`Ignorado: Notebook com patrimônio '${patrimonio}' já existe.`);
+                }
+                payload = { asset_type: 'Notebook', patrimonio: patrimonio, serial_number: safeVal(getVal(row, 'serial_number', 'serial')), modelo_notebook: safeVal(getVal(row, 'modelo')), garantia: safeVal(getVal(row, 'garantia')), status_garantia: safeVal(getVal(row, 'status_garantia')) || 'No prazo', status: creationStatus };
+              } 
+              else if (importCategory === 'Celulares') {
+                const imei = safeVal(getVal(row, 'imei'));
+                if (imei && assets.some(a => a.asset_type === 'Celular' && a.celular?.imei === imei)) {
+                    throw new Error(`Ignorado: Celular com IMEI '${imei}' já existe.`);
+                }
+                payload = { asset_type: 'Celular', imei: imei, modelo_celular: safeVal(getVal(row, 'modelo')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), status: creationStatus };
+              } 
+              else if (importCategory === 'CHIPs') {
+                const numero = safeVal(getVal(row, 'numero', 'linha'));
+                if (numero && assets.some(a => a.asset_type === 'CHIP' && a.chip?.numero === numero)) {
+                    throw new Error(`Ignorado: CHIP com número '${numero}' já existe.`);
+                }
+                payload = { asset_type: 'CHIP', numero: numero, iccid: safeVal(getVal(row, 'iccid')), plano: safeVal(getVal(row, 'plano')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), vencimento_plano: safeVal(getVal(row, 'vencimento_plano', 'vencimento')), status: creationStatus };
+              } 
+              else if (importCategory === 'Starlinks') {
                 payload = { asset_type: 'Starlink', grupo: safeVal(getVal(row, 'grupo')), modelo_starlink: safeVal(getVal(row, 'modelo')), localizacao: safeVal(getVal(row, 'localizacao', 'local')), projeto: safeVal(getVal(row, 'projeto')), responsavel: safeVal(getVal(row, 'responsavel')), email_responsavel: emailColab, email: safeVal(getVal(row, 'email_conta', 'email')), senha: safeVal(getVal(row, 'senha_conta', 'senha')), senha_roteador: safeVal(getVal(row, 'senha_wifi', 'wifi')), status: creationStatus };
-              } else if (importCategory === 'Notebooks') {
-                payload = { asset_type: 'Notebook', patrimonio: safeVal(getVal(row, 'patrimonio')), serial_number: safeVal(getVal(row, 'serial_number', 'serial')), modelo_notebook: safeVal(getVal(row, 'modelo')), garantia: safeVal(getVal(row, 'garantia')), status_garantia: safeVal(getVal(row, 'status_garantia')) || 'No prazo', status: creationStatus };
-              } else if (importCategory === 'Celulares') {
-                payload = { asset_type: 'Celular', imei: safeVal(getVal(row, 'imei')), modelo_celular: safeVal(getVal(row, 'modelo')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), status: creationStatus };
-              } else if (importCategory === 'CHIPs') {
-                payload = { asset_type: 'CHIP', numero: safeVal(getVal(row, 'numero', 'linha')), iccid: safeVal(getVal(row, 'iccid')), plano: safeVal(getVal(row, 'plano')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), vencimento_plano: safeVal(getVal(row, 'vencimento_plano', 'vencimento')), status: creationStatus };
               }
 
-              // 🚨 NOVO: Axios
               const res = await api.post('/api/assets', payload);
               const resData = res.data;
 
@@ -280,14 +342,15 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
                 const assetIdToAssign = resData?.data?.id || resData?.id; 
                 if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas o backend não devolveu o ID para vincular.`);
 
-                // 🚨 NOVO: Axios (usando put)
                 await api.put(`/api/employees/${emp.id}/assign`, { asset_id: assetIdToAssign });
               }
             }
             successCount++;
           } catch (err) { 
               errorCount++; 
-              errorDetails.push(`Linha ${i+1}: ${err.response?.data?.error || err.message}`); 
+              // Impede que o "Error:" ou "Ignorado:" suje a mensagem na tela de forma feia
+              const errMsg = err.response?.data?.error || err.message;
+              errorDetails.push(`Linha ${i+1}: ${errMsg}`); 
           }
         }
 
@@ -301,11 +364,11 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
             title: 'Concluído com ressalvas!',
             html: `
               <div style="text-align: left;">
-                <p>✅ <b>Sucesso:</b> ${successCount} registros</p>
-                <p>❌ <b>Avisos/Erros:</b> ${errorCount}</p>
+                <p>✅ <b>Sucesso:</b> ${successCount} registros novos</p>
+                <p>⚠️ <b>Ignorados/Erros:</b> ${errorCount}</p>
                 <br/>
-                <p><b>Detalhes dos últimos erros:</b></p>
-                <pre style="font-size: 12px; white-space: pre-wrap; color: #ef4444; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">${errorDetails.slice(-6).join('\n')}</pre>
+                <p><b>Detalhes:</b></p>
+                <pre style="font-size: 12px; white-space: pre-wrap; color: #ef4444; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">${errorDetails.slice(0, 10).join('\n')}${errorDetails.length > 10 ? '\n...e mais outros' : ''}</pre>
               </div>
             `,
             icon: 'warning',
@@ -318,7 +381,7 @@ export default function ImportModule({ hasAccess, employees, contracts, licenses
         } else { 
           Swal.fire({
             title: 'Sucesso!',
-            text: 'Dados registrados no sistema com sucesso!',
+            text: 'Dados registrados no sistema sem duplicidades!',
             icon: 'success',
             background: '#1f2937',
             color: '#ffffff',

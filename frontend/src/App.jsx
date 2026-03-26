@@ -6,8 +6,7 @@ import { roleTemplates } from './constants/permissions';
 import { formatCurrency } from './utils/helpers'; 
 import api from './services/api';
 
-// 🚨 NOVO: LAZY LOADING DE COMPONENTES (Code Splitting)
-// O JS de cada módulo só será baixado quando o usuário clicar na aba!
+// 🚨 COMPONENTES COM CODE SPLITTING
 const DashboardModule = React.lazy(() => import('./modules/DashboardModule'));
 const AdminModule = React.lazy(() => import('./modules/AdminModule'));
 const InventoryModule = React.lazy(() => import('./modules/InventoryModule'));
@@ -21,6 +20,7 @@ const CatalogModule = React.lazy(() => import('./modules/CatalogModule'));
 const OffboardingModule = React.lazy(() => import('./modules/OffboardingModule')); 
 
 export default function App() {
+  // ⚡ LAZY INITIALIZATION (Performance Máxima)
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = localStorage.getItem('logged_user');
     const token = localStorage.getItem('token');
@@ -40,10 +40,15 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard'); 
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: false, confirmText: 'Confirmar' });
-  const requestConfirm = (title, message, onConfirm, isDanger = false, confirmText = 'Confirmar') => { setConfirmDialog({ isOpen: true, title, message, onConfirm, isDanger, confirmText }); };
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ nome: '', email: '', senha: '', cargo: 'Gestor' });
+
+  // ─── FUNÇÕES CORE (Hoisting Garantido) ───
+
+  function requestConfirm(title, message, onConfirm, isDanger = false, confirmText = 'Confirmar') {
+    setConfirmDialog({ isOpen: true, title, message, onConfirm, isDanger, confirmText });
+  }
 
   function handleLogout() { 
     const userName = currentUser ? currentUser.nome : 'Sistema';
@@ -73,7 +78,9 @@ export default function App() {
     try {
       await api.post('/api/audit-logs', logEntry);
       if (currentUser?.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData();
-    } catch (e) {e.response?.status === 401 && handleLogout();}
+    } catch (e) {
+      if(e.response?.status === 401) handleLogout();
+    }
   }
 
   function fetchData() {
@@ -115,11 +122,13 @@ export default function App() {
       .finally(() => setIsLoading(false));
   }
 
+  // ─── EFFECTS ───
+
   useEffect(() => { 
     if (currentUser) { 
       fetchData(); 
       if (currentUser.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData(); 
-    } 
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
 
@@ -136,7 +145,6 @@ export default function App() {
       const data = res.data;
       
       const loggedUser = data.data;
-      
       const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
       loggedUser.permissions = rawPerms 
         ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
@@ -147,7 +155,6 @@ export default function App() {
       
       Swal.close();
       setCurrentUser(loggedUser);
-
     } catch (err) {
       Swal.fire({
         title: 'Erro no Login',
@@ -160,9 +167,19 @@ export default function App() {
     }
   };
 
-  const hasAccess = (module, requiredLevel = 'read') => { if (!currentUser) return false; if (currentUser.cargo === 'Administrator') return true; const perm = currentUser.permissions[module]; if (!perm || perm === 'none') return false; if (requiredLevel === 'read') return perm === 'read' || perm === 'edit'; if (requiredLevel === 'edit') return perm === 'edit'; return false; };
+  const hasAccess = (module, requiredLevel = 'read') => { 
+    if (!currentUser) return false; 
+    if (currentUser.cargo === 'Administrator') return true; 
+    const perm = currentUser.permissions?.[module]; 
+    if (!perm || perm === 'none') return false; 
+    if (requiredLevel === 'read') return perm === 'read' || perm === 'edit'; 
+    if (requiredLevel === 'edit') return perm === 'edit'; 
+    return false; 
+  };
 
-  const handleRoleChange = (cargo) => setNewUser({ ...newUser, cargo: cargo, permissions: { ...roleTemplates[cargo] } });
+  const handleRoleChange = (cargo) => {
+    setNewUser({ ...newUser, cargo: cargo, permissions: { ...roleTemplates[cargo] } });
+  };
   
   const handleCreateSystemUser = async (e) => { 
     e.preventDefault(); 
@@ -172,7 +189,9 @@ export default function App() {
       setIsUserModalOpen(false); 
       fetchAdminData(); 
       registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
-    } catch(err){ alert(err.response?.data?.error || err.message); }
+    } catch(err){ 
+      Swal.fire('Erro', err.response?.data?.error || err.message, 'error');
+    }
   };
   
   const deleteSystemUser = (id) => { 
@@ -181,11 +200,12 @@ export default function App() {
         await api.delete(`/api/users/${id}`);
         fetchAdminData(); 
         registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); 
-      } catch(err) { alert(err.response?.data?.error || err.message); }
+      } catch(err) { 
+        Swal.fire('Erro', err.response?.data?.error || err.message, 'error');
+      }
     }, true, 'Excluir'); 
   };
 
-  // Componente de Loading visual enquanto o JS do módulo é baixado
   const FallbackLoader = () => (
     <div className="flex flex-col items-center justify-center py-32">
       <Loader2 className="w-12 h-12 text-brandGreen animate-spin mb-4" />
@@ -248,7 +268,6 @@ export default function App() {
           </div>
 
           <main className="max-w-7xl mx-auto p-6 mt-4">
-            {/* 🚨 NOVO: <Suspense> envolve os componentes. Enquanto baixa, mostra o FallbackLoader */}
             <Suspense fallback={<FallbackLoader />}>
               {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} isLoading={isLoading} />}
               {activeTab === 'admin' && hasAccess('admin', 'read') && <AdminModule hasAccess={hasAccess} systemUsers={systemUsers} auditLogs={auditLogs} deleteSystemUser={deleteSystemUser} setNewUser={setNewUser} setIsUserModalOpen={setIsUserModalOpen} roleTemplates={roleTemplates} />}
@@ -259,7 +278,7 @@ export default function App() {
               {activeTab === 'contracts' && hasAccess('contracts', 'read') && <ContractsModule contracts={contracts} catalogItems={catalogItems} hasAccess={hasAccess} fetchData={fetchData} formatCurrency={formatCurrency} requestConfirm={requestConfirm} registerLog={registerLog} />}
               {activeTab === 'licenses' && hasAccess('licenses', 'read') && <LicensesModule licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} formatCurrency={formatCurrency} />}
               {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
-              {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
+              {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} assets={assets} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
               {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
             </Suspense>
           </main>
@@ -306,7 +325,6 @@ export default function App() {
               </div>
             </div>
           )}
-
         </>
       )}
     </div>
