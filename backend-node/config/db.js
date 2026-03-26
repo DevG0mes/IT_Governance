@@ -36,7 +36,7 @@ const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataType
 // 3. RELACIONAMENTOS DO BANCO
 // ==========================================
 
-// Ligação Ativo -> Detalhes
+// Ligação Ativo -> Detalhes (Refletindo a coluna AssetId que criamos no DBeaver)
 Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook' });
 AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId' });
 
@@ -49,15 +49,24 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId' });
 Asset.hasOne(AssetCelular, { foreignKey: 'AssetId', as: 'Celular' });
 AssetCelular.belongsTo(Asset, { foreignKey: 'AssetId' });
 
-// LIGAÇÃO COM O FUNCIONÁRIO (O culpado do erro 500 de Associação)
+// LIGAÇÃO COM O FUNCIONÁRIO (Refletindo a coluna EmployeeId da tabela assets)
 Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'employee' });
 Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets' });
 
-// Ligações com Licenças 
-Employee.hasMany(EmployeeLicense, { foreignKey: 'EmployeeId', as: 'EmployeeLicenses' });
-EmployeeLicense.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
-License.hasMany(EmployeeLicense, { foreignKey: 'LicenseId', as: 'EmployeeLicenses' });
-EmployeeLicense.belongsTo(License, { foreignKey: 'LicenseId', as: 'License' });
+// 🚨 CORREÇÃO: Ligações com Licenças (Ajustado para o snake_case exato do seu banco: employee_id e license_id)
+Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'EmployeeLicenses' });
+EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id', as: 'Employee' });
+
+License.hasMany(EmployeeLicense, { foreignKey: 'license_id', as: 'EmployeeLicenses' });
+EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
+
+// 🚨 NOVO: Ligações do Histórico de Atribuições (AssetAssignment)
+// Garante o rastreio de entregas e devoluções para a governança
+Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
+AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
+
+Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'Assignments' });
+AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
 // ==========================================
 // 4. Sincronização e Setup Inicial
@@ -88,7 +97,7 @@ const connectDatabase = async () => {
   }
 };
 
-// 🚨 ADICIONADO EmployeeLicense e AssetAssignment NA EXPORTAÇÃO
+// EXPORTAÇÃO COMPLETA
 module.exports = { 
   sequelize, User, Employee, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, 
   License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, connectDatabase 
