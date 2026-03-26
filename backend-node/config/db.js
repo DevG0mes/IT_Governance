@@ -37,6 +37,7 @@ const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataType
 // ==========================================
 
 // Ligação Ativo -> Detalhes (Refletindo a coluna AssetId que criamos no DBeaver)
+// 1. Ligação Ativo -> Detalhes (Hardware)
 Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook' });
 AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
@@ -49,12 +50,24 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
 AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
-// 2. Colaborador -> Histórico de Ativos (Para contar Hardwares e Softwares)
-Employee.hasMany(AssetAssignment, { foreignKey: 'employee_id', as: 'Assignments' });
-AssetAssignment.belongsTo(Employee, { foreignKey: 'employee_id' });
+// 2. 🚨 A LIGAÇÃO QUE FALTAVA (Ativo <-> Colaborador) 🚨
+// Isso resolve o erro "Employee is not associated to Asset"
+Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'Employee' }); 
+Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets' });
 
-Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'Licenses' });
-EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id' });
+// 3. Colaborador -> Histórico de Atribuições (Para contar os Hardwares na tela)
+Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
+AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
+
+Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'Assignments' });
+AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
+
+// 4. Colaborador -> Licenças de Software (Para contar os Softwares na tela)
+Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'EmployeeLicenses' });
+EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id', as: 'Employee' });
+
+License.hasMany(EmployeeLicense, { foreignKey: 'license_id', as: 'EmployeeLicenses' });
+EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
 
 // ==========================================
 // 4. Sincronização e Setup Inicial
