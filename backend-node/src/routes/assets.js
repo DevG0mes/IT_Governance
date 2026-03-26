@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../config/db');
+const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../../config/db');
 
 // ROTA DE LISTAGEM (GET)
 router.get('/', async (req, res) => {

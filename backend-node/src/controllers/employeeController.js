@@ -6,7 +6,7 @@ const {
   License, 
   EmployeeLicense 
 } = require('../../config/db');
-const { standardizeText, standardizeEmail } = require('../utils/sanitizer');
+const { standardizeText, standardizeEmail } = require('../../utils/sanitizer');
 
 exports.getAll = async (req, res) => {
   try {
