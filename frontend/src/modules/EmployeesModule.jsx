@@ -17,7 +17,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
   const [selectedLicenseToAssign, setSelectedLicenseToAssign] = useState('');
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-  const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
+  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
   const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
   const [offboardingTarget, setOffboardingTarget] = useState(null);
   const [offboardingChecks, setOffboardingChecks] = useState({

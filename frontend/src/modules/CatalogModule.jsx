@@ -12,7 +12,7 @@ export default function CatalogModule({ catalogItems, assets = [], hasAccess, fe
   const selectedCategory = editCatalogData ? editCatalogData.category : newCatalogItem.category;
   const currentNome = editCatalogData ? editCatalogData.nome : newCatalogItem.nome;
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  // Filtro Inteligente e Rigoroso: Puxa modelos distintos APENAS de suas tabelas reais
+  const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  // Filtro Inteligente e Rigoroso: Puxa modelos distintos APENAS de suas tabelas reais
   const availableModels = useMemo(() => {
     const models = new Set();
     const targetCategory = (selectedCategory || '').trim().toLowerCase();

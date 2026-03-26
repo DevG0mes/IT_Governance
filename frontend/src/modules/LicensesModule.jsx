@@ -8,7 +8,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
   const [newLicense, setNewLicense] = useState({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' });
   const [viewLicenseUsers, setViewLicenseUsers] = useState(null);
 // Substitua temporariamente a linha por esta (com a URL real do seu backend):
-const API_BASE_URL = 'https://silver-monkey-552153.hostingersite.com';  
+const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';  
 const handleCreateLicense = async (e) => { 
     e.preventDefault(); 
     const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; 
