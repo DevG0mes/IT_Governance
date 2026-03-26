@@ -12,5 +12,6 @@ router.put('/:id/toggle-status', employeeController.toggleStatus);
 
 // Remoção
 router.delete('/:id', employeeController.delete);
+router.post('/bulk-delete', employeeController.bulkDelete);
 
 module.exports = router;

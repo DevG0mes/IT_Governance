@@ -154,3 +154,30 @@ exports.delete = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+exports.bulkDelete = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const { ids } = req.body; // Recebe um array: [1, 2, 3]
+    if (!ids || !ids.length) throw new Error('Nenhum ID fornecido');
+
+    // Libera os ativos vinculados a essas pessoas
+    const activeAssignments = await AssetAssignment.findAll({
+      where: { employee_id: ids, returned_at: null },
+      transaction: t
+    });
+
+    for (let asg of activeAssignments) {
+      await Asset.update({ status: 'Disponível' }, { where: { id: asg.asset_id }, transaction: t });
+      await asg.update({ returned_at: new Date() }, { transaction: t });
+    }
+
+    // Deleta todo mundo de uma vez só!
+    await Employee.destroy({ where: { id: ids }, transaction: t });
+    
+    await t.commit();
+    return res.status(200).json({ message: `${ids.length} colaboradores removidos com sucesso.` });
+  } catch (error) {
+    if (t) await t.rollback();
+    return res.status(500).json({ error: error.message });
+  }
+};

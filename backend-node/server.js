@@ -1,4 +1,6 @@
 // Arquivo: server.js
+process.env.UV_THREADPOOL_SIZE = 2;
+
 const express = require('express');
 const cors = require('cors');
 const timeout = require('connect-timeout'); 
