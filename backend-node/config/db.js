@@ -29,10 +29,8 @@ const AssetNotebook = require('../Models/AssetNotebook')(sequelize, DataTypes);
 const AssetStarlink = require('../Models/AssetStarlink')(sequelize, DataTypes);
 const AssetChip = require('../Models/AssetChip')(sequelize, DataTypes);
 const AssetCelular = require('../Models/AssetCelular')(sequelize, DataTypes);
-
-// 🚨 IMPORTAÇÕES QUE FALTAVAM (O Node crashava por não achar isso)
-//const EmployeeLicense = require('../Models/EmployeeLicense')(sequelize, DataTypes);
-//const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataTypes);
+const EmployeeLicense = require('../Models/EmployeeLicense')(sequelize, DataTypes);
+const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataTypes);
 
 // ==========================================
 // 3. RELACIONAMENTOS DO BANCO
