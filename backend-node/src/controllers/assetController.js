@@ -1,4 +1,4 @@
-const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee } = require('../../config/db');
+const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee, AssetAssignment } = require('../../config/db');
 
 exports.getAll = async (req, res) => {
   try {
@@ -23,7 +23,6 @@ exports.create = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    // Trava Anti-duplicação
     if (input.asset_type === 'Notebook' && input.patrimonio) {
       const exists = await AssetNotebook.findOne({ where: { patrimonio: input.patrimonio }, transaction: t });
       if (exists) {
@@ -40,13 +39,11 @@ exports.create = async (req, res) => {
       }
     }
 
-    // Criação do Ativo Base
     const asset = await Asset.create({
       asset_type: input.asset_type,
       status: input.status || 'Disponível'
     }, { transaction: t });
 
-    // Lógica Dinâmica para Sub-tabelas
     if (input.asset_type === 'Notebook') {
       await AssetNotebook.create({
         AssetId: asset.id,
@@ -93,7 +90,6 @@ exports.create = async (req, res) => {
 
     await t.commit();
     return res.status(201).json({ message: 'Ativo criado com sucesso', data: asset });
-
   } catch (error) {
     if (t) await t.rollback();
     console.error("❌ Erro ao criar ativo:", error);
@@ -101,10 +97,8 @@ exports.create = async (req, res) => {
   }
 };
 
-// 🚀 NOVA OPÇÃO DE BYPASS: IMPORTAÇÃO EM MASSA (BULK)
 exports.importBulk = async (req, res) => {
-  const { items } = req.body; // Espera receber um JSON tipo: { items: [ {...}, {...}, {...} ] }
-  
+  const { items } = req.body; 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "Envie um array contendo os ativos a serem importados." });
   }
@@ -113,16 +107,12 @@ exports.importBulk = async (req, res) => {
   let successCount = 0;
 
   try {
-    // O Node.js processa a lista internamente usando APENAS 1 PROCESSO
     for (const input of items) {
-      
-      // Ignora vazios
       if (!input.asset_type) continue; 
 
-      // Pula duplicados de Notebook sem travar a transação inteira
       if (input.asset_type === 'Notebook' && input.patrimonio) {
         const exists = await AssetNotebook.findOne({ where: { patrimonio: input.patrimonio }, transaction: t });
-        if (exists) continue; // Se já existe, apenas pula para o próximo da lista
+        if (exists) continue; 
       }
 
       const asset = await Asset.create({
@@ -140,17 +130,65 @@ exports.importBulk = async (req, res) => {
           status_garantia: input.status_garantia
         }, { transaction: t });
       } 
-      // ... adicione os outros (Celular, Starlink) aqui seguindo o padrão acima se precisar importar eles em massa
-      
       successCount++;
     }
 
     await t.commit();
     return res.status(201).json({ message: `Importação concluída! ${successCount} registros criados.` });
-
   } catch (error) {
     if (t) await t.rollback();
     console.error("❌ Erro no processamento em massa:", error);
     return res.status(500).json({ error: "Erro na importação em lote: " + error.message });
+  }
+};
+
+exports.bulkDelete = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const { ids } = req.body; 
+    if (!ids || !ids.length) throw new Error('Nenhum ID fornecido para exclusão.');
+
+    await AssetAssignment.update(
+      { returned_at: new Date() },
+      { where: { AssetId: ids, returned_at: null }, transaction: t }
+    );
+
+    await AssetNotebook.destroy({ where: { AssetId: ids }, transaction: t });
+    await AssetCelular.destroy({ where: { AssetId: ids }, transaction: t });
+    await AssetChip.destroy({ where: { AssetId: ids }, transaction: t });
+    await AssetStarlink.destroy({ where: { AssetId: ids }, transaction: t });
+
+    await Asset.destroy({ where: { id: ids }, transaction: t });
+    
+    await t.commit();
+    return res.status(200).json({ message: `${ids.length} ativos removidos com sucesso.` });
+  } catch (error) {
+    if (t) await t.rollback();
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+exports.delete = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const asset = await Asset.findByPk(req.params.id, { transaction: t });
+    if (!asset) throw new Error('Ativo não encontrado');
+
+    await AssetAssignment.update(
+      { returned_at: new Date() },
+      { where: { AssetId: asset.id, returned_at: null }, transaction: t }
+    );
+
+    await AssetNotebook.destroy({ where: { AssetId: asset.id }, transaction: t });
+    await AssetCelular.destroy({ where: { AssetId: asset.id }, transaction: t });
+    await AssetChip.destroy({ where: { AssetId: asset.id }, transaction: t });
+    await AssetStarlink.destroy({ where: { AssetId: asset.id }, transaction: t });
+
+    await asset.destroy({ transaction: t });
+    await t.commit();
+    return res.status(200).json({ message: 'Ativo removido com sucesso' });
+  } catch (error) {
+    if (t) await t.rollback();
+    return res.status(500).json({ error: error.message });
   }
 };
