@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Database, Laptop, Smartphone, Wifi, Cpu, Search, X, ArrowDownAZ, ArrowUpZA, Trash2, MoreVertical, Info, Clock, CheckCircle, LogOut, ShieldAlert, AlertTriangle, Users, Wrench, RefreshCw, Loader2, Edit2, UserPlus } from 'lucide-react';
 import { formatCurrency } from '../utils/helpers';
-// 🚨 NOVO: Importando a sua API centralizada e blindada
 import api from '../services/api';
 
 export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading }) {
@@ -30,7 +29,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
   const [statusModalData, setStatusModalData] = useState(null);
 
-  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
   const safeAssets = assets || [];
@@ -46,23 +44,25 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     return matchCategory && matchStatus; 
   });
   
+  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas
   if (inventorySearchTerm) { 
     const term = inventorySearchTerm.toLowerCase(); 
     filteredAssets = filteredAssets.filter(a => (
-      a?.notebook?.patrimonio?.toLowerCase().includes(term) || 
-      a?.notebook?.serial_number?.toLowerCase().includes(term) || 
-      a?.celular?.imei?.toLowerCase().includes(term) || 
-      a?.chip?.numero?.toLowerCase().includes(term) || 
-      a?.chip?.iccid?.toLowerCase().includes(term) || 
-      a?.starlink?.grupo?.toLowerCase().includes(term) ||
-      a?.starlink?.projeto?.toLowerCase().includes(term) ||
-      a?.celular?.grupo?.toLowerCase().includes(term) ||
-      a?.chip?.grupo?.toLowerCase().includes(term)
+      a?.Notebook?.patrimonio?.toLowerCase().includes(term) || 
+      a?.Notebook?.serial_number?.toLowerCase().includes(term) || 
+      a?.Celular?.imei?.toLowerCase().includes(term) || 
+      a?.Chip?.numero?.toLowerCase().includes(term) || 
+      a?.Chip?.iccid?.toLowerCase().includes(term) || 
+      a?.Starlink?.grupo?.toLowerCase().includes(term) ||
+      a?.Starlink?.projeto?.toLowerCase().includes(term) ||
+      a?.Celular?.grupo?.toLowerCase().includes(term) ||
+      a?.Chip?.grupo?.toLowerCase().includes(term)
     )); 
   }
   
+  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas
   filteredAssets.sort((a, b) => { 
-    const getIdent = (asset) => asset?.notebook?.patrimonio || asset?.celular?.imei || asset?.chip?.numero || asset?.starlink?.grupo || ''; 
+    const getIdent = (asset) => asset?.Notebook?.patrimonio || asset?.Celular?.imei || asset?.Chip?.numero || asset?.Starlink?.grupo || ''; 
     const valA = getIdent(a).toLowerCase(); const valB = getIdent(b).toLowerCase(); 
     return inventorySortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
   });
@@ -70,30 +70,31 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredAssets.length && filteredAssets.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredAssets.map(item => item.id));
 
+  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas no Edit Modal
   const openEditModal = (asset) => {
       const flatAsset = {
           id: asset.id,
           asset_type: asset.asset_type,
           status: asset.status,
-          patrimonio: asset.notebook?.patrimonio || '',
-          serial_number: asset.notebook?.serial_number || '',
-          modelo_notebook: asset.notebook?.modelo || '',
-          garantia: asset.notebook?.garantia || '',
-          status_garantia: asset.notebook?.status_garantia || 'No prazo',
-          imei: asset.celular?.imei || '',
-          modelo_celular: asset.celular?.modelo || '',
-          numero: asset.chip?.numero || '',
-          iccid: asset.chip?.iccid || '',
-          plano: asset.chip?.plano || '',
-          vencimento_plano: asset.chip?.vencimento_plano || '',
-          localizacao: asset.starlink?.localizacao || '',
-          projeto: asset.starlink?.projeto || '',
-          modelo_starlink: asset.starlink?.modelo || '',
-          email: asset.starlink?.email || '',
-          senha: asset.starlink?.senha || '',
-          senha_roteador: asset.starlink?.senha_roteador || '',
-          grupo: asset.celular?.grupo || asset.chip?.grupo || asset.starlink?.grupo || '',
-          responsavel: asset.celular?.responsavel || asset.chip?.responsavel || asset.starlink?.responsavel || ''
+          patrimonio: asset.Notebook?.patrimonio || '',
+          serial_number: asset.Notebook?.serial_number || '',
+          modelo_notebook: asset.Notebook?.modelo || '',
+          garantia: asset.Notebook?.garantia || '',
+          status_garantia: asset.Notebook?.status_garantia || 'No prazo',
+          imei: asset.Celular?.imei || '',
+          modelo_celular: asset.Celular?.modelo || '',
+          numero: asset.Chip?.numero || '',
+          iccid: asset.Chip?.iccid || '',
+          plano: asset.Chip?.plano || '',
+          vencimento_plano: asset.Chip?.vencimento_plano || '',
+          localizacao: asset.Starlink?.localizacao || '',
+          projeto: asset.Starlink?.projeto || '',
+          modelo_starlink: asset.Starlink?.modelo || '',
+          email: asset.Starlink?.email || '',
+          senha: asset.Starlink?.senha || '',
+          senha_roteador: asset.Starlink?.senha_roteador || '',
+          grupo: asset.Celular?.grupo || asset.Chip?.grupo || asset.Starlink?.grupo || '',
+          responsavel: asset.Celular?.responsavel || asset.Chip?.responsavel || asset.Starlink?.responsavel || ''
       };
       setNewAsset(flatAsset);
       setIsEditingAsset(true);
@@ -105,9 +106,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     const statusInicial = newAsset.grupo?.trim() && !['Renovação', 'Manutenção'].includes(newAsset.status) ? 'Em uso' : newAsset.status; 
     try {
-      // 🚨 NOVO: api.post super limpo
       await api.post('/api/assets', { ...newAsset, status: statusInicial });
-      
       registerLog('CREATE', 'Inventário', `Cadastrou o ativo ${newAsset.asset_type}`); 
       setIsAssetModalOpen(false); 
       fetchData(); 
@@ -117,9 +116,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const handleUpdateAsset = async (e) => {
     e.preventDefault();
     try {
-        // 🚨 NOVO: api.put no lugar do fetch
         await api.put(`/api/assets/${activeAsset.id}`, newAsset);
-        
         registerLog('UPDATE', 'Inventário', `Atualizou os dados do ativo ID ${activeAsset.id}`);
         setIsAssetModalOpen(false);
         setIsEditingAsset(false);
@@ -131,9 +128,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     setOpenActionMenu(null); 
     requestConfirm('Confirmar Ação', `Deseja aplicar esta ação no equipamento?`, async () => { 
       try {
-        // 🚨 NOVO: api.put
         await api.put(`/api/assets/${assetId}/${action}`);
-        
         registerLog('UPDATE', 'Inventário', `Ação ${action} no ativo ID ${assetId}`); 
         fetchData(); 
       } catch (err) { alert(getAxiosError(err, 'Erro ao aplicar ação')); }
@@ -144,17 +139,12 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     try {
       let targetEmpId = selectedItemForAssign;
-
       if (targetEmpId === 'NEW') {
-          // 🚨 NOVO: api.post
           const createRes = await api.post('/api/employees', newEmployeeForAssign);
           targetEmpId = createRes.data.data.id || createRes.data.id; 
           registerLog('CREATE', 'Colaboradores', `Cadastrou funcionário ${newEmployeeForAssign.nome} via Atribuição`);
       }
-
-      // 🚨 NOVO: api.put
       await api.put(`/api/employees/${targetEmpId}/assign`, { asset_id: activeAsset.id });
-      
       registerLog('UPDATE', 'Inventário', `Atribuiu ativo ID ${activeAsset.id} ao colab ID ${targetEmpId}`); 
       setIsAssignAssetModalOpen(false); 
       setSelectedItemForAssign(''); 
@@ -166,9 +156,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const submitMaintenance = async (e) => {
     e.preventDefault();
     try {
-      // 🚨 NOVO: api.put
       await api.put(`/api/assets/${activeAsset.id}/maintenance`, maintenanceForm);
-      
       registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); 
       setIsMaintenanceModalOpen(false); 
       setMaintenanceForm({chamado: '', observacao: ''}); 
@@ -185,12 +173,10 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     e.preventDefault(); 
     if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } 
     try {
-      // 🚨 NOVO: api.put
       await api.put(`/api/assets/${statusModalData.asset.id}/discard`, { 
           status: statusModalData.status, 
           observacao: statusModalData.observacao 
       });
-      
       registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); 
       setStatusModalData(null); 
       fetchData();
@@ -202,7 +188,6 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     requestConfirm('Exclusão em Massa', `ATENÇÃO: Excluir DEFINITIVAMENTE ${selectedIds.length} itens?`, async () => {
         try {
             await Promise.all(selectedIds.map(async (id) => { 
-              // 🚨 NOVO: api.delete
               await api.delete(`/api/assets/${id}`); 
             }));
             registerLog('DELETE BULK', 'INVENTÁRIO', `Excluiu ${selectedIds.length} ativos.`); 
@@ -273,10 +258,11 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             <tbody className="divide-y divide-gray-800/50">
               {assets && filteredAssets.length > 0 ? filteredAssets.map((asset, idx) => { 
                 if (!asset) return null;
-                const activeAsg = asset.assignments?.find(a => !a.returned_at); 
-                const ownerName = activeAsg?.employee?.nome || asset.celular?.responsavel || asset.chip?.responsavel || asset.starlink?.responsavel; 
-                const groupName = asset.celular?.grupo || asset.chip?.grupo || asset.starlink?.grupo;
-                let catModel = asset.notebook?.modelo || asset.celular?.modelo || asset.starlink?.modelo || asset.chip?.plano || '';
+                // 🚨 CORREÇÃO: Buscando os Arrays e as Sub-tabelas com as novas letras
+                const activeAsg = asset.AssetAssignments?.find(a => !a.returned_at); 
+                const ownerName = activeAsg?.Employee?.nome || asset.Celular?.responsavel || asset.Chip?.responsavel || asset.Starlink?.responsavel; 
+                const groupName = asset.Celular?.grupo || asset.Chip?.grupo || asset.Starlink?.grupo;
+                let catModel = asset.Notebook?.modelo || asset.Celular?.modelo || asset.Starlink?.modelo || asset.Chip?.plano || '';
                 const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
 
                 const isLastRows = idx >= filteredAssets.length - 2 && filteredAssets.length > 2;
@@ -292,13 +278,14 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {asset.asset_type === 'Notebook' && asset.notebook && (<div><p className="font-semibold text-gray-200">{asset.notebook.patrimonio}</p><p className="text-xs text-gray-500">SN: {asset.notebook.serial_number}</p></div>)}
-                      {asset.asset_type === 'Celular' && asset.celular && (<div><p className="font-semibold text-gray-200">IMEI: {asset.celular.imei}</p></div>)}
-                      {asset.asset_type === 'CHIP' && asset.chip && (<div><p className="font-semibold text-gray-200">Nº: {asset.chip.numero}</p>{asset.chip.iccid && <p className="text-xs text-gray-500">ICCID: {asset.chip.iccid}</p>}</div>)}
-                      {asset.asset_type === 'Starlink' && asset.starlink && (<div><p className="font-semibold text-gray-200">{asset.starlink.modelo}</p>{asset.starlink.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {asset.starlink.projeto}</p>}</div>)}
+                      {/* 🚨 CORREÇÃO: As exibições da tabela agora com Maiúsculas */}
+                      {asset.asset_type === 'Notebook' && asset.Notebook && (<div><p className="font-semibold text-gray-200">{asset.Notebook.patrimonio}</p><p className="text-xs text-gray-500">SN: {asset.Notebook.serial_number}</p></div>)}
+                      {asset.asset_type === 'Celular' && asset.Celular && (<div><p className="font-semibold text-gray-200">IMEI: {asset.Celular.imei}</p></div>)}
+                      {asset.asset_type === 'CHIP' && asset.Chip && (<div><p className="font-semibold text-gray-200">Nº: {asset.Chip.numero}</p>{asset.Chip.iccid && <p className="text-xs text-gray-500">ICCID: {asset.Chip.iccid}</p>}</div>)}
+                      {asset.asset_type === 'Starlink' && asset.Starlink && (<div><p className="font-semibold text-gray-200">{asset.Starlink.modelo}</p>{asset.Starlink.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {asset.Starlink.projeto}</p>}</div>)}
                       
                       {groupName && <p className="text-[10px] bg-gray-800 text-brandGreen px-2 py-0.5 rounded inline-block mt-1 mr-2 border border-brandGreen/20">{groupName}</p>}
-                      {asset.chip?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {asset.chip.vencimento_plano}</p>}
+                      {asset.Chip?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {asset.Chip.vencimento_plano}</p>}
                       {ownerName && <p className="text-xs text-blue-300 font-semibold mt-1 flex items-center gap-1"><Users className="w-3 h-3"/> {ownerName}</p>}
                     </td>
                     <td className="px-6 py-4 text-center relative">
@@ -444,26 +431,26 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             <div className="bg-black/50 p-5 rounded-xl border border-gray-800">
               <p className="text-gray-300 mb-1">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
               <p className="text-gray-300 mb-1">Status: <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span></p>
-              <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{viewAssetDetails.notebook?.patrimonio || viewAssetDetails.celular?.imei || viewAssetDetails.chip?.numero || viewAssetDetails.starlink?.grupo}</span></p>
+              <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{viewAssetDetails.Notebook?.patrimonio || viewAssetDetails.Celular?.imei || viewAssetDetails.Chip?.numero || viewAssetDetails.Starlink?.grupo}</span></p>
               
-              {viewAssetDetails.asset_type === 'CHIP' && viewAssetDetails.chip?.iccid && (
-                  <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{viewAssetDetails.chip.iccid}</span></p>
+              {viewAssetDetails.asset_type === 'CHIP' && viewAssetDetails.Chip?.iccid && (
+                  <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{viewAssetDetails.Chip.iccid}</span></p>
               )}
 
-              {viewAssetDetails.asset_type === 'Starlink' && viewAssetDetails.starlink && (
+              {viewAssetDetails.asset_type === 'Starlink' && viewAssetDetails.Starlink && (
                   <div className="mt-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
                       <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Wifi className="w-3 h-3 text-blue-400"/> Info. Rede & Credenciais</p>
-                      <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{viewAssetDetails.starlink.modelo || '-'}</span></p>
-                      <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{viewAssetDetails.starlink.projeto || '-'}</span></p>
-                      <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{viewAssetDetails.starlink.localizacao || '-'}</span></p>
+                      <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{viewAssetDetails.Starlink.modelo || '-'}</span></p>
+                      <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{viewAssetDetails.Starlink.projeto || '-'}</span></p>
+                      <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{viewAssetDetails.Starlink.localizacao || '-'}</span></p>
                       <div className="border-t border-gray-700/50 my-2 pt-2"></div>
-                      <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{viewAssetDetails.starlink.email || 'Não informado'}</span></p>
-                      <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{viewAssetDetails.starlink.senha || 'Não informada'}</span></p>
-                      <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{viewAssetDetails.starlink.senha_roteador || 'Não informada'}</span></p>
+                      <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{viewAssetDetails.Starlink.email || 'Não informado'}</span></p>
+                      <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{viewAssetDetails.Starlink.senha || 'Não informada'}</span></p>
+                      <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{viewAssetDetails.Starlink.senha_roteador || 'Não informada'}</span></p>
                   </div>
               )}
 
-              {viewAssetDetails.chip?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{viewAssetDetails.chip.vencimento_plano}</span></p>}
+              {viewAssetDetails.Chip?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{viewAssetDetails.Chip.vencimento_plano}</span></p>}
               
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo Base)</p>
@@ -476,6 +463,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       )}
 
+      {/* 🚨 CORREÇÃO: Modal Histórico com Maiúsculas */}
       {isHistoryModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-2xl shadow-2xl">
@@ -484,9 +472,9 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
               <button onClick={() => setIsHistoryModalOpen(false)} className="text-gray-400 hover:text-white p-2"><X className="w-6 h-6" /></button>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-4 custom-scrollbar pr-2">
-              {activeAsset.assignments && activeAsset.assignments.length > 0 ? activeAsset.assignments.sort((a,b) => new Date(b.assigned_at) - new Date(a.assigned_at)).map((assignment, idx) => (
+              {activeAsset.AssetAssignments && activeAsset.AssetAssignments.length > 0 ? activeAsset.AssetAssignments.sort((a,b) => new Date(b.assigned_at) - new Date(a.assigned_at)).map((assignment, idx) => (
                 <div key={idx} className="bg-black/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:border-gray-700 transition-colors">
-                  <div><p className="text-brandGreen font-bold">{assignment.employee?.nome || 'Desconhecido'}</p><p className="text-xs text-gray-500">{assignment.employee?.email}</p></div>
+                  <div><p className="text-brandGreen font-bold">{assignment.Employee?.nome || 'Desconhecido'}</p><p className="text-xs text-gray-500">{assignment.Employee?.email}</p></div>
                   <div className="text-right text-sm">
                     <p className="text-gray-300">Início: {new Date(assignment.assigned_at).toLocaleDateString('pt-BR')}</p>
                     <p className="text-blue-400 font-semibold">Fim: {assignment.returned_at ? new Date(assignment.returned_at).toLocaleDateString('pt-BR') : 'Em uso'}</p>
