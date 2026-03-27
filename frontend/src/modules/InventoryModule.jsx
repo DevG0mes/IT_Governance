@@ -44,25 +44,37 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     return matchCategory && matchStatus; 
   });
   
-  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas
+  // 🛡️ Lógica Blindada de Busca
   if (inventorySearchTerm) { 
     const term = inventorySearchTerm.toLowerCase(); 
-    filteredAssets = filteredAssets.filter(a => (
-      a?.Notebook?.patrimonio?.toLowerCase().includes(term) || 
-      a?.Notebook?.serial_number?.toLowerCase().includes(term) || 
-      a?.Celular?.imei?.toLowerCase().includes(term) || 
-      a?.Chip?.numero?.toLowerCase().includes(term) || 
-      a?.Chip?.iccid?.toLowerCase().includes(term) || 
-      a?.Starlink?.grupo?.toLowerCase().includes(term) ||
-      a?.Starlink?.projeto?.toLowerCase().includes(term) ||
-      a?.Celular?.grupo?.toLowerCase().includes(term) ||
-      a?.Chip?.grupo?.toLowerCase().includes(term)
-    )); 
+    filteredAssets = filteredAssets.filter(a => {
+      const nb = a?.Notebook || a?.notebook;
+      const cel = a?.Celular || a?.celular;
+      const ch = a?.Chip || a?.chip;
+      const st = a?.Starlink || a?.starlink;
+      
+      return (
+        nb?.patrimonio?.toLowerCase().includes(term) || 
+        nb?.serial_number?.toLowerCase().includes(term) || 
+        cel?.imei?.toLowerCase().includes(term) || 
+        ch?.numero?.toLowerCase().includes(term) || 
+        ch?.iccid?.toLowerCase().includes(term) || 
+        st?.grupo?.toLowerCase().includes(term) ||
+        st?.projeto?.toLowerCase().includes(term) ||
+        cel?.grupo?.toLowerCase().includes(term) ||
+        ch?.grupo?.toLowerCase().includes(term)
+      );
+    }); 
   }
   
-  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas
   filteredAssets.sort((a, b) => { 
-    const getIdent = (asset) => asset?.Notebook?.patrimonio || asset?.Celular?.imei || asset?.Chip?.numero || asset?.Starlink?.grupo || ''; 
+    const getIdent = (asset) => {
+      const nb = asset?.Notebook || asset?.notebook;
+      const cel = asset?.Celular || asset?.celular;
+      const ch = asset?.Chip || asset?.chip;
+      const st = asset?.Starlink || asset?.starlink;
+      return nb?.patrimonio || cel?.imei || ch?.numero || st?.grupo || ''; 
+    };
     const valA = getIdent(a).toLowerCase(); const valB = getIdent(b).toLowerCase(); 
     return inventorySortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
   });
@@ -70,31 +82,36 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () => selectedIds.length === filteredAssets.length && filteredAssets.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredAssets.map(item => item.id));
 
-  // 🚨 CORREÇÃO: Buscando com Iniciais Maiúsculas no Edit Modal
+  // 🛡️ Lógica Blindada no Edit Modal
   const openEditModal = (asset) => {
+      const nb = asset?.Notebook || asset?.notebook;
+      const cel = asset?.Celular || asset?.celular;
+      const ch = asset?.Chip || asset?.chip;
+      const st = asset?.Starlink || asset?.starlink;
+
       const flatAsset = {
           id: asset.id,
           asset_type: asset.asset_type,
           status: asset.status,
-          patrimonio: asset.Notebook?.patrimonio || '',
-          serial_number: asset.Notebook?.serial_number || '',
-          modelo_notebook: asset.Notebook?.modelo || '',
-          garantia: asset.Notebook?.garantia || '',
-          status_garantia: asset.Notebook?.status_garantia || 'No prazo',
-          imei: asset.Celular?.imei || '',
-          modelo_celular: asset.Celular?.modelo || '',
-          numero: asset.Chip?.numero || '',
-          iccid: asset.Chip?.iccid || '',
-          plano: asset.Chip?.plano || '',
-          vencimento_plano: asset.Chip?.vencimento_plano || '',
-          localizacao: asset.Starlink?.localizacao || '',
-          projeto: asset.Starlink?.projeto || '',
-          modelo_starlink: asset.Starlink?.modelo || '',
-          email: asset.Starlink?.email || '',
-          senha: asset.Starlink?.senha || '',
-          senha_roteador: asset.Starlink?.senha_roteador || '',
-          grupo: asset.Celular?.grupo || asset.Chip?.grupo || asset.Starlink?.grupo || '',
-          responsavel: asset.Celular?.responsavel || asset.Chip?.responsavel || asset.Starlink?.responsavel || ''
+          patrimonio: nb?.patrimonio || '',
+          serial_number: nb?.serial_number || '',
+          modelo_notebook: nb?.modelo || '',
+          garantia: nb?.garantia || '',
+          status_garantia: nb?.status_garantia || 'No prazo',
+          imei: cel?.imei || '',
+          modelo_celular: cel?.modelo || '',
+          numero: ch?.numero || '',
+          iccid: ch?.iccid || '',
+          plano: ch?.plano || '',
+          vencimento_plano: ch?.vencimento_plano || '',
+          localizacao: st?.localizacao || '',
+          projeto: st?.projeto || '',
+          modelo_starlink: st?.modelo || '',
+          email: st?.email || '',
+          senha: st?.senha || '',
+          senha_roteador: st?.senha_roteador || '',
+          grupo: cel?.grupo || ch?.grupo || st?.grupo || '',
+          responsavel: cel?.responsavel || ch?.responsavel || st?.responsavel || ''
       };
       setNewAsset(flatAsset);
       setIsEditingAsset(true);
@@ -258,11 +275,19 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             <tbody className="divide-y divide-gray-800/50">
               {assets && filteredAssets.length > 0 ? filteredAssets.map((asset, idx) => { 
                 if (!asset) return null;
-                // 🚨 CORREÇÃO: Buscando os Arrays e as Sub-tabelas com as novas letras
-                const activeAsg = asset.AssetAssignments?.find(a => !a.returned_at); 
-                const ownerName = activeAsg?.Employee?.nome || asset.Celular?.responsavel || asset.Chip?.responsavel || asset.Starlink?.responsavel; 
-                const groupName = asset.Celular?.grupo || asset.Chip?.grupo || asset.Starlink?.grupo;
-                let catModel = asset.Notebook?.modelo || asset.Celular?.modelo || asset.Starlink?.modelo || asset.Chip?.plano || '';
+
+                // 🛡️ Lógica Blindada nas sub-tabelas
+                const nb = asset.Notebook || asset.notebook;
+                const cel = asset.Celular || asset.celular;
+                const ch = asset.Chip || asset.chip;
+                const st = asset.Starlink || asset.starlink;
+                const assignments = asset.AssetAssignments || asset.assignments || asset.AssetAssignment || [];
+
+                const activeAsg = assignments.find(a => !a.returned_at); 
+                const empInfo = activeAsg?.Employee || activeAsg?.employee;
+                const ownerName = empInfo?.nome || cel?.responsavel || ch?.responsavel || st?.responsavel; 
+                const groupName = cel?.grupo || ch?.grupo || st?.grupo;
+                let catModel = nb?.modelo || cel?.modelo || st?.modelo || ch?.plano || '';
                 const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
 
                 const isLastRows = idx >= filteredAssets.length - 2 && filteredAssets.length > 2;
@@ -278,14 +303,13 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {/* 🚨 CORREÇÃO: As exibições da tabela agora com Maiúsculas */}
-                      {asset.asset_type === 'Notebook' && asset.Notebook && (<div><p className="font-semibold text-gray-200">{asset.Notebook.patrimonio}</p><p className="text-xs text-gray-500">SN: {asset.Notebook.serial_number}</p></div>)}
-                      {asset.asset_type === 'Celular' && asset.Celular && (<div><p className="font-semibold text-gray-200">IMEI: {asset.Celular.imei}</p></div>)}
-                      {asset.asset_type === 'CHIP' && asset.Chip && (<div><p className="font-semibold text-gray-200">Nº: {asset.Chip.numero}</p>{asset.Chip.iccid && <p className="text-xs text-gray-500">ICCID: {asset.Chip.iccid}</p>}</div>)}
-                      {asset.asset_type === 'Starlink' && asset.Starlink && (<div><p className="font-semibold text-gray-200">{asset.Starlink.modelo}</p>{asset.Starlink.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {asset.Starlink.projeto}</p>}</div>)}
+                      {asset.asset_type === 'Notebook' && nb && (<div><p className="font-semibold text-gray-200">{nb.patrimonio}</p><p className="text-xs text-gray-500">SN: {nb.serial_number}</p></div>)}
+                      {asset.asset_type === 'Celular' && cel && (<div><p className="font-semibold text-gray-200">IMEI: {cel.imei}</p></div>)}
+                      {asset.asset_type === 'CHIP' && ch && (<div><p className="font-semibold text-gray-200">Nº: {ch.numero}</p>{ch.iccid && <p className="text-xs text-gray-500">ICCID: {ch.iccid}</p>}</div>)}
+                      {asset.asset_type === 'Starlink' && st && (<div><p className="font-semibold text-gray-200">{st.modelo}</p>{st.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {st.projeto}</p>}</div>)}
                       
                       {groupName && <p className="text-[10px] bg-gray-800 text-brandGreen px-2 py-0.5 rounded inline-block mt-1 mr-2 border border-brandGreen/20">{groupName}</p>}
-                      {asset.Chip?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {asset.Chip.vencimento_plano}</p>}
+                      {ch?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {ch.vencimento_plano}</p>}
                       {ownerName && <p className="text-xs text-blue-300 font-semibold mt-1 flex items-center gap-1"><Users className="w-3 h-3"/> {ownerName}</p>}
                     </td>
                     <td className="px-6 py-4 text-center relative">
@@ -329,7 +353,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                   </tr>
                 )
               }) : (
-                <tr><td colSpan="5" className="text-center py-20 text-gray-500 font-medium">Nenhum equipamento encontrado com estes filtros.</td></tr>
+                <tr><td colSpan="5" className="text-center py-20 text-gray-500 font-medium">Nenhum equipamento encontrado.</td></tr>
               )}
             </tbody>
           </table>
@@ -390,7 +414,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         </div>
       )}
 
-      {/* MODAL ATRIBUIR ATIVO COM OPÇÃO DE NOVO COLABORADOR */}
+      {/* MODAL ATRIBUIR ATIVO */}
       {isAssignAssetModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
@@ -421,70 +445,83 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
       )}
 
       {/* MODAL DETALHES DO ATIVO */}
-      {viewAssetDetails && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white">Detalhes do Ativo</h2>
-              <button onClick={() => setViewAssetDetails(null)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="bg-black/50 p-5 rounded-xl border border-gray-800">
-              <p className="text-gray-300 mb-1">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
-              <p className="text-gray-300 mb-1">Status: <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span></p>
-              <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{viewAssetDetails.Notebook?.patrimonio || viewAssetDetails.Celular?.imei || viewAssetDetails.Chip?.numero || viewAssetDetails.Starlink?.grupo}</span></p>
-              
-              {viewAssetDetails.asset_type === 'CHIP' && viewAssetDetails.Chip?.iccid && (
-                  <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{viewAssetDetails.Chip.iccid}</span></p>
-              )}
+      {viewAssetDetails && (() => {
+        const nb = viewAssetDetails.Notebook || viewAssetDetails.notebook;
+        const cel = viewAssetDetails.Celular || viewAssetDetails.celular;
+        const ch = viewAssetDetails.Chip || viewAssetDetails.chip;
+        const st = viewAssetDetails.Starlink || viewAssetDetails.starlink;
 
-              {viewAssetDetails.asset_type === 'Starlink' && viewAssetDetails.Starlink && (
-                  <div className="mt-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
-                      <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Wifi className="w-3 h-3 text-blue-400"/> Info. Rede & Credenciais</p>
-                      <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{viewAssetDetails.Starlink.modelo || '-'}</span></p>
-                      <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{viewAssetDetails.Starlink.projeto || '-'}</span></p>
-                      <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{viewAssetDetails.Starlink.localizacao || '-'}</span></p>
-                      <div className="border-t border-gray-700/50 my-2 pt-2"></div>
-                      <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{viewAssetDetails.Starlink.email || 'Não informado'}</span></p>
-                      <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{viewAssetDetails.Starlink.senha || 'Não informada'}</span></p>
-                      <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{viewAssetDetails.Starlink.senha_roteador || 'Não informada'}</span></p>
-                  </div>
-              )}
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white">Detalhes do Ativo</h2>
+                <button onClick={() => setViewAssetDetails(null)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="bg-black/50 p-5 rounded-xl border border-gray-800">
+                <p className="text-gray-300 mb-1">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
+                <p className="text-gray-300 mb-1">Status: <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span></p>
+                <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{nb?.patrimonio || cel?.imei || ch?.numero || st?.grupo}</span></p>
+                
+                {viewAssetDetails.asset_type === 'CHIP' && ch?.iccid && (
+                    <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{ch.iccid}</span></p>
+                )}
 
-              {viewAssetDetails.Chip?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{viewAssetDetails.Chip.vencimento_plano}</span></p>}
-              
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo Base)</p>
-                <p className="text-xl font-bold text-brandGreen">
-                  {viewAssetDetails.catalogValue ? formatCurrency(viewAssetDetails.catalogValue) : 'Não precificado'}
-                </p>
+                {viewAssetDetails.asset_type === 'Starlink' && st && (
+                    <div className="mt-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
+                        <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Wifi className="w-3 h-3 text-blue-400"/> Info. Rede & Credenciais</p>
+                        <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{st.modelo || '-'}</span></p>
+                        <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{st.projeto || '-'}</span></p>
+                        <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{st.localizacao || '-'}</span></p>
+                        <div className="border-t border-gray-700/50 my-2 pt-2"></div>
+                        <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{st.email || 'Não informado'}</span></p>
+                        <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{st.senha || 'Não informada'}</span></p>
+                        <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{st.senha_roteador || 'Não informada'}</span></p>
+                    </div>
+                )}
+
+                {ch?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{ch.vencimento_plano}</span></p>}
+                
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo Base)</p>
+                  <p className="text-xl font-bold text-brandGreen">
+                    {viewAssetDetails.catalogValue ? formatCurrency(viewAssetDetails.catalogValue) : 'Não precificado'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* 🚨 CORREÇÃO: Modal Histórico com Maiúsculas */}
-      {isHistoryModalOpen && activeAsset && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-2xl shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2"><Clock className="text-purple-400"/> Histórico de Donos</h2>
-              <button onClick={() => setIsHistoryModalOpen(false)} className="text-gray-400 hover:text-white p-2"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="max-h-96 overflow-y-auto space-y-4 custom-scrollbar pr-2">
-              {activeAsset.AssetAssignments && activeAsset.AssetAssignments.length > 0 ? activeAsset.AssetAssignments.sort((a,b) => new Date(b.assigned_at) - new Date(a.assigned_at)).map((assignment, idx) => (
-                <div key={idx} className="bg-black/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:border-gray-700 transition-colors">
-                  <div><p className="text-brandGreen font-bold">{assignment.Employee?.nome || 'Desconhecido'}</p><p className="text-xs text-gray-500">{assignment.Employee?.email}</p></div>
-                  <div className="text-right text-sm">
-                    <p className="text-gray-300">Início: {new Date(assignment.assigned_at).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-blue-400 font-semibold">Fim: {assignment.returned_at ? new Date(assignment.returned_at).toLocaleDateString('pt-BR') : 'Em uso'}</p>
-                  </div>
-                </div>
-              )) : <p className="text-center py-10 text-gray-600 italic">Nenhuma atribuição registrada.</p>}
+      {/* 🛡️ Modal Histórico com Variável Blindada */}
+      {isHistoryModalOpen && activeAsset && (() => {
+        const assignments = activeAsset.AssetAssignments || activeAsset.assignments || activeAsset.AssetAssignment || [];
+        return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-2xl shadow-2xl">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Clock className="text-purple-400"/> Histórico de Donos</h2>
+                <button onClick={() => setIsHistoryModalOpen(false)} className="text-gray-400 hover:text-white p-2"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="max-h-96 overflow-y-auto space-y-4 custom-scrollbar pr-2">
+                {assignments.length > 0 ? assignments.sort((a,b) => new Date(b.assigned_at) - new Date(a.assigned_at)).map((assignment, idx) => {
+                  const emp = assignment.Employee || assignment.employee;
+                  return (
+                    <div key={idx} className="bg-black/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:border-gray-700 transition-colors">
+                      <div><p className="text-brandGreen font-bold">{emp?.nome || 'Desconhecido'}</p><p className="text-xs text-gray-500">{emp?.email}</p></div>
+                      <div className="text-right text-sm">
+                        <p className="text-gray-300">Início: {new Date(assignment.assigned_at).toLocaleDateString('pt-BR')}</p>
+                        <p className="text-blue-400 font-semibold">Fim: {assignment.returned_at ? new Date(assignment.returned_at).toLocaleDateString('pt-BR') : 'Em uso'}</p>
+                      </div>
+                    </div>
+                  );
+                }) : <p className="text-center py-10 text-gray-600 italic">Nenhuma atribuição registrada.</p>}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {isMaintenanceModalOpen && activeAsset && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">

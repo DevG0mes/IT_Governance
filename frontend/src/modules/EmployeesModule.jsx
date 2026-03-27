@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edit2, Printer, Laptop, Smartphone, Cpu, Wifi, Database, Users, ExternalLink, AlertTriangle, Link } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-// 🚨 NOVO: Importando a sua API centralizada e blindada
 import api from '../services/api';
 
 export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog }) {
@@ -18,7 +17,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [selectedItemForAssign, setSelectedItemForAssign] = useState('');
   const [selectedLicenseToAssign, setSelectedLicenseToAssign] = useState('');
   
-  // ─── NOVOS ESTADOS: Modal de Offboarding com Checklist ───────────────────────
   const [isOffboardingModalOpen, setIsOffboardingModalOpen] = useState(false);
   const [offboardingTarget, setOffboardingTarget] = useState(null);
   const [offboardingChecks, setOffboardingChecks] = useState({
@@ -29,9 +27,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   });
   const [offboardingTermoUrl, setOffboardingTermoUrl] = useState('');
   const [isSubmittingOffboarding, setIsSubmittingOffboarding] = useState(false);
-  // ─────────────────────────────────────────────────────────────────────────────
 
-  // 🚨 NOVO: Tratamento de erro simplificado para o Axios
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
   const activeEmployees = employees.filter(e =>
@@ -44,15 +40,25 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
   const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'CHIP', 'Starlink'].includes(a.asset_type));
 
-  const getActiveAssetsForEmployee = (empId) => assets.filter(a => a.status === 'Em uso' && a.assignments?.some(asg => asg.employee_id === empId && !asg.returned_at));
+  // 🛡️ CORREÇÃO: Buscando Hardwares do funcionário com Fallback
+  const getActiveAssetsForEmployee = (empId) => assets.filter(a => {
+    const assignments = a.AssetAssignments || a.assignments || [];
+    return a.status === 'Em uso' && assignments.some(asg => (asg.EmployeeId === empId || asg.employee_id === empId) && !asg.returned_at);
+  });
+
+  // 🛡️ CORREÇÃO: Buscando Softwares do funcionário com Fallback
   const getLicensesForEmployee = (empId) => {
     const empLics = [];
-    licenses.forEach(lic => { if (lic.assignments) { const asg = lic.assignments.find(a => a.employee_id === empId); if (asg) empLics.push({ assignment_id: asg.id, license: lic }); } });
+    licenses.forEach(lic => { 
+      const assignments = lic.EmployeeLicenses || lic.assignments || [];
+      const asg = assignments.find(a => a.EmployeeId === empId || a.employee_id === empId); 
+      if (asg) empLics.push({ assignment_id: asg.id, license: lic }); 
+    });
     return empLics;
   };
 
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  const toggleAll = () => selectedIds.length === activeEmployees.length ? setSelectedIds([]) : setSelectedIds(activeEmployees.map(item => item.id));
+  const toggleAll = () => selectedIds.length === activeEmployees.length && activeEmployees.length > 0 ? setSelectedIds([]) : setSelectedIds(activeEmployees.map(item => item.id));
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -100,7 +106,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     }, true, 'Excluir Colaborador');
   };
 
-  // ─── ABRE O MODAL DE CHECKLIST ─────────────────────────
   const startOffboarding = (emp) => {
     setOpenActionMenu(null);
     setOffboardingTarget(emp);
@@ -109,7 +114,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     setIsOffboardingModalOpen(true);
   };
 
-  // ─── TODOS OS CHECKS MARCADOS + URL PREENCHIDA ────────────────────────────────
   const allChecksValid =
     offboardingChecks.onfly &&
     offboardingChecks.megaErp &&
@@ -117,7 +121,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     offboardingChecks.equipamentos &&
     offboardingTermoUrl.trim().length > 0;
 
-  // ─── CONFIRMA E ENVIA PARA A API ──────────────────────────────────────────────
   const confirmOffboarding = async () => {
     if (!allChecksValid || !offboardingTarget) return;
 
@@ -139,7 +142,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       setIsSubmittingOffboarding(false);
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const submitAssignment = async (e) => {
     e.preventDefault();
@@ -212,12 +214,19 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     doc.setFont("helvetica", "normal");
     addText("O(a) RESPONSÁVEL reconhece ter recebido os seguintes equipamentos e ferramentas de trabalho, de propriedade da PSI Energy:");
 
+    // 🛡️ CORREÇÃO: Variáveis Blindadas para gerar PDF com os dados corretos
     const tableData = empAssets.map(a => {
+      const nb = a.Notebook || a.notebook;
+      const cel = a.Celular || a.celular;
+      const ch = a.Chip || a.chip;
+      const st = a.Starlink || a.starlink;
+
       let descInfo = 'Modelo não cadastrado';
-      if (a.asset_type === 'Notebook') descInfo = `${a.notebook?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${a.notebook?.patrimonio || 'S/N'})`;
-      else if (a.asset_type === 'Celular') descInfo = `${a.celular?.modelo || 'Modelo não cadastrado'} ${a.celular?.imei ? `(IMEI: ${a.celular.imei})` : ''}`;
-      else if (a.asset_type === 'CHIP') descInfo = `Linha: ${a.chip?.numero || '-'} (${a.chip?.plano || 'Sem plano'})`;
-      else if (a.asset_type === 'Starlink') descInfo = `${a.starlink?.modelo || 'Modelo não cadastrado'} (Projeto: ${a.starlink?.projeto || '-'})`;
+      if (a.asset_type === 'Notebook') descInfo = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || 'S/N'})`;
+      else if (a.asset_type === 'Celular') descInfo = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
+      else if (a.asset_type === 'CHIP') descInfo = `Linha: ${ch?.numero || '-'} (${ch?.plano || 'Sem plano'})`;
+      else if (a.asset_type === 'Starlink') descInfo = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
+      
       return [a.asset_type.toUpperCase(), descInfo, '[  ] SIM    [  ] NÃO'];
     });
 
@@ -283,7 +292,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     doc.save(`Termo_PSI_${employee.nome.replace(/\s+/g, '_')}.pdf`);
   };
 
-  // ─── COMPONENTE DO CHECKBOX DO MODAL ─────────────────────────────────────────
   const OffboardingCheckItem = ({ id, label, sublabel, checked, onChange }) => (
     <label
       htmlFor={id}
@@ -310,7 +318,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       </div>
     </label>
   );
-  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="animate-fade-in">
@@ -369,7 +376,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                             <div className="border-t border-gray-700 my-1"></div>
                             <button onClick={() => { setOpenActionMenu(null); setActiveEmployee(emp); setIsAssignEmployeeModalOpen(true); setSelectedItemForAssign(''); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><CheckCircle className="w-4 h-4 text-brandGreen" /> Atribuir Novo Eqp.</button>
                             <div className="border-t border-gray-700 my-1"></div>
-                            {/* Chama o novo modal de checklist ↓ */}
                             <button onClick={() => startOffboarding(emp)} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><PowerOff className="w-4 h-4 text-yellow-500" /> Iniciar Desligamento</button>
                             <button onClick={() => handleDeleteEmployee(emp.id)} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Trash2 className="w-4 h-4 text-red-500" /> Excluir</button>
                           </>
@@ -387,15 +393,10 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         </table>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          MODAL: CHECKLIST DE PRÉ-REQUISITOS DO OFFBOARDING
-          Só libera o botão quando: 4 checkboxes ✓ + URL preenchida
-      ══════════════════════════════════════════════════════════════════════════ */}
       {isOffboardingModalOpen && offboardingTarget && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-gray-900 border border-yellow-900/40 rounded-3xl p-6 w-full max-w-lg shadow-2xl shadow-yellow-900/10">
 
-            {/* Header */}
             <div className="flex justify-between items-start mb-5">
               <div className="flex items-center gap-3">
                 <div className="bg-yellow-500/10 border border-yellow-500/30 p-2.5 rounded-xl">
@@ -414,14 +415,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
               </button>
             </div>
 
-            {/* Aviso */}
             <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3 mb-5">
               <p className="text-xs text-yellow-300/80 leading-relaxed">
                 Confirme que <strong className="text-yellow-300">todos os acessos foram bloqueados</strong> e os <strong className="text-yellow-300">equipamentos foram devolvidos</strong> antes de mover o colaborador para a fila de Revogação.
               </p>
             </div>
 
-            {/* Checklist */}
             <div className="space-y-2.5 mb-5">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
                 Pré-requisitos do Desligamento
@@ -457,7 +456,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
               />
             </div>
 
-            {/* Campo: URL do Termo de Devolução */}
             <div className="mb-5">
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest block mb-2">
                 Termo de Devolução Assinado <span className="text-red-400">*</span>
@@ -480,14 +478,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
               </div>
             </div>
 
-            {/* Progresso visual */}
             <div className="flex gap-1.5 mb-5">
               {[offboardingChecks.onfly, offboardingChecks.megaErp, offboardingChecks.admin365, offboardingChecks.equipamentos, offboardingTermoUrl.trim().length > 0].map((done, i) => (
                 <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${done ? 'bg-emerald-500' : 'bg-gray-700'}`} />
               ))}
             </div>
 
-            {/* Botões */}
             <div className="flex gap-3">
               <button
                 onClick={() => { setIsOffboardingModalOpen(false); setOffboardingTarget(null); }}
@@ -515,7 +511,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
           </div>
         </div>
       )}
-      {/* ══════════════════════════════════════════════════════════════════════ */}
 
       {isEmployeeModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -562,11 +557,18 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 <h3 className="text-brandGreen font-bold mb-4">Hardware Físico</h3>
                 <div className="space-y-3">
                   {getActiveAssetsForEmployee(editEmployeeData.id).map(asset => {
+                    // 🛡️ CORREÇÃO: Variáveis blindadas dentro do painel
+                    const nb = asset.Notebook || asset.notebook;
+                    const cel = asset.Celular || asset.celular;
+                    const ch = asset.Chip || asset.chip;
+                    const st = asset.Starlink || asset.starlink;
+
                     let assetDesc = 'Modelo não cadastrado';
-                    if (asset.asset_type === 'Notebook') assetDesc = `${asset.notebook?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${asset.notebook?.patrimonio || '-'})`;
-                    else if (asset.asset_type === 'Celular') assetDesc = `${asset.celular?.modelo || 'Modelo não cadastrado'} ${asset.celular?.imei ? `(IMEI: ${asset.celular.imei})` : ''}`;
-                    else if (asset.asset_type === 'CHIP') assetDesc = `Nº: ${asset.chip?.numero || '-'} (${asset.chip?.plano || '-'})`;
-                    else if (asset.asset_type === 'Starlink') assetDesc = `${asset.starlink?.modelo || 'Modelo não cadastrado'} (Projeto: ${asset.starlink?.projeto || '-'})`;
+                    if (asset.asset_type === 'Notebook') assetDesc = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || '-'})`;
+                    else if (asset.asset_type === 'Celular') assetDesc = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
+                    else if (asset.asset_type === 'CHIP') assetDesc = `Nº: ${ch?.numero || '-'} (${ch?.plano || '-'})`;
+                    else if (asset.asset_type === 'Starlink') assetDesc = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
+                    
                     return (
                       <div key={asset.id} className="bg-black/50 p-3 rounded-lg flex justify-between items-center border border-gray-800 hover:border-gray-700 transition-colors">
                         <div>
@@ -619,7 +621,14 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             <form onSubmit={submitAssignment} className="flex flex-col gap-4">
               <select required value={selectedItemForAssign} onChange={(e) => setSelectedItemForAssign(e.target.value)} className="w-full bg-black/50 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none cursor-pointer">
                 <option value="" disabled>Escolha na lista de Disponíveis...</option>
-                {availableAssignables.map(asset => (<option key={asset.id} value={asset.id}>{asset.asset_type}: {asset.notebook?.patrimonio || asset.celular?.imei || asset.chip?.numero || asset.starlink?.projeto}</option>))}
+                {/* 🛡️ CORREÇÃO: Variáveis blindadas dentro do Select */}
+                {availableAssignables.map(asset => {
+                  const nb = asset.Notebook || asset.notebook;
+                  const cel = asset.Celular || asset.celular;
+                  const ch = asset.Chip || asset.chip;
+                  const st = asset.Starlink || asset.starlink;
+                  return (<option key={asset.id} value={asset.id}>{asset.asset_type}: {nb?.patrimonio || cel?.imei || ch?.numero || st?.projeto}</option>);
+                })}
               </select>
               <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Confirmar Atribuição</button>
             </form>
