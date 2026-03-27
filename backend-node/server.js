@@ -57,14 +57,15 @@ const loginLimiter = rateLimit({
 // Rota de Health Check (Sempre aberta)
 app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI Node.js' }));
 
-// Rotas de Autenticação (Login/Setup)
-app.use('/api/auth', loginLimiter, authRoutes); 
-// Nota: Se o seu authRoutes já tem router.post('/login'), a URL será /api/auth/login
+// 🚨 CORREÇÃO: Voltando a rota para o padrão que o React espera (/api/login)
+app.use('/api', loginLimiter, authRoutes); 
 
 // --- 🛡️ FILTRO DE SEGURANÇA GLOBAL (Daqui para baixo precisa de Token) ---
 app.use('/api', (req, res, next) => {
-    // Pula a verificação se for rota de login ou health
-    if (req.path.includes('/auth') || req.path.includes('/health')) return next();
+    // Pula a verificação se for a rota de login, health ou setup
+    if (req.path.includes('/login') || req.path.includes('/setup-admin') || req.path.includes('/health')) {
+        return next();
+    }
     verificarToken(req, res, next);
 });
 
