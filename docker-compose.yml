@@ -1,18 +1,43 @@
 services:
   db:
-    image: postgres:15-alpine
-    container_name: governanca_pg
+    image: postgres:16-alpine
+    container_name: postgres_db
     restart: always
     environment:
-      POSTGRES_USER: admin_gov
-      POSTGRES_PASSWORD: senha_super_segura
-      POSTGRES_DB: governanca_ti
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: senha_secreta_123
+      POSTGRES_DB: inventario_db
     ports:
-      # Mudamos a porta da sua máquina para 5433 (esquerda) e mantemos a do container na 5432 (direita)
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database:/var/lib/postgresql/data
+    networks:
+      - rede-governance
 
-volumes:
-  pgdata:
+  api:
+    build: ./backend
+    container_name: node_api
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://admin:senha_secreta_123@db:5432/inventario_db
+    networks:
+      - rede-governance
+
+  frontend:
+    build: ./frontend
+    container_name: react_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - rede-governance
+
+networks:
+  rede-governance:
+    driver: bridge
