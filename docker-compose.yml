@@ -23,13 +23,10 @@ services:
     depends_on:
       - db
     environment:
-      # A mágica acontece aqui: o host 'db' é o nome do serviço do postgres abaixo
       - DATABASE_URL=postgres://admin:senha_secreta_123@db:5432/inventario_db
-      - NODE_ENV=production
       - PORT=3000
     networks:
       - rede-governance
-
   frontend:
     build: ./frontend
     container_name: react_frontend

@@ -133,39 +133,53 @@ export default function App() {
   }, [currentUser, activeTab]);
 
   const handleLogin = async (e) => {
-    e.preventDefault(); 
+  e.preventDefault(); 
+  Swal.fire({
+    title: 'Autenticando...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  try {
+    const res = await api.post('/api/login', loginForm);
+    const data = res.data;
+    
+    // O backend retorna os dados dentro de data.data conforme seu log
+    const loggedUser = data.data;
+    const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
+    
+    loggedUser.permissions = rawPerms 
+      ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
+      : (roleTemplates[loggedUser.cargo] || {});
+
+    // 1. SALVA AS CREDENCIAIS NO NAVEGADOR
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('logged_user', JSON.stringify(loggedUser));
+    
+    Swal.close();
+
+    // 2. ATUALIZA O ESTADO GLOBAL
+    setCurrentUser(loggedUser);
+
+    // 3. 🚨 O PULO DO GATO: REDIRECIONAR 🚨
+    // Se você usa o hook: const navigate = useNavigate();
+    // navigate('/dashboard');
+    
+    // Se não estiver usando hooks, use o redirecionamento nativo:
+    window.location.href = '/dashboard';
+
+  } catch (err) {
+    console.error("Erro completo:", err);
     Swal.fire({
-      title: 'Autenticando...',
-      allowOutsideClick: false,
-      didOpen: () => { Swal.showLoading(); }
+      title: 'Erro no Login',
+      text: err.response?.data?.error || "E-mail ou senha incorretos.",
+      icon: 'error',
+      background: '#1f2937',
+      color: '#ffffff',
+      confirmButtonColor: '#ef4444'
     });
-
-    try {
-      const res = await api.post('/api/login', loginForm);
-      const data = res.data;
-      
-      const loggedUser = data.data;
-      const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
-      loggedUser.permissions = rawPerms 
-        ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
-        : (roleTemplates[loggedUser.cargo] || {});
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('logged_user', JSON.stringify(loggedUser));
-      
-      Swal.close();
-      setCurrentUser(loggedUser);
-    } catch (err) {
-      Swal.fire({
-        title: 'Erro no Login',
-        text: err.response?.data?.error || "E-mail ou senha incorretos.",
-        icon: 'error',
-        background: '#1f2937',
-        color: '#ffffff',
-        confirmButtonColor: '#ef4444'
-      });
-    }
-  };
+  }
+};
 
   const hasAccess = (module, requiredLevel = 'read') => { 
     if (!currentUser) return false; 
