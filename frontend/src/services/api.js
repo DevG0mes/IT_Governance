@@ -1,19 +1,18 @@
 import axios from 'axios';
-// Importamos a URL centralizada que ajustamos antes
 import { API_BASE_URL } from '../utils/helpers'; 
 
-// 1. CRIAÇÃO DA INSTÂNCIA BLINDADA
+// 1. CRIAÇÃO DA INSTÂNCIA BLINDADA (AWS EC2 Edition)
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 🚨 REGRA DE OURO: Se o backend não responder em 10s, o React cancela o pedido e libera a conexão!
+  timeout: 10000, // 🚨 REGRA DE OURO: Se a AWS não responder em 10s, o React cancela para liberar conexão!
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// 2. INTERCEPTOR DE IDA (Antes de enviar para a Hostinger)
+// 2. INTERCEPTOR DE IDA (Segurança e Autenticação)
 api.interceptors.request.use((config) => {
-  // Pega o token de onde você guarda (ajuste se for sessionStorage ou cookies)
+  // Recupera o token do localStorage
   const token = localStorage.getItem('token'); 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -21,26 +20,25 @@ api.interceptors.request.use((config) => {
   return config;
 }, (error) => Promise.reject(error));
 
-// 3. INTERCEPTOR DE VOLTA (Tratamento Global de Gargalos)
+// 3. INTERCEPTOR DE VOLTA (Tratamento Global de Erros)
 api.interceptors.response.use(
-  (response) => response, // Se deu certo, segue o jogo
+  (response) => response, 
   (error) => {
-    // A) Tratamento de Timeout (Frontend desistiu de esperar)
+    // A) Tratamento de Timeout
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      console.error('🚨 Timeout: A requisição foi abortada para evitar gargalo.');
-      // Opcional: Você pode importar o Swal aqui e dar um alerta sutil
+      console.error('🚨 Timeout: O servidor AWS demorou demais para responder.');
     }
     
-    // B) Tratamento de Hostinger Sufocada (NPROC estourado)
+    // B) Tratamento de Servidor Indisponível (Container fora do ar)
     if (error.response && error.response.status === 503) {
-      console.error('🚨 Erro 503: Servidor recusou a conexão. Aguardando resfriamento.');
+      console.error('🚨 Erro 503: O container da API pode estar reiniciando.');
     }
 
-    // C) Tratamento de Token Expirado (Segurança)
+    // C) Tratamento de Token Expirado (Segurança de Governança)
     if (error.response && error.response.status === 401) {
-       console.warn('🔒 Sessão expirada. Redirecionando para login...');
+       console.warn('🔒 Sessão expirada ou acesso negado. Redirecionando para login...');
        localStorage.removeItem('token');
-       window.location.href = '/'; // Derruba o usuário para a tela inicial
+       window.location.href = '/'; // Redireciona para a tela inicial
     }
 
     return Promise.reject(error);

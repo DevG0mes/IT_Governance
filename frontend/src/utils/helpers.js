@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'https://paleturquoise-mallard-173694.hostingersite.com';
+export const API_BASE_URL = 'http://51.20.55.160:3000';
 export const getAuthHeaders = () => {
   const token = sessionStorage.getItem('jwt_token');
   return {
