@@ -23,7 +23,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "."
           target: "~/projeto-inventario"
-          rm: true 
+          # Comando rm: true removido definitivamente para não apagar o volume do Banco de Dados
 
       - name: Executar build e deploy via SSH na AWS
         uses: appleboy/ssh-action@v1.0.3
@@ -40,5 +40,5 @@ jobs:
             # Sobe os containers novamente recriando a imagem da API e do Frontend
             docker compose up -d --build
             
-            # Limpa imagens antigas do Docker para não lotar o disco de 30GB da AWS
+            # Limpa imagens antigas do Docker para não lotar o disco
             docker image prune -f
