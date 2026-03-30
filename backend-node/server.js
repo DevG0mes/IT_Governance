@@ -9,14 +9,10 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit'); 
 require('dotenv').config();
 
-// Conexão com o Banco (Caminho relativo à raiz)
 const { connectDatabase } = require('./config/db');
-
-// Middlewares de Segurança
 const verificarToken = require('./middlewares/auth'); 
 const verificarAdmin = require('./middlewares/admin'); 
 
-// Rotas (Certifique-se que os arquivos existem nestes caminhos)
 const authRoutes = require('./src/routes/auth'); 
 const employeeRoutes = require('./src/routes/employees'); 
 const assetRoutes = require('./src/routes/assets'); 
@@ -29,24 +25,30 @@ const userRoutes = require('./src/routes/users');
 const app = express();
 
 // --- 1. PROTEÇÃO DE INFRAESTRUTURA ---
-app.use(helmet()); 
-app.use(timeout('15s')); // Aumentado para 15s para dar folga ao PDF Parse
+app.use(helmet({
+  crossOriginResourcePolicy: false, // Necessário para não bloquear recursos em domínios diferentes
+})); 
+app.use(timeout('15s')); 
 app.use(compression()); 
 
-// --- 2. CONFIGURAÇÃO DE CORS (Ajustado para produção) ---
+// --- 2. CONFIGURAÇÃO DE CORS (Essencial para o Erro do Navegador) ---
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'Content-Type', 'Accept', 'Authorization']
+  allowedHeaders: ['Origin', 'Content-Type', 'Accept', 'Authorization'],
+  credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' })); // Limite de JSON aumentado para logs/lotes
+app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
 
-// --- 3. RATE LIMIT (Proteção contra Brute Force) ---
+// Responder OPTIONS imediatamente para evitar NS_BINDING_ABORTED
+app.options('*', cors());
+
+// --- 3. RATE LIMIT ---
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
-  max: 10, // Aumentado para 10 para evitar bloqueios por erro do usuário
+  max: 100, // Aumentado para testes iniciais
   message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
   standardHeaders: true, 
   legacyHeaders: false,
@@ -54,15 +56,14 @@ const loginLimiter = rateLimit({
 
 // --- 4. DEFINIÇÃO DAS ROTAS ---
 
-// Rota de Health Check (Sempre aberta)
-app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI Node.js' }));
+// Health Check
+app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI Node.js na AWS' }));
 
-// 🚨 CORREÇÃO: Voltando a rota para o padrão que o React espera (/api/login)
+// Rotas de Autenticação
 app.use('/api', loginLimiter, authRoutes); 
 
-// --- 🛡️ FILTRO DE SEGURANÇA GLOBAL (Daqui para baixo precisa de Token) ---
+// Filtro de Segurança Global
 app.use('/api', (req, res, next) => {
-    // Pula a verificação se for a rota de login, health ou setup
     if (req.path.includes('/login') || req.path.includes('/setup-admin') || req.path.includes('/health')) {
         return next();
     }
@@ -76,11 +77,9 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
-
-// Acesso Restrito ao Admin
 app.use('/api/users', verificarAdmin, userRoutes);
 
-// --- 5. TRATAMENTO DE ERROS (O "Pára-raios") ---
+// --- 5. TRATAMENTO DE ERROS ---
 app.use((err, req, res, next) => {
   if (req.timedout) {
     return res.status(503).json({ error: 'Timeout: O servidor demorou muito para responder.' });
@@ -89,23 +88,24 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
 });
 
-const PORT = process.env.PORT || 8080;
+// 🚨 AJUSTE DE PORTA PARA DOCKER/AWS 🚨
+const PORT = process.env.PORT || 3000; // Agora batendo com o docker-compose
 
 const startServer = async () => {
   try {
     await connectDatabase();
     
-    const server = app.listen(PORT, () => {
+    // Ouvindo em 0.0.0.0 para aceitar conexões externas à rede do container
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });
 
-    // Ajustes para evitar o erro "OS can't spawn worker thread"
     server.keepAliveTimeout = 60000; 
     server.headersTimeout = 65000; 
 
   } catch (err) {
     console.error('❌ Falha catastrófica no boot:', err);
-    process.exit(1); // Força o encerramento para a Hostinger reiniciar o processo limpo
+    process.exit(1); 
   }
 };
 
