@@ -21,8 +21,8 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Especificamos exatamente os arquivos e pastas para copiar, blindando o banco de dados
-          source: "backend,frontend,docker-compose.yml"
+          # Ajustado para refletir o nome real da pasta backend-node e incluir a pasta dados
+          source: "backend-node,frontend,dados,docker-compose.yml"
           target: "~/projeto-inventario"
 
       - name: Executar build e deploy via SSH na AWS
@@ -38,7 +38,8 @@ jobs:
             docker compose down
             
             # Sobe os containers novamente recriando a imagem da API e do Frontend
+            # O Docker lerá o docker-compose.yml que aponta para ./backend-node
             docker compose up -d --build
             
-            # Limpa imagens antigas do Docker para não lotar o disco
+            # Limpa imagens antigas e órfãs para não lotar o disco de 30GB da AWS
             docker image prune -f
