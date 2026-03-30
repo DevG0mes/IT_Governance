@@ -15,7 +15,7 @@ services:
       - rede-governance
 
   api:
-    build: ./backend-node  # <- Alterado de backend para backend-node
+    build: ./backend-node
     container_name: node_api
     restart: always
     ports:
@@ -23,7 +23,10 @@ services:
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgres://admin:senha_secreta_123@db:5432/inventario_db
+      # A mágica acontece aqui: o host 'db' é o nome do serviço do postgres abaixo
+      - DATABASE_URL=postgres://admin:senha_secreta_123@db:5432/inventario_db
+      - NODE_ENV=production
+      - PORT=3000
     networks:
       - rede-governance
 
