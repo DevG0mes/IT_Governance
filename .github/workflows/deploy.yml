@@ -37,7 +37,7 @@ jobs:
             # Derruba os containers antigos
             docker compose down
             
-            # Sobe os containers novamente recriando a imagem da API
+            # Sobe os containers novamente recriando a imagem da API e do Frontend
             docker compose up -d --build
             
             # Limpa imagens antigas do Docker para não lotar o disco de 30GB da AWS
