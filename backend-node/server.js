@@ -24,31 +24,30 @@ const userRoutes = require('./src/routes/users');
 
 const app = express();
 
-// --- 1. PROTEÇÃO DE INFRAESTRUTURA ---
-app.use(helmet({
-  crossOriginResourcePolicy: false, // Necessário para não bloquear recursos em domínios diferentes
-})); 
-app.use(timeout('15s')); 
-app.use(compression()); 
-
-// --- 2. CONFIGURAÇÃO DE CORS (Essencial para o Erro do Navegador) ---
+// --- 1. CONFIGURAÇÃO DE CORS (DEVE VIR ANTES DE TUDO) ---
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'Content-Type', 'Accept', 'Authorization'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
   credentials: true
 }));
 
+// ✅ AJUSTE CRÍTICO: Usando regex para evitar o PathError no app.options
+app.options(/(.*)/, cors()); 
+
+// --- 2. PROTEÇÃO E PERFORMANCE ---
+app.use(helmet({
+  crossOriginResourcePolicy: false, 
+})); 
+app.use(timeout('15s')); 
+app.use(compression()); 
 app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
-
-// Responder OPTIONS imediatamente para evitar NS_BINDING_ABORTED
-app.options('*', cors());
 
 // --- 3. RATE LIMIT ---
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
-  max: 100, // Aumentado para testes iniciais
+  max: 100, 
   message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
   standardHeaders: true, 
   legacyHeaders: false,
@@ -57,14 +56,16 @@ const loginLimiter = rateLimit({
 // --- 4. DEFINIÇÃO DAS ROTAS ---
 
 // Health Check
-app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI Node.js na AWS' }));
+app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI na AWS' }));
 
-// Rotas de Autenticação
+// Rotas de Autenticação (Login)
 app.use('/api', loginLimiter, authRoutes); 
 
 // Filtro de Segurança Global
 app.use('/api', (req, res, next) => {
-    if (req.path.includes('/login') || req.path.includes('/setup-admin') || req.path.includes('/health')) {
+    // Rotas públicas que não precisam de token
+    const publicPaths = ['/login', '/setup-admin', '/health'];
+    if (publicPaths.some(path => req.path.includes(path))) {
         return next();
     }
     verificarToken(req, res, next);
@@ -88,14 +89,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
 });
 
-// 🚨 AJUSTE DE PORTA PARA DOCKER/AWS 🚨
-const PORT = process.env.PORT || 3000; // Agora batendo com o docker-compose
+const PORT = process.env.PORT || 3000; 
 
 const startServer = async () => {
   try {
     await connectDatabase();
     
-    // Ouvindo em 0.0.0.0 para aceitar conexões externas à rede do container
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });
