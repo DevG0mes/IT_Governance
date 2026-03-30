@@ -1,16 +1,22 @@
 // Arquivo: config/db.js
-const { Sequelize, DataTypes } = require('sequelize'); // ✅ CORRIGIDO: DataTypes adicionado aqui
-const bcrypt = require('bcrypt'); // ✅ ADICIONADO: Necessário para o hash do admin
+const { Sequelize, DataTypes } = require('sequelize');
+const bcrypt = require('bcrypt');
+require('dotenv').config(); // ✅ ADICIONADO: Garante a leitura do arquivo .env
 
-// Se process.env.DATABASE_URL vier vazio, o Docker injetará o valor correto
-const dbUrl = process.env.DATABASE_URL;
+console.log('--- 📡 Tentando conectar ao banco de dados PostgreSQL...');
 
-console.log('--- 📡 Tentando conectar ao banco:', dbUrl);
-
-const sequelize = new Sequelize(dbUrl, {
-  dialect: 'postgres',
-  logging: false, // para não poluir o log
-});
+// 1. Inicialização do Sequelize lendo as variáveis separadas do nosso .env
+const sequelize = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASS,
+  {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    dialect: 'postgres',
+    logging: false, // Mantido false para não poluir o terminal
+  }
+);
 
 // 2. Importação dos Models (Passando sequelize e DataTypes corretamente)
 const User = require('../Models/User')(sequelize, DataTypes);
@@ -70,6 +76,11 @@ const connectDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ Conexão com o PostgreSQL AWS estabelecida com sucesso!');
     
+    // ✅ ADICIONADO: Sincroniza (cria) as tabelas no Postgres ANTES de procurar o admin
+    console.log('🔄 Sincronizando estrutura das tabelas...');
+    await sequelize.sync({ alter: true }); // O 'alter' ajusta o banco sem apagar dados
+    console.log('✅ Estrutura do banco de dados atualizada!');
+
     console.log('✅ Verificando usuário administrador...');
     // Verificamos o e-mail oficial da PSI Energy
     const adminExists = await User.findOne({ where: { email: 'admin@psienergy.com.br' } });
