@@ -24,7 +24,14 @@ const userRoutes = require('./src/routes/users');
 
 const app = express();
 
-// --- 1. CONFIGURAÇÃO DE CORS (DEVE VIR ANTES DE TUDO) ---
+// --- 1. PROTEÇÃO E PERFORMANCE ---
+app.use(helmet({
+  crossOriginResourcePolicy: false, 
+})); 
+app.use(timeout('15s')); 
+app.use(compression()); 
+
+// --- 2. CONFIGURAÇÃO DE CORS (Blindada) ---
 app.use(cors({
   origin: '*', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -32,15 +39,9 @@ app.use(cors({
   credentials: true
 }));
 
-// ✅ AJUSTE CRÍTICO: Usando regex para evitar o PathError no app.options
+// ✅ CORREÇÃO DO PathError: Usando Regex em vez de '*'
 app.options(/(.*)/, cors()); 
 
-// --- 2. PROTEÇÃO E PERFORMANCE ---
-app.use(helmet({
-  crossOriginResourcePolicy: false, 
-})); 
-app.use(timeout('15s')); 
-app.use(compression()); 
 app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
 
@@ -58,12 +59,9 @@ const loginLimiter = rateLimit({
 // Health Check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI na AWS' }));
 
-// Rotas de Autenticação (Login)
 app.use('/api', loginLimiter, authRoutes); 
 
-// Filtro de Segurança Global
 app.use('/api', (req, res, next) => {
-    // Rotas públicas que não precisam de token
     const publicPaths = ['/login', '/setup-admin', '/health'];
     if (publicPaths.some(path => req.path.includes(path))) {
         return next();
@@ -71,7 +69,6 @@ app.use('/api', (req, res, next) => {
     verificarToken(req, res, next);
 });
 
-// Rotas Protegidas
 app.use('/api/assets', assetRoutes);
 app.use('/api/licenses', licenseRoutes);
 app.use('/api/employees', employeeRoutes);
@@ -80,7 +77,6 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/users', verificarAdmin, userRoutes);
 
-// --- 5. TRATAMENTO DE ERROS ---
 app.use((err, req, res, next) => {
   if (req.timedout) {
     return res.status(503).json({ error: 'Timeout: O servidor demorou muito para responder.' });
