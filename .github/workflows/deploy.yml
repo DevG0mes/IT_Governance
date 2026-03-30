@@ -21,9 +21,9 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
+          # Especificamos exatamente os arquivos e pastas para copiar, blindando o banco de dados
+          source: "backend,frontend,docker-compose.yml"
           target: "~/projeto-inventario"
-          # Comando rm: true removido definitivamente para não apagar o volume do Banco de Dados
 
       - name: Executar build e deploy via SSH na AWS
         uses: appleboy/ssh-action@v1.0.3
