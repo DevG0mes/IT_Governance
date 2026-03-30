@@ -1,21 +1,15 @@
 // Arquivo: config/db.js
-const { Sequelize, DataTypes } = require('sequelize');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
+const { Sequelize } = require('sequelize');
 
-// 1. Conexão com o Banco de Dados
-const sequelize = new Sequelize(
-  process.env.DB_NAME, 
-  process.env.DB_USER, 
-  process.env.DB_PASS, 
-  {
-    host: process.env.DB_HOST, 
-    dialect: 'mysql',
-    port: process.env.DB_PORT || 3306,
-    logging: false, 
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000 } 
-  }
-);
+// Se process.env.DATABASE_URL vier vazio, ele tenta o fallback (opcional)
+const dbUrl = process.env.DATABASE_URL;
+
+console.log('--- 📡 Tentando conectar ao banco:', dbUrl);
+
+const sequelize = new Sequelize(dbUrl, {
+  dialect: 'postgres',
+  logging: false, // para não poluir o log
+});
 
 // 2. Importação dos Models
 const User = require('../Models/User')(sequelize, DataTypes);
