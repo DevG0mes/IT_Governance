@@ -1,7 +1,8 @@
 // Arquivo: config/db.js
-const { Sequelize } = require('sequelize');
+const { Sequelize, DataTypes } = require('sequelize'); // ✅ CORRIGIDO: DataTypes adicionado aqui
+const bcrypt = require('bcrypt'); // ✅ ADICIONADO: Necessário para o hash do admin
 
-// Se process.env.DATABASE_URL vier vazio, ele tenta o fallback (opcional)
+// Se process.env.DATABASE_URL vier vazio, o Docker injetará o valor correto
 const dbUrl = process.env.DATABASE_URL;
 
 console.log('--- 📡 Tentando conectar ao banco:', dbUrl);
@@ -11,7 +12,7 @@ const sequelize = new Sequelize(dbUrl, {
   logging: false, // para não poluir o log
 });
 
-// 2. Importação dos Models
+// 2. Importação dos Models (Passando sequelize e DataTypes corretamente)
 const User = require('../Models/User')(sequelize, DataTypes);
 const AuditLog = require('../Models/Audit')(sequelize, DataTypes);
 const CatalogItem = require('../Models/Catalog')(sequelize, DataTypes);
@@ -30,7 +31,6 @@ const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataType
 // 3. RELACIONAMENTOS DO BANCO
 // ==========================================
 
-// Ligação Ativo -> Detalhes (Refletindo a coluna AssetId que criamos no DBeaver)
 // 1. Ligação Ativo -> Detalhes (Hardware)
 Asset.hasOne(AssetNotebook, { foreignKey: 'AssetId', as: 'Notebook' });
 AssetNotebook.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
@@ -44,19 +44,18 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
 AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
-// 2. 🚨 A LIGAÇÃO QUE FALTAVA (Ativo <-> Colaborador) 🚨
-// Isso resolve o erro "Employee is not associated to Asset"
+// 2. Ligação Ativo <-> Colaborador
 Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'Employee' }); 
 Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets' });
 
-// 3. Colaborador -> Histórico de Atribuições (Para contar os Hardwares na tela)
+// 3. Colaborador -> Histórico de Atribuições
 Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
 AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
 
 Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'Assignments' });
 AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
-// 4. Colaborador -> Licenças de Software (Para contar os Softwares na tela)
+// 4. Colaborador -> Licenças de Software
 Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'EmployeeLicenses' });
 EmployeeLicense.belongsTo(Employee, { foreignKey: 'employee_id', as: 'Employee' });
 
@@ -68,24 +67,24 @@ EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
 // ==========================================
 const connectDatabase = async () => {
   try {
-    console.log('--- 📡 Tentando conectar ao banco: ' + process.env.DB_HOST);
     await sequelize.authenticate();
-    console.log('✅ Conexão com o MySQL Hostinger estabelecida!');
+    console.log('✅ Conexão com o PostgreSQL AWS estabelecida com sucesso!');
     
     console.log('✅ Verificando usuário administrador...');
-    const adminExists = await User.findOne({ where: { email: 'admin@psi.com.br' } });
+    // Verificamos o e-mail oficial da PSI Energy
+    const adminExists = await User.findOne({ where: { email: 'admin@psienergy.com.br' } });
     
     if (!adminExists) {
-      console.log('🛠️ Criando usuário Root...');
+      console.log('🛠️ Criando usuário Administrador da PSI Energy...');
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await User.create({
-        nome: 'Administrador Root',
-        email: 'admin@psi.com.br',
+        nome: 'Administrador TI',
+        email: 'admin@psienergy.com.br',
         senha: hashedPassword,
         cargo: 'Administrator',
         permissionsJSON: '{"dashboard":"edit","inventory":"edit","licenses":"edit","contracts":"edit","catalog":"edit","employees":"edit","maintenance":"edit","offboarding":"edit","export":"edit","import":"edit","admin":"edit"}'
       });
-      console.log('✅ Usuário Root criado!');
+      console.log('✅ Usuário Administrador criado!');
     }
   } catch (error) {
     console.error('❌ ERRO NO BOOT DO BANCO:', error.message);
