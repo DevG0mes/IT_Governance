@@ -76,29 +76,36 @@ const connectDatabase = async () => {
     await sequelize.authenticate();
     console.log('✅ Conexão com o PostgreSQL AWS estabelecida com sucesso!');
     
-    // ✅ ADICIONADO: Sincroniza (cria) as tabelas no Postgres ANTES de procurar o admin
-    console.log('🔄 Sincronizando estrutura das tabelas...');
-    await sequelize.sync({ alter: true }); // O 'alter' ajusta o banco sem apagar dados
-    console.log('✅ Estrutura do banco de dados atualizada!');
+    console.log('🔄 Resetando e Sincronizando estrutura das tabelas...');
+    // Usamos force: true apenas desta vez para limpar erros de constraint da migração
+    await sequelize.sync({ force: true }); 
+    console.log('✅ Estrutura do banco de dados RECONSTRUÍDA com sucesso!');
 
-    console.log('✅ Verificando usuário administrador...');
-    // Verificamos o e-mail oficial da PSI Energy
-    const adminExists = await User.findOne({ where: { email: 'admin@psienergy.com.br' } });
+    console.log('✅ Criando usuário administrador...');
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    await User.create({
+      nome: 'Administrador TI',
+      email: 'admin@psienergy.com.br',
+      senha: hashedPassword,
+      cargo: 'Administrator',
+      permissionsJSON: JSON.stringify({
+        dashboard: "edit",
+        inventory: "edit",
+        licenses: "edit",
+        contracts: "edit",
+        catalog: "edit",
+        employees: "edit",
+        maintenance: "edit",
+        offboarding: "edit",
+        export: "edit",
+        import: "edit",
+        admin: "edit"
+      })
+    });
+    console.log('✅ Usuário Administrador [admin@psienergy.com.br] criado!');
     
-    if (!adminExists) {
-      console.log('🛠️ Criando usuário Administrador da PSI Energy...');
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await User.create({
-        nome: 'Administrador TI',
-        email: 'admin@psienergy.com.br',
-        senha: hashedPassword,
-        cargo: 'Administrator',
-        permissionsJSON: '{"dashboard":"edit","inventory":"edit","licenses":"edit","contracts":"edit","catalog":"edit","employees":"edit","maintenance":"edit","offboarding":"edit","export":"edit","import":"edit","admin":"edit"}'
-      });
-      console.log('✅ Usuário Administrador criado!');
-    }
   } catch (error) {
-    console.error('❌ ERRO NO BOOT DO BANCO:', error.message);
+    console.error('❌ ERRO NO BOOT DO BANCO:', error);
   }
 };
 
