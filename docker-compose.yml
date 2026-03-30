@@ -23,10 +23,17 @@ services:
     depends_on:
       - db
     environment:
-      - DATABASE_URL=postgres://admin:senha_secreta_123@db:5432/inventario_db
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASS=senha_secreta_123
+      - DB_NAME=inventario_db
+      - DB_DIALECT=postgres
+      - JWT_SECRET=PS1_En3rgy_G0vTI_2026_Secure_#$!_TrUst_N0_On3_9971
       - PORT=3000
     networks:
       - rede-governance
+
   frontend:
     build: ./frontend
     container_name: react_frontend
