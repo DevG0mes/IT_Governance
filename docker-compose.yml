@@ -15,7 +15,7 @@ services:
       - rede-governance
 
   api:
-    build: ./backend
+    build: ./backend-node  # <- Alterado de backend para backend-node
     container_name: node_api
     restart: always
     ports:
