@@ -1,0 +1,45 @@
+name: Deploy API Inventario na AWS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    name: Deploy para a EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Copiar arquivos para a AWS via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: "~/projeto-inventario"
+          rm: true 
+          exclude: ".git,node_modules"
+
+      - name: Executar build e deploy via SSH na AWS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/projeto-inventario
+            
+            # Derruba os containers antigos
+            docker compose down
+            
+            # Sobe os containers novamente recriando a imagem
+            docker compose up -d --build
+            
+            # Limpa imagens antigas do Docker para não lotar o disco
+            docker image prune -f
