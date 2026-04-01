@@ -1,6 +1,11 @@
-export const API_BASE_URL = 'http://34.95.207.232:3000';
+// 1. URL BLINDADA (Google Cloud Edition)
+// Tenta ler o .env de produção. Se falhar, usa o IP cravado do GCP.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000';
+
 export const getAuthHeaders = () => {
-  const token = sessionStorage.getItem('jwt_token');
+  // 🚨 AJUSTE DE GOVERNANÇA: Padronizado para 'localStorage' e chave 'token'
+  // para ficar 100% idêntico ao api.js e evitar bugs de sessão deslogando sozinha.
+  const token = localStorage.getItem('token');
   return {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : ''
@@ -8,7 +13,7 @@ export const getAuthHeaders = () => {
 };
 
 export const fetchWithAuth = (url, options = {}) => {
-  const token = sessionStorage.getItem('jwt_token');
+  const token = localStorage.getItem('token');
   return fetch(url, {
     ...options,
     headers: { ...options.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
