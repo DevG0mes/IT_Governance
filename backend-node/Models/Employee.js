@@ -1,5 +1,5 @@
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define('Employee', {
+  const Employee = sequelize.define('Employee', {
     id: { 
       type: DataTypes.INTEGER, 
       primaryKey: true, 
@@ -17,6 +17,8 @@ module.exports = (sequelize, DataTypes) => {
     departamento: { 
       type: DataTypes.STRING 
     },
+    // ⚠️ ATENÇÃO: Estas colunas abaixo são redundantes se usarmos a tabela de Assets.
+    // O ideal é que o seu Frontend conte os itens da associação 'assets' abaixo.
     notebook: { 
       type: DataTypes.STRING 
     },
@@ -47,14 +49,31 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0
     },
     offboarding_date: {
-      type:DataTypes.DATE,
+      type: DataTypes.DATE,
       allowNull: true
     }
-
   }, { 
     tableName: 'employees', 
-    timestamps: false, // 🚨 DESLIGADO: Impede o erro do createdAt/updatedAt 🚨
-    createAt: 'created_at',
-    updatedAt: 'updated_at'
+    timestamps: false,
+    underscored: false // Mantemos false para bater com o "EmployeeId" (PascalCase) que vimos no banco
   });
+
+  // 🛡️ O CORAÇÃO DO RELACIONAMENTO (PONTO A PONTO)
+  Employee.associate = (models) => {
+    // Relacionamento Direto (Dono Atual)
+    // Isso liga o Colaborador aos Ativos onde ele é o dono atual (coluna EmployeeId na tabela assets)
+    Employee.hasMany(models.Asset, { 
+      foreignKey: 'EmployeeId', 
+      as: 'assets' 
+    });
+
+    // Relacionamento Histórico (Atribuições)
+    // Isso liga o Colaborador a todas as linhas da tabela de vínculo (asset_assignments)
+    Employee.hasMany(models.AssetAssignment, { 
+      foreignKey: 'employee_id', 
+      as: 'assignments' 
+    });
+  };
+
+  return Employee;
 };
