@@ -34,7 +34,7 @@ app.use(cors({
 }));
 
 // Resposta imediata para requisições OPTIONS
-app.options('/(.*)', cors()); 
+app.options(/^(.*)$/, cors()); 
 
 // --- 2. PROTEÇÃO E PERFORMANCE ---
 app.use(helmet({
