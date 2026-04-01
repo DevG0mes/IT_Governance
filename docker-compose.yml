@@ -4,10 +4,9 @@ services:
     container_name: postgres_db
     restart: always
     environment:
-      # Puxa as definições do seu arquivo .env automaticamente
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: senha_secreta_123
+      POSTGRES_DB: inventario_db
     ports:
       - "5432:5432"
     volumes:
@@ -26,29 +25,23 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
-      - DB_USER=${DB_USER}
-      - DB_PASS=${DB_PASS}
-      - DB_NAME=${DB_NAME}
+      - DB_USER=admin
+      - DB_PASS=senha_secreta_123
+      - DB_NAME=inventario_db
       - DB_DIALECT=postgres
-      - JWT_SECRET=${JWT_SECRET}
-      - PORT=3000
+      - JWT_SECRET=PS1_En3rgy_G0vTI_2026_Secure_TrUst_N0_On3_9971
+      - PORT=3000\
     networks:
       - rede-governance
 
   frontend:
-    build: 
-      context: ./frontend
-      # Passa a URL da API para o Vite durante o build
-      args:
-        - VITE_API_URL=http://34.95.207.232:3000/api
+    build: ./frontend
     container_name: react_frontend
     restart: always
     ports:
       - "80:80"
     depends_on:
       - api
-    environment:
-      - VITE_API_URL=http://34.95.207.232:3000/api
     networks:
       - rede-governance
 
