@@ -1,6 +1,6 @@
 // 1. URL BLINDADA (Google Cloud Edition)
 // Tenta ler o .env de produção. Se falhar, usa o IP cravado do GCP.
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000/api';
 
 export const getAuthHeaders = () => {
   // 🚨 AJUSTE DE GOVERNANÇA: Padronizado para 'localStorage' e chave 'token'
