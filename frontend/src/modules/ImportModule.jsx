@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
-import { normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
-import api from '../services/api';
+import { normalizeEmail, parseCurrencyToFloat } from '../../utils/helpers';
+import api from '../../services/api';
 
 export default function ImportModule({ hasAccess, employees = [], contracts = [], licenses = [], assets = [], requestConfirm, registerLog, fetchData }) {
   const [importCategory, setImportCategory] = useState('Lote PDFs');
@@ -267,7 +267,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             
             else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let payload = {};
-              
               const emailColab = normalizeEmail(getVal(row, 'email', 'email_responsavel', 'email_colaborador', 'usuario'));
               const hasValidEmail = emailColab && emailColab.length > 3 && emailColab !== 'n/a' && emailColab !== '0' && emailColab !== '-';
 
@@ -289,7 +288,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               let willAssign = false;
 
               if (hasValidEmail && ['Disponível', 'Em uso'].includes(finalStatus)) {
-                  creationStatus = 'Disponível'; // Nasce disponível para depois vincular
+                  creationStatus = 'Disponível';
                   willAssign = true;
               }
 
@@ -298,7 +297,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 if (patrimonio && assets.some(a => a.asset_type === 'Notebook' && a.notebook?.patrimonio === patrimonio)) {
                     throw new Error(`Ignorado: Notebook '${patrimonio}' já existe.`);
                 }
-                
                 payload = { asset_type: 'Notebook', patrimonio, serial_number: safeVal(getVal(row, 'serial_number', 'serial')), modelo: safeVal(getVal(row, 'modelo')), garantia: safeVal(getVal(row, 'garantia')), status_garantia: safeVal(getVal(row, 'status_garantia')) || 'No prazo', status: creationStatus };
               } 
               else if (importCategory === 'Celulares') {
@@ -322,7 +320,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               const res = await api.post('/api/assets', payload);
               const resData = res.data;
 
-              // 🚨 MÁGICA DO VÍNCULO CORRIGIDA (Com tratamento do ESLint)
+              // 🚨 CORREÇÃO DEFINITIVA DO VÍNCULO (Células compatíveis com o Backend)
               if (willAssign) {
                 const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
                 if (!emp) { throw new Error(`Salvo no Estoque Livre, pois o E-mail '${emailColab}' não existe no sistema.`); }
@@ -330,20 +328,10 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 const assetIdToAssign = resData?.data?.id || resData?.id; 
                 if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas ID não retornado para vincular.`);
 
-                try {
-                  // Tentativa Primária: Rota padrão de POST enviando ambos os IDs
-                  await api.post('/api/assets/assign', { 
-                      asset_id: assetIdToAssign, 
-                      employee_id: emp.id 
-                  });
-                } catch (assignError) {
-                  console.warn('Rota primária de vínculo falhou. Acionando fallback...', assignError.message);
-                  // Tentativa Secundária (Fallback): Rota antiga mas com pacote de dados correto
-                  await api.put(`/api/employees/${emp.id}/assign`, { 
-                      asset_id: assetIdToAssign,
-                      employee_id: emp.id
-                  });
-                }
+                // Usa A ROTA CORRETA e passa as variáveis que o Backend espera ler do body
+                await api.put(`/api/employees/${emp.id}/assign`, { 
+                    asset_id: assetIdToAssign // Mantemos asset_id em minusculo pq o req.body lá espera assim
+                });
               }
             }
             successCount++;
