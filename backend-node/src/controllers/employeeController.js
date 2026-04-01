@@ -19,14 +19,13 @@ exports.getAll = async (req, res) => {
       include: [
         { 
           model: AssetAssignment, 
-          // 🛡️ Ajustado para o plural padrão que o Sequelize usa no banco
-          //as: 'asset_assignments', 
+          // 🛡️ Removemos o 'as' aqui para ele não conflitar com o banco
           where: { returned_at: null }, 
           required: false 
         },
         {
           model: EmployeeLicense,
-          as: 'EmployeeLicenses',
+          // Se as licenças também não aparecerem, remova o 'as' daqui também
           required: false
         }
       ]
