@@ -20,7 +20,7 @@ exports.getAll = async (req, res) => {
         { 
           model: AssetAssignment, 
           // 🛡️ Ajustado para o plural padrão que o Sequelize usa no banco
-          as: 'asset_assignments', 
+          //as: 'asset_assignments', 
           where: { returned_at: null }, 
           required: false 
         },
