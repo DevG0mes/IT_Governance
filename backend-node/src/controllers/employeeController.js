@@ -19,7 +19,8 @@ exports.getAll = async (req, res) => {
       include: [
         { 
           model: AssetAssignment, 
-          as: 'AssetAssignments', 
+          // 🛡️ Ajustado para o plural padrão que o Sequelize usa no banco
+          as: 'asset_assignments', 
           where: { returned_at: null }, 
           required: false 
         },
@@ -62,11 +63,9 @@ exports.create = async (req, res) => {
   }
 };
 
-// 🛡️ FUNÇÃO CORRIGIDA E BLINDADA
 exports.assignAsset = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    // Captura o ID independente de vir como asset_id ou assetId
     const assetIdRaw = req.body.asset_id || req.body.assetId;
     const employeeIdRaw = req.params.id;
 
@@ -79,27 +78,21 @@ exports.assignAsset = async (req, res) => {
     const asset = await Asset.findByPk(assetIdRaw, { transaction: t });
     if (!asset) throw new Error('Equipamento não encontrado');
     
-    // Se já estiver em uso por outra pessoa, precisamos saber
     if (asset.status === 'Em uso' && asset.EmployeeId !== employee.id) {
         throw new Error(`Este equipamento já está em uso por outro colaborador.`);
     }
 
-    // Atualiza status do Ativo (Usando EmployeeId PascalCase do seu DB)
     await asset.update({ status: 'Em uso', EmployeeId: employee.id }, { transaction: t });
 
-    // Sincroniza campo visual no cadastro do funcionário
     if (asset.asset_type === 'Notebook') {
       const note = await AssetNotebook.findOne({ where: { AssetId: asset.id }, transaction: t });
       if (note) await employee.update({ notebook: note.patrimonio }, { transaction: t });
     } 
 
-    // 🛡️ CRITICAL FIX: Gravação explícita para evitar notNull Violation
-    // Passamos tanto o PascalCase quanto o snake_case para garantir que o Sequelize aceite
+    // 🛡️ Gravação explícita compatível com a tabela física 'asset_assignments'
     await AssetAssignment.create({
       EmployeeId: employee.id,
       AssetId: asset.id,
-      employee_id: employee.id, // Fallback para modelos que usam snake_case
-      asset_id: asset.id,       // Fallback para modelos que usam snake_case
       assigned_at: new Date(),
       returned_at: null
     }, { transaction: t });
