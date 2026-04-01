@@ -123,7 +123,11 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
 
             // 🛡️ VÍNCULO HISTÓRICO: Garante que o hardware apareça no painel do colaborador
             if (emp && newAsset?.id) {
-              await api.put(`/api/employees/${emp.id}/assign`, { asset_id: newAsset.id });
+              // O segredo está no nome das chaves: asset_id e employee_id
+              await api.put(`/api/employees/${emp.id}/assign`, { 
+                  asset_id: newAsset.id, 
+                  employee_id: emp.id 
+              });
             }
           }
 
