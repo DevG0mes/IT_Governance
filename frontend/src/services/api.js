@@ -1,10 +1,13 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../utils/helpers'; 
+// 🚨 A importação do 'helpers' foi removida para matar o IP antigo na raiz
 
-// 1. CRIAÇÃO DA INSTÂNCIA BLINDADA (AWS EC2 Edition)
+// 1. CRIAÇÃO DA INSTÂNCIA BLINDADA (Google Cloud Edition)
+// Tenta ler o .env de produção do Vite. Se falhar, aciona o Fallback de Segurança.
+const API_URL_OFICIAL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000/api';
+
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000, // 🚨 REGRA DE OURO: Se a AWS não responder em 10s, o React cancela para liberar conexão!
+  baseURL: API_URL_OFICIAL,
+  timeout: 10000, // 🚨 REGRA DE OURO: Se o GCP não responder em 10s, o React cancela para liberar conexão!
   headers: {
     'Content-Type': 'application/json'
   }
@@ -26,12 +29,12 @@ api.interceptors.response.use(
   (error) => {
     // A) Tratamento de Timeout
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      console.error('🚨 Timeout: O servidor AWS demorou demais para responder.');
+      console.error('🚨 Timeout: O servidor do Google Cloud demorou demais para responder.');
     }
     
     // B) Tratamento de Servidor Indisponível (Container fora do ar)
     if (error.response && error.response.status === 503) {
-      console.error('🚨 Erro 503: O container da API pode estar reiniciando.');
+      console.error('🚨 Erro 503: O container da API pode estar reiniciando no GCP.');
     }
 
     // C) Tratamento de Token Expirado (Segurança de Governança)
