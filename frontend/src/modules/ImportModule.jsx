@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
-import { normalizeEmail, parseCurrencyToFloat } from '../../utils/helpers';
-import api from '../../services/api';
+import { normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
+import api from '../services/api';
 
 export default function ImportModule({ hasAccess, employees = [], contracts = [], licenses = [], assets = [], requestConfirm, registerLog, fetchData }) {
   const [importCategory, setImportCategory] = useState('Lote PDFs');
@@ -328,10 +328,14 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 const assetIdToAssign = resData?.data?.id || resData?.id; 
                 if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas ID não retornado para vincular.`);
 
-                // Usa A ROTA CORRETA e passa as variáveis que o Backend espera ler do body
-                await api.put(`/api/employees/${emp.id}/assign`, { 
-                    asset_id: assetIdToAssign // Mantemos asset_id em minusculo pq o req.body lá espera assim
-                });
+                try {
+                  // Usa A ROTA CORRETA e passa as variáveis que o Backend espera ler do body
+                  await api.put(`/api/employees/${emp.id}/assign`, { 
+                      asset_id: assetIdToAssign // Mantemos asset_id em minusculo pq o req.body lá espera assim
+                  });
+                } catch (assignError) {
+                  console.warn('Falha ao tentar vincular:', assignError.message);
+                }
               }
             }
             successCount++;
