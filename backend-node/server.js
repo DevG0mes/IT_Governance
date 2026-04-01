@@ -45,6 +45,19 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
 
+// --- 2.5. MIDDLEWARE DE AUDITORIA E CORREÇÃO DE ROTAS (O "GUARDA DE TRÂNSITO") ---
+app.use((req, res, next) => {
+    // 1. Se o frontend mandar duplicado (/api/api/...), corta um deles
+    if (req.url.startsWith('/api/api')) {
+        req.url = req.url.replace('/api/api', '/api');
+    }
+    // 2. Se o frontend esquecer o /api (ex: /employees), adiciona na marra
+    else if (!req.url.startsWith('/api')) {
+        req.url = '/api' + req.url;
+    }
+    next();
+});
+
 // --- 3. RATE LIMIT ---
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
