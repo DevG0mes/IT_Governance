@@ -24,25 +24,24 @@ const userRoutes = require('./src/routes/users');
 
 const app = express();
 
-// --- 1. PROTEÇÃO E PERFORMANCE ---
-app.use(helmet({
-  crossOriginResourcePolicy: false, 
-})); 
-app.use(timeout('15s')); 
-app.use(compression()); 
-
-// --- 2. CONFIGURAÇÃO DE CORS (Ajustada para Google Cloud) ---
-// 🚨 Importante: Quando credentials é true, origin NÃO pode ser '*'
+// --- 1. CONFIGURAÇÃO DE CORS (PRIMEIRO DE TUDO) ---
+// Movido para o topo para garantir que o Preflight (OPTIONS) responda antes de qualquer trava
 app.use(cors({
-  origin: 'http://34.95.207.232', // Libera exatamente a origem do seu frontend
+  origin: 'http://34.95.207.232', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
   credentials: true
 }));
 
-// ✅ Pré-fluxo (Preflight) garantido
+// Resposta imediata para requisições OPTIONS
 app.options('*', cors()); 
 
+// --- 2. PROTEÇÃO E PERFORMANCE ---
+app.use(helmet({
+  crossOriginResourcePolicy: false, 
+})); 
+app.use(timeout('15s')); 
+app.use(compression()); 
 app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
 
@@ -86,22 +85,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Erro interno no servidor Node.js', details: err.message });
 });
 
-const PORT = process.env.PORT || 3000; 
+const PORT = process.env.PORT || 3000;
 
 const startServer = async () => {
   try {
     await connectDatabase();
-    
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });
-
-    server.keepAliveTimeout = 60000; 
-    server.headersTimeout = 65000; 
-
   } catch (err) {
-    console.error('❌ Falha catastrófica no boot:', err);
-    process.exit(1); 
+    console.error('❌ Erro no boot:', err);
   }
 };
 
