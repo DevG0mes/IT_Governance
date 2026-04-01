@@ -48,7 +48,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- 3. RATE LIMIT ---
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
-  max: 1000, 
+  max: 3000, 
   message: { error: "Muitas tentativas. Tente novamente em 15 minutos." },
   standardHeaders: true, 
   legacyHeaders: false,
