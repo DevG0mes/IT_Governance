@@ -33,7 +33,7 @@ app.use(compression());
 
 // --- 2. CONFIGURAÇÃO DE CORS (Blindada) ---
 app.use(cors({
-  origin: '*', 
+  origin: ['http://34.95.207.232', 'http://localhost:5173'], 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
   credentials: true
