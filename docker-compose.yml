@@ -30,7 +30,7 @@ services:
       - DB_NAME=inventario_db
       - DB_DIALECT=postgres
       - JWT_SECRET=PS1_En3rgy_G0vTI_2026_Secure_TrUst_N0_On3_9971
-      - PORT=3000\
+      - PORT=3000
     networks:
       - rede-governance
 
