@@ -52,7 +52,8 @@ export default function App() {
 
   function handleLogout() { 
     const userName = currentUser ? currentUser.nome : 'Sistema';
-    api.post('/api/audit-logs', { user: userName, action: 'LOGOUT', module: 'Autenticação', details: 'Saiu do sistema.' }).catch(() => {});
+    // 🛡️ Ajuste de Rota: removido o /api duplicado
+    api.post('/audit-logs', { user: userName, action: 'LOGOUT', module: 'Autenticação', details: 'Saiu do sistema.' }).catch(() => {});
     
     localStorage.clear(); 
     setCurrentUser(null); 
@@ -62,8 +63,9 @@ export default function App() {
   async function fetchAdminData() {
     try {
       const [usersRes, logsRes] = await Promise.all([
-          api.get('/api/users'),
-          api.get('/api/audit-logs')
+          // 🛡️ Ajuste de Rotas: removido o /api duplicado
+          api.get('/users'),
+          api.get('/audit-logs')
       ]);
       const usersFromDB = (usersRes.data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) }));
       setSystemUsers(usersFromDB);
@@ -76,7 +78,8 @@ export default function App() {
   async function registerLog(action, module, details) {
     const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
     try {
-      await api.post('/api/audit-logs', logEntry);
+      // 🛡️ Ajuste de Rota
+      await api.post('/audit-logs', logEntry);
       if (currentUser?.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData();
     } catch (e) {
       if(e.response?.status === 401) handleLogout();
@@ -87,32 +90,33 @@ export default function App() {
     setIsLoading(true);
     const requests = [];
 
+    // 🛡️ Ajuste massivo de Rotas: Todos os endpoints foram corrigidos para não duplicar o /api
     if (['dashboard', 'export', 'import'].includes(activeTab)) {
-        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
-        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
-        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
-        requests.push(api.get('/api/contracts').then(res => setContracts(res.data.data || [])));
-        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
+        requests.push(api.get('/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/licenses').then(res => setLicenses(res.data.data || [])));
+        requests.push(api.get('/contracts').then(res => setContracts(res.data.data || [])));
+        requests.push(api.get('/catalog').then(res => setCatalogItems(res.data.data || [])));
     } 
     else if (['inventory', 'maintenance'].includes(activeTab)) {
-        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
-        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
-        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
+        requests.push(api.get('/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/catalog').then(res => setCatalogItems(res.data.data || [])));
     } 
     else if (['employees', 'offboarding'].includes(activeTab)) {
-        requests.push(api.get('/api/employees').then(res => setEmployees(res.data.data || [])));
-        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
-        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
+        requests.push(api.get('/employees').then(res => setEmployees(res.data.data || [])));
+        requests.push(api.get('/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/licenses').then(res => setLicenses(res.data.data || [])));
     } 
     else if (activeTab === 'contracts') {
-        requests.push(api.get('/api/contracts').then(res => setContracts(res.data.data || [])));
+        requests.push(api.get('/contracts').then(res => setContracts(res.data.data || [])));
     } 
     else if (activeTab === 'licenses') {
-        requests.push(api.get('/api/licenses').then(res => setLicenses(res.data.data || [])));
+        requests.push(api.get('/licenses').then(res => setLicenses(res.data.data || [])));
     } 
     else if (activeTab === 'catalog') {
-        requests.push(api.get('/api/catalog').then(res => setCatalogItems(res.data.data || [])));
-        requests.push(api.get('/api/assets').then(res => setAssets(res.data.data || [])));
+        requests.push(api.get('/catalog').then(res => setCatalogItems(res.data.data || [])));
+        requests.push(api.get('/assets').then(res => setAssets(res.data.data || [])));
     }
 
     Promise.all(requests)
@@ -141,10 +145,10 @@ export default function App() {
   });
 
   try {
-    const res = await api.post('/api/login', loginForm);
+    // 🛡️ Ajuste Crítico: De /api/login para /login
+    const res = await api.post('/login', loginForm);
     const data = res.data;
     
-    // O backend retorna os dados dentro de data.data conforme seu log
     const loggedUser = data.data;
     const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
     
@@ -161,11 +165,7 @@ export default function App() {
     // 2. ATUALIZA O ESTADO GLOBAL
     setCurrentUser(loggedUser);
 
-    // 3. 🚨 O PULO DO GATO: REDIRECIONAR 🚨
-    // Se você usa o hook: const navigate = useNavigate();
-    // navigate('/dashboard');
-    
-    // Se não estiver usando hooks, use o redirecionamento nativo:
+    // 3. REDIRECIONAMENTO
     window.location.href = '/dashboard';
 
   } catch (err) {
@@ -199,7 +199,8 @@ export default function App() {
     e.preventDefault(); 
     const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; 
     try {
-      await api.post('/api/users', payload);
+      // 🛡️ Ajuste de Rota
+      await api.post('/users', payload);
       setIsUserModalOpen(false); 
       fetchAdminData(); 
       registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
@@ -211,7 +212,8 @@ export default function App() {
   const deleteSystemUser = (id) => { 
     requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', async () => { 
       try {
-        await api.delete(`/api/users/${id}`);
+        // 🛡️ Ajuste de Rota
+        await api.delete(`/users/${id}`);
         fetchAdminData(); 
         registerLog('DELETE', 'Segurança', `Deletou o usuário ID ${id}`); 
       } catch(err) { 
