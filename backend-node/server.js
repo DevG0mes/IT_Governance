@@ -34,17 +34,9 @@ app.use(compression());
 // --- 2. CONFIGURAÇÃO DE CORS (Ajustada para Google Cloud) ---
 // 🚨 Importante: Quando credentials é true, origin NÃO pode ser '*'
 app.use(cors({
-  origin: function (origin, callback) {
-    // Permite requisições sem origin (como mobile ou curl) e o seu IP específico
-    const allowedOrigins = ['http://34.95.207.232', 'http://localhost:5173', 'http://localhost:3000'];
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes('34.95.207.232')) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Temporariamente permitindo tudo para destravar seu login
-    }
-  },
+  origin: 'http://34.95.207.232', // Libera exatamente a origem do seu frontend
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
   credentials: true
 }));
 
