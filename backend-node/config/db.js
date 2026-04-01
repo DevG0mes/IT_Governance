@@ -1,11 +1,11 @@
 // Arquivo: config/db.js
 const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcrypt');
-require('dotenv').config(); // ✅ ADICIONADO: Garante a leitura do arquivo .env
+require('dotenv').config();
 
 console.log('--- 📡 Tentando conectar ao banco de dados PostgreSQL...');
 
-// 1. Inicialização do Sequelize lendo as variáveis separadas do nosso .env
+// 1. Inicialização do Sequelize
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -14,11 +14,11 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 5432,
     dialect: 'postgres',
-    logging: false, // Mantido false para não poluir o terminal
+    logging: false,
   }
 );
 
-// 2. Importação dos Models (Passando sequelize e DataTypes corretamente)
+// 2. Importação dos Models
 const User = require('../Models/User')(sequelize, DataTypes);
 const AuditLog = require('../Models/Audit')(sequelize, DataTypes);
 const CatalogItem = require('../Models/Catalog')(sequelize, DataTypes);
@@ -74,35 +74,42 @@ EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
 const connectDatabase = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Conexão com o PostgreSQL AWS estabelecida com sucesso!');
+    console.log('✅ Conexão com o PostgreSQL GCP estabelecida com sucesso!');
     
-    console.log('🔄 Resetando e Sincronizando estrutura das tabelas...');
-    // Usamos force: true apenas desta vez para limpar erros de constraint da migração
-    await sequelize.sync({ force: true }); 
-    console.log('✅ Estrutura do banco de dados RECONSTRUÍDA com sucesso!');
+    console.log('🔄 Sincronizando estrutura das tabelas...');
+    // 🚨 AJUSTE DE GOVERNANÇA: Usando alter: true para não apagar dados em produção
+    await sequelize.sync({ alter: true }); 
+    console.log('✅ Estrutura do banco de dados SINCRONIZADA com sucesso!');
 
-    console.log('✅ Criando usuário administrador...');
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    await User.create({
-      nome: 'Administrador TI',
-      email: 'admin@psienergy.com.br',
-      senha: hashedPassword,
-      cargo: 'Administrator',
-      permissionsJSON: JSON.stringify({
-        dashboard: "edit",
-        inventory: "edit",
-        licenses: "edit",
-        contracts: "edit",
-        catalog: "edit",
-        employees: "edit",
-        maintenance: "edit",
-        offboarding: "edit",
-        export: "edit",
-        import: "edit",
-        admin: "edit"
-      })
-    });
-    console.log('✅ Usuário Administrador [admin@psienergy.com.br] criado!');
+    // Verifica se o admin já existe para evitar erros de duplicidade
+    const adminExists = await User.findOne({ where: { email: 'admin@psienergy.com.br' } });
+
+    if (!adminExists) {
+      console.log('⚙️ Criando usuário administrador inicial...');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await User.create({
+        nome: 'Administrador TI',
+        email: 'admin@psienergy.com.br',
+        senha: hashedPassword,
+        cargo: 'Administrator',
+        permissionsJSON: JSON.stringify({
+          dashboard: "edit",
+          inventory: "edit",
+          licenses: "edit",
+          contracts: "edit",
+          catalog: "edit",
+          employees: "edit",
+          maintenance: "edit",
+          offboarding: "edit",
+          export: "edit",
+          import: "edit",
+          admin: "edit"
+        })
+      });
+      console.log('✅ Usuário Administrador [admin@psienergy.com.br] criado!');
+    } else {
+      console.log('✅ Usuário Administrador já existe no banco. Pulando criação.');
+    }
     
   } catch (error) {
     console.error('❌ ERRO NO BOOT DO BANCO:', error);
