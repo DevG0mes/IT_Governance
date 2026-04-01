@@ -19,22 +19,24 @@ exports.getAll = async (req, res) => {
       include: [
         { 
           model: AssetAssignment, 
-          // 🛡️ Removi o 'as' para o Sequelize usar o padrão automático
+          // 🛡️ Tente 'AssetAssignments' (Plural do modelo)
+          as: 'AssetAssignments', 
           where: { returned_at: null }, 
           required: false 
         },
         {
           model: EmployeeLicense,
-          // 🛡️ Removi o 'as' aqui também para garantir
+          // 🛡️ Tente 'EmployeeLicenses' (Plural do modelo)
+          as: 'EmployeeLicenses',
           required: false
         }
       ]
     });
     return res.status(200).json({ data: employees });
   } catch (error) {
-    // Isso vai nos mostrar no log do Docker por que a lista não carrega
-    console.error("❌ Erro ao buscar colaboradores:", error.message);
-    return res.status(500).json({ error: 'Erro interno no servidor: ' + error.message });
+    // Se der erro de "Association not found", o log vai nos dizer o nome certo
+    console.error("❌ Erro na consulta de colaboradores:", error.message);
+    return res.status(500).json({ error: 'Erro ao carregar lista: ' + error.message });
   }
 };
 
