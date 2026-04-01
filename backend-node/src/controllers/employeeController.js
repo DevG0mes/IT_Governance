@@ -18,14 +18,12 @@ exports.getAll = async (req, res) => {
       order: [['nome', 'ASC']],
       include: [
         { 
-          // 🛡️ Traz o contador de Hardwares usando o Alias EXATO do db.js
           model: AssetAssignment, 
           as: 'AssetAssignments', 
-          where: { returned_at: null }, // Conta apenas o que ele tem em mãos agora
-          required: false // LEFT JOIN: Traz o João mesmo se ele não tiver nada
+          where: { returned_at: null }, 
+          required: false 
         },
         {
-          // 🛡️ Traz o contador de Softwares
           model: EmployeeLicense,
           as: 'EmployeeLicenses',
           required: false
@@ -64,40 +62,53 @@ exports.create = async (req, res) => {
   }
 };
 
+// 🛡️ FUNÇÃO CORRIGIDA E BLINDADA
 exports.assignAsset = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { asset_id } = req.body;
-    const employee = await Employee.findByPk(req.params.id, { transaction: t });
+    // Captura o ID independente de vir como asset_id ou assetId
+    const assetIdRaw = req.body.asset_id || req.body.assetId;
+    const employeeIdRaw = req.params.id;
 
+    if (!assetIdRaw) throw new Error('ID do Ativo não fornecido');
+
+    const employee = await Employee.findByPk(employeeIdRaw, { transaction: t });
     if (!employee) throw new Error('Colaborador não encontrado');
     if (employee.status === 'Desligado') throw new Error('Não é possível atribuir equipamento a um colaborador desligado');
 
-    const asset = await Asset.findByPk(asset_id, { transaction: t });
-
+    const asset = await Asset.findByPk(assetIdRaw, { transaction: t });
     if (!asset) throw new Error('Equipamento não encontrado');
-    if (asset.status !== 'Disponível') throw new Error(`Equipamento não disponível (Status: ${asset.status})`);
+    
+    // Se já estiver em uso por outra pessoa, precisamos saber
+    if (asset.status === 'Em uso' && asset.EmployeeId !== employee.id) {
+        throw new Error(`Este equipamento já está em uso por outro colaborador.`);
+    }
 
-    // Atualiza status do Ativo
-    await asset.update({ status: 'Em Uso', EmployeeId: employee.id }, { transaction: t });
+    // Atualiza status do Ativo (Usando EmployeeId PascalCase do seu DB)
+    await asset.update({ status: 'Em uso', EmployeeId: employee.id }, { transaction: t });
 
-    // Atualiza campo visual do funcionário de acordo com o tipo
+    // Sincroniza campo visual no cadastro do funcionário
     if (asset.asset_type === 'Notebook') {
       const note = await AssetNotebook.findOne({ where: { AssetId: asset.id }, transaction: t });
       if (note) await employee.update({ notebook: note.patrimonio }, { transaction: t });
     } 
 
-    // 🛡️ Registra a atribuição usando o PascalCase do seu banco de dados
+    // 🛡️ CRITICAL FIX: Gravação explícita para evitar notNull Violation
+    // Passamos tanto o PascalCase quanto o snake_case para garantir que o Sequelize aceite
     await AssetAssignment.create({
       EmployeeId: employee.id,
       AssetId: asset.id,
-      assigned_at: new Date()
+      employee_id: employee.id, // Fallback para modelos que usam snake_case
+      asset_id: asset.id,       // Fallback para modelos que usam snake_case
+      assigned_at: new Date(),
+      returned_at: null
     }, { transaction: t });
 
     await t.commit();
     return res.status(200).json({ message: `${asset.asset_type} atribuído com sucesso!` });
   } catch (error) {
     if (t) await t.rollback();
+    console.error("❌ Erro na atribuição:", error.message);
     return res.status(400).json({ error: error.message });
   }
 };
@@ -111,7 +122,6 @@ exports.toggleStatus = async (req, res) => {
     const now = new Date();
     if (employee.status === 'Ativo' || !employee.status) {
       
-      // 1. Revoga Hardwares (Usando EmployeeId e AssetId conforme seu DB)
       const activeAssignments = await AssetAssignment.findAll({
         where: { EmployeeId: employee.id, returned_at: null },
         transaction: t
@@ -122,7 +132,6 @@ exports.toggleStatus = async (req, res) => {
         await Asset.update({ status: 'Disponível', EmployeeId: null }, { where: { id: asg.AssetId }, transaction: t });
       }
 
-      // 2. Revoga Licenças (Usando employee_id e license_id conforme seu DB)
       const empLicenses = await EmployeeLicense.findAll({ where: { employee_id: employee.id }, transaction: t });
       for (let el of empLicenses) {
         const lic = await License.findByPk(el.license_id, { transaction: t });
