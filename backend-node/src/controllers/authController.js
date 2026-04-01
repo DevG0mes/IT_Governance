@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User } = require('../../config/db');
 
+// 🛡️ GOVERNANÇA: Chave do JWT. Em produção, sempre virá do .env
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
 
 exports.login = async (req, res) => {
@@ -50,7 +51,8 @@ exports.login = async (req, res) => {
 // 🛡️ SETUP DE EMERGÊNCIA (Isolado no Controller)
 exports.setupAdmin = async (req, res) => {
   try {
-    const adminEmail = 'admin@psi.com.br';
+    // 🚨 AJUSTE: Padronizado para o domínio oficial da empresa (psienergy.com.br)
+    const adminEmail = 'admin@psienergy.com.br';
     const adminExists = await User.findOne({ where: { email: adminEmail } });
     
     if (adminExists) {
@@ -72,7 +74,7 @@ exports.setupAdmin = async (req, res) => {
       })
     });
 
-    res.send('✅ Admin criado com sucesso! Use admin@psi.com.br / admin123');
+    res.send('✅ Admin criado com sucesso! Use admin@psienergy.com.br / admin123');
   } catch (error) {
     res.status(500).send('❌ Erro ao criar admin: ' + error.message);
   }

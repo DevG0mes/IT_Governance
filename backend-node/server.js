@@ -56,8 +56,8 @@ const loginLimiter = rateLimit({
 
 // --- 4. DEFINIÇÃO DAS ROTAS ---
 
-// Health Check
-app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI na AWS' }));
+// Health Check (Ajustado para refletir a nova infraestrutura)
+app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI no Google Cloud' }));
 
 app.use('/api', loginLimiter, authRoutes); 
 
