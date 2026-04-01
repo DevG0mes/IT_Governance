@@ -19,21 +19,22 @@ exports.getAll = async (req, res) => {
       include: [
         { 
           model: AssetAssignment, 
-          // 🛡️ Removemos o 'as' aqui para ele não conflitar com o banco
+          // 🛡️ Removi o 'as' para o Sequelize usar o padrão automático
           where: { returned_at: null }, 
           required: false 
         },
         {
           model: EmployeeLicense,
-          // Se as licenças também não aparecerem, remova o 'as' daqui também
+          // 🛡️ Removi o 'as' aqui também para garantir
           required: false
         }
       ]
     });
     return res.status(200).json({ data: employees });
   } catch (error) {
+    // Isso vai nos mostrar no log do Docker por que a lista não carrega
     console.error("❌ Erro ao buscar colaboradores:", error.message);
-    return res.status(500).json({ error: 'Erro interno no servidor' });
+    return res.status(500).json({ error: 'Erro interno no servidor: ' + error.message });
   }
 };
 
