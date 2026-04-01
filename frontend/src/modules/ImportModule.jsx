@@ -14,9 +14,9 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";
-    if (importCategory === 'Notebooks') headers = "Patrimonio;Serial_Number;Modelo;Garantia;Status_Garantia;Status;Email_Colaborador";
-    if (importCategory === 'Celulares') headers = "IMEI;Modelo;Grupo;Responsavel;Status;Email_Colaborador";
-    if (importCategory === 'CHIPs') headers = "Numero;ICCID;Plano;Grupo;Responsavel;Vencimento_Plano;Status;Email_Colaborador";
+    if (importCategory === 'Notebooks') headers = "Patrimonio;Serial_Number;Modelo;Garantia;Status_Garantia;Status;Email";
+    if (importCategory === 'Celulares') headers = "IMEI;Modelo;Grupo;Responsavel;Status;Email";
+    if (importCategory === 'CHIPs') headers = "Numero;ICCID;Plano;Grupo;Responsavel;Vencimento_Plano;Status;Email";
     if (importCategory === 'Starlinks') headers = "Grupo;Modelo;Localizacao;Projeto;Responsavel;Email_Responsavel;Email_Conta;Senha_Conta;Senha_Wifi;Status";
     if (importCategory === 'Medições de Contratos') headers = "Servico;Mes_Competencia;Valor_Realizado";
     if (importCategory === 'Licenças (Cadastro)') headers = "Software;Fornecedor;Plano;Custo;Quantidade";
@@ -31,7 +31,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
     link.click();
   };
 
-  // 1. APENAS LÊ O ARQUIVO E GERA A PRÉ-VISUALIZAÇÃO (Sem chamar API ainda)
   const handleCsvUpload = (e) => {
     const file = e.target.files[0]; 
     if (!file) return;
@@ -65,9 +64,8 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             return; 
           }
           
-          // Libera a tabela na tela para o usuário ver antes de salvar
           setPreviewData(cleanData);
-          e.target.value = null; // Limpa o input
+          e.target.value = null; 
         }
       });
     };
@@ -177,7 +175,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
     setIsImporting(false);
   };
 
-  // 2. A MÁGICA DE GRAVAR NO BANCO ACONTECE AQUI
   const processImport = () => {
     if (!previewData || previewData.length === 0) return;
     requestConfirm('Confirmar Salvar', `Deseja registrar definitivamente as ${previewData.length} linhas no sistema?`, async () => {
@@ -188,7 +185,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
         const getVal = (row, ...keys) => { const foundKey = Object.keys(row).find(k => keys.some(searchKey => k.trim().toLowerCase() === searchKey.toLowerCase())); return foundKey ? String(row[foundKey]).trim() : ''; };
         const safeVal = (v) => !v || v === '0' || v.toLowerCase() === 'n/a' || v.toLowerCase() === '#n/d' ? '' : v;
 
-        // O Loop For...Of com Await manda 1 por vez de forma segura, mantendo seus vínculos de funcionário funcionando!
         for (let i = 0; i < previewData.length; i++) {
           const row = previewData[i];
 
@@ -271,7 +267,8 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             
             else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
               let payload = {};
-              const emailColab = normalizeEmail(getVal(row, 'email_responsavel', 'email_colaborador', 'usuario'));
+              
+              const emailColab = normalizeEmail(getVal(row, 'email', 'email_responsavel', 'email_colaborador', 'usuario'));
               const hasValidEmail = emailColab && emailColab.length > 3 && emailColab !== 'n/a' && emailColab !== '0' && emailColab !== '-';
 
               let rawStatus = getVal(row, 'status', 'situação', 'situacao');
@@ -292,7 +289,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               let willAssign = false;
 
               if (hasValidEmail && ['Disponível', 'Em uso'].includes(finalStatus)) {
-                  creationStatus = 'Disponível';
+                  creationStatus = 'Disponível'; // Nasce disponível para depois vincular
                   willAssign = true;
               }
 
@@ -301,14 +298,15 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 if (patrimonio && assets.some(a => a.asset_type === 'Notebook' && a.notebook?.patrimonio === patrimonio)) {
                     throw new Error(`Ignorado: Notebook '${patrimonio}' já existe.`);
                 }
-                payload = { asset_type: 'Notebook', patrimonio, serial_number: safeVal(getVal(row, 'serial_number', 'serial')), modelo_notebook: safeVal(getVal(row, 'modelo')), garantia: safeVal(getVal(row, 'garantia')), status_garantia: safeVal(getVal(row, 'status_garantia')) || 'No prazo', status: creationStatus };
+                
+                payload = { asset_type: 'Notebook', patrimonio, serial_number: safeVal(getVal(row, 'serial_number', 'serial')), modelo: safeVal(getVal(row, 'modelo')), garantia: safeVal(getVal(row, 'garantia')), status_garantia: safeVal(getVal(row, 'status_garantia')) || 'No prazo', status: creationStatus };
               } 
               else if (importCategory === 'Celulares') {
                 const imei = safeVal(getVal(row, 'imei'));
                 if (imei && assets.some(a => a.asset_type === 'Celular' && a.celular?.imei === imei)) {
                     throw new Error(`Ignorado: Celular IMEI '${imei}' já existe.`);
                 }
-                payload = { asset_type: 'Celular', imei, modelo_celular: safeVal(getVal(row, 'modelo')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), status: creationStatus };
+                payload = { asset_type: 'Celular', imei, modelo: safeVal(getVal(row, 'modelo')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), status: creationStatus };
               } 
               else if (importCategory === 'CHIPs') {
                 const numero = safeVal(getVal(row, 'numero', 'linha'));
@@ -318,13 +316,13 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 payload = { asset_type: 'CHIP', numero, iccid: safeVal(getVal(row, 'iccid')), plano: safeVal(getVal(row, 'plano')), grupo: safeVal(getVal(row, 'grupo')), responsavel: safeVal(getVal(row, 'responsavel')), vencimento_plano: safeVal(getVal(row, 'vencimento_plano', 'vencimento')), status: creationStatus };
               } 
               else if (importCategory === 'Starlinks') {
-                payload = { asset_type: 'Starlink', grupo: safeVal(getVal(row, 'grupo')), modelo_starlink: safeVal(getVal(row, 'modelo')), localizacao: safeVal(getVal(row, 'localizacao', 'local')), projeto: safeVal(getVal(row, 'projeto')), responsavel: safeVal(getVal(row, 'responsavel')), email_responsavel: emailColab, email: safeVal(getVal(row, 'email_conta', 'email')), senha: safeVal(getVal(row, 'senha_conta', 'senha')), senha_roteador: safeVal(getVal(row, 'senha_wifi', 'wifi')), status: creationStatus };
+                payload = { asset_type: 'Starlink', grupo: safeVal(getVal(row, 'grupo')), modelo: safeVal(getVal(row, 'modelo')), localizacao: safeVal(getVal(row, 'localizacao', 'local')), projeto: safeVal(getVal(row, 'projeto')), responsavel: safeVal(getVal(row, 'responsavel')), email_responsavel: emailColab, email: safeVal(getVal(row, 'email_conta', 'email')), senha: safeVal(getVal(row, 'senha_conta', 'senha')), senha_roteador: safeVal(getVal(row, 'senha_wifi', 'wifi')), status: creationStatus };
               }
 
               const res = await api.post('/api/assets', payload);
               const resData = res.data;
 
-              // A MÁGICA DO VÍNCULO ACONTECE AQUI!
+              // 🚨 MÁGICA DO VÍNCULO CORRIGIDA (Com tratamento do ESLint)
               if (willAssign) {
                 const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
                 if (!emp) { throw new Error(`Salvo no Estoque Livre, pois o E-mail '${emailColab}' não existe no sistema.`); }
@@ -332,7 +330,20 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                 const assetIdToAssign = resData?.data?.id || resData?.id; 
                 if (!assetIdToAssign) throw new Error(`Salvo no Estoque, mas ID não retornado para vincular.`);
 
-                await api.put(`/api/employees/${emp.id}/assign`, { asset_id: assetIdToAssign });
+                try {
+                  // Tentativa Primária: Rota padrão de POST enviando ambos os IDs
+                  await api.post('/api/assets/assign', { 
+                      asset_id: assetIdToAssign, 
+                      employee_id: emp.id 
+                  });
+                } catch (assignError) {
+                  console.warn('Rota primária de vínculo falhou. Acionando fallback...', assignError.message);
+                  // Tentativa Secundária (Fallback): Rota antiga mas com pacote de dados correto
+                  await api.put(`/api/employees/${emp.id}/assign`, { 
+                      asset_id: assetIdToAssign,
+                      employee_id: emp.id
+                  });
+                }
               }
             }
             successCount++;
