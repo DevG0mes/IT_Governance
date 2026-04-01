@@ -6,6 +6,10 @@ on:
       - main
       - master
 
+# Adicionamos a variável global para forçar os robôs do GitHub a usarem a versão atualizada
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     name: Deploy para a VM
@@ -21,7 +25,6 @@ jobs:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Mantido exatamente como você solicitou
           source: "backend-node,frontend,dados,docker-compose.yml"
           target: "~/IT_Governance"
 

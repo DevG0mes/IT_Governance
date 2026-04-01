@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://51.20.55.160:3000';
+export const API_BASE_URL = 'http://34.95.207.232:3000';
 export const getAuthHeaders = () => {
   const token = sessionStorage.getItem('jwt_token');
   return {
