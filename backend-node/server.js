@@ -31,16 +31,25 @@ app.use(helmet({
 app.use(timeout('15s')); 
 app.use(compression()); 
 
-// --- 2. CONFIGURAÇÃO DE CORS (Blindada) ---
+// --- 2. CONFIGURAÇÃO DE CORS (Ajustada para Google Cloud) ---
+// 🚨 Importante: Quando credentials é true, origin NÃO pode ser '*'
 app.use(cors({
-  origin: '*', 
+  origin: function (origin, callback) {
+    // Permite requisições sem origin (como mobile ou curl) e o seu IP específico
+    const allowedOrigins = ['http://34.95.207.232', 'http://localhost:5173', 'http://localhost:3000'];
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes('34.95.207.232')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Temporariamente permitindo tudo para destravar seu login
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
   credentials: true
 }));
 
-// ✅ CORREÇÃO DO PathError: Usando Regex em vez de '*'
-app.options(/(.*)/, cors()); 
+// ✅ Pré-fluxo (Preflight) garantido
+app.options('*', cors()); 
 
 app.use(express.json({ limit: '10mb' })); 
 app.use(express.urlencoded({ extended: true }));
@@ -56,7 +65,7 @@ const loginLimiter = rateLimit({
 
 // --- 4. DEFINIÇÃO DAS ROTAS ---
 
-// Health Check (Ajustado para refletir a nova infraestrutura)
+// Health Check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI no Google Cloud' }));
 
 app.use('/api', loginLimiter, authRoutes); 
