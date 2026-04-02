@@ -62,7 +62,9 @@ Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets
 Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
 AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
 
-Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'Assignments' });
+// Importante: o frontend usa AssetAssignments/assignments como fallback.
+// Padronizamos o alias do lado do Asset para 'AssetAssignments'.
+Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'AssetAssignments' });
 AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
 // 4. Colaborador -> Licenças de Software

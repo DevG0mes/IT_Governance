@@ -2,6 +2,27 @@ const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular,
 const { writeAuditLog } = require('../../utils/audit');
 const { standardizeAssetIdentifier, standardizeText } = require('../../utils/sanitizer');
 
+const normalizeAssetStatus = (raw) => {
+  if (!raw) return 'Disponível';
+  const s = String(raw).trim().toLowerCase();
+  const map = {
+    disponivel: 'Disponível',
+    'disponível': 'Disponível',
+    'em uso': 'Em uso',
+    emuso: 'Em uso',
+    manutencao: 'Manutenção',
+    'manutenção': 'Manutenção',
+    renovacao: 'Renovação',
+    'renovação': 'Renovação',
+    inutilizado: 'Inutilizado',
+    descartado: 'Descartado',
+    'extraviado/roubado': 'Extraviado/Roubado',
+    extraviado: 'Extraviado/Roubado',
+    roubado: 'Extraviado/Roubado',
+  };
+  return map[s] || raw;
+};
+
 exports.getAll = async (req, res) => {
   try {
     const assets = await Asset.findAll({
@@ -13,7 +34,7 @@ exports.getAll = async (req, res) => {
         { model: Employee, as: 'Employee' },
         {
           model: AssetAssignment,
-          as: 'Assignments',
+          as: 'AssetAssignments',
           required: false,
           include: [{ model: Employee, as: 'Employee', required: false }],
         },
@@ -34,7 +55,7 @@ exports.create = async (req, res) => {
     const assetType = input.asset_type;
     const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-    const status = ownerEmployeeId ? 'Em uso' : (input.status || 'Disponível');
+    const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
 
     const patrimonio = standardizeAssetIdentifier(input.patrimonio);
     const serial_number = standardizeAssetIdentifier(input.serial_number);
@@ -323,7 +344,7 @@ exports.importBulk = async (req, res) => {
         const assetType = input.asset_type;
         const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
         const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-        const status = ownerEmployeeId ? 'Em uso' : (input.status || 'Disponível');
+        const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
 
         const patrimonio = standardizeAssetIdentifier(input.patrimonio);
         const serial_number = standardizeAssetIdentifier(input.serial_number);
