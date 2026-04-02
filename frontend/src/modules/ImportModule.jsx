@@ -131,6 +131,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               localizacao: getVal(row, 'localizacao'),
               projeto: getVal(row, 'projeto'),
               modelo_starlink: getVal(row, 'modelo'),
+              email_responsavel: getVal(row, 'email_responsavel'),
               email: getVal(row, 'email_conta'),
               senha: getVal(row, 'senha_conta'),
               senha_roteador: getVal(row, 'senha_wifi')
@@ -225,6 +226,26 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
                   quantidade_total: parseInt(getVal(row, 'quantidade')) || 1 
               });
             }
+          }
+          
+          // 5. VÍNCULOS DE LICENÇAS (Employee <-> License)
+          else if (importCategory === 'Vínculos de Licenças') {
+            const email = normalizeEmail(getVal(row, 'email_colaborador', 'email', 'e-mail'));
+            const software = getVal(row, 'software');
+            if (!email || !software) continue;
+
+            const emp = employees.find(e => normalizeEmail(e.email) === email);
+            if (!emp) continue; // sem e-mail corporativo no sistema, não há como vincular
+
+            const lic = licenses.find(l => (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim());
+            if (!lic) continue;
+
+            // evita duplicidade com base no array local (quando já carregado)
+            const existingAssignments = lic.EmployeeLicenses || lic.assignments || [];
+            const already = existingAssignments.some(a => (a.EmployeeId === emp.id || a.employee_id === emp.id) && (a.license_id === lic.id || a.LicenseId === lic.id));
+            if (already) continue;
+
+            await api.post('/api/licenses/assign', { employee_id: emp.id, license_id: lic.id });
           }
 
           successCount++;
