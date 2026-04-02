@@ -5,6 +5,11 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true, 
       autoIncrement: true 
     },
+    // FK 1:1 com assets (necessário para inserts via controller)
+    AssetId: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
     imei: { 
       type: DataTypes.STRING 
     },

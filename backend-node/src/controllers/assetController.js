@@ -337,115 +337,119 @@ exports.importBulk = async (req, res) => {
     for (let idx = 0; idx < items.length; idx++) {
       const input = items[idx];
       try {
-        if (!input || !input.asset_type) {
-          skipped++;
-          continue;
-        }
-
-        const assetType = input.asset_type;
-        const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
-        const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-        const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
-
-        const patrimonio = standardizeAssetIdentifier(input.patrimonio);
-        const serial_number = standardizeAssetIdentifier(input.serial_number);
-        const imei = standardizeAssetIdentifier(input.imei);
-        const numero = standardizeAssetIdentifier(input.numero);
-        const iccid = standardizeAssetIdentifier(input.iccid);
-
-        // Anti-duplicação por tipo
-        if (assetType === 'Notebook') {
-          if (patrimonio) {
-            const exists = await AssetNotebook.findOne({ where: { patrimonio }, transaction: t });
-            if (exists) { skipped++; continue; }
+        // Em PostgreSQL, uma falha dentro de uma transaction aborta o bloco inteiro.
+        // Usamos SAVEPOINT por item (nested transaction) para não perder o lote completo.
+        await sequelize.transaction({ transaction: t }, async (tItem) => {
+          if (!input || !input.asset_type) {
+            skipped++;
+            return;
           }
-          if (serial_number) {
-            const exists = await AssetNotebook.findOne({ where: { serial_number }, transaction: t });
-            if (exists) { skipped++; continue; }
-          }
-        }
-        if (assetType === 'Celular' && imei) {
-          const exists = await AssetCelular.findOne({ where: { imei }, transaction: t });
-          if (exists) { skipped++; continue; }
-        }
-        if (assetType === 'CHIP') {
-          if (numero) {
-            const exists = await AssetChip.findOne({ where: { numero }, transaction: t });
-            if (exists) { skipped++; continue; }
-          }
-          if (iccid) {
-            const exists = await AssetChip.findOne({ where: { iccid }, transaction: t });
-            if (exists) { skipped++; continue; }
-          }
-        }
 
-        const asset = await Asset.create(
-          { asset_type: assetType, status, EmployeeId: ownerEmployeeId || null },
-          { transaction: t }
-        );
+          const assetType = input.asset_type;
+          const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
+          const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
+          const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
 
-        if (assetType === 'Notebook') {
-          await AssetNotebook.create({
-            AssetId: asset.id,
-            serial_number,
-            patrimonio,
-            modelo: standardizeText(input.modelo_notebook),
-            garantia: standardizeText(input.garantia),
-            status_garantia: standardizeText(input.status_garantia)
-          }, { transaction: t });
-        } else if (assetType === 'Celular') {
-          await AssetCelular.create({
-            AssetId: asset.id,
-            imei,
-            modelo: standardizeText(input.modelo_celular),
-            grupo: standardizeText(input.grupo),
-            responsavel: standardizeText(input.responsavel)
-          }, { transaction: t });
-        } else if (assetType === 'CHIP') {
-          await AssetChip.create({
-            AssetId: asset.id,
-            numero,
-            iccid,
-            plano: standardizeText(input.plano),
-            grupo: standardizeText(input.grupo),
-            responsavel: standardizeText(input.responsavel),
-            vencimento_plano: input.vencimento_plano
-          }, { transaction: t });
-        } else if (assetType === 'Starlink') {
-          await AssetStarlink.create({
-            AssetId: asset.id,
-            modelo: standardizeText(input.modelo_starlink),
-            localizacao: standardizeText(input.localizacao),
-            projeto: standardizeText(input.projeto),
-            grupo: standardizeText(input.grupo),
-            responsavel: standardizeText(input.responsavel),
-            email_responsavel: input.email_responsavel,
-            email: input.email,
-            senha: input.senha,
-            senha_roteador: input.senha_roteador
-          }, { transaction: t });
-        }
+          const patrimonio = standardizeAssetIdentifier(input.patrimonio);
+          const serial_number = standardizeAssetIdentifier(input.serial_number);
+          const imei = standardizeAssetIdentifier(input.imei);
+          const numero = standardizeAssetIdentifier(input.numero);
+          const iccid = standardizeAssetIdentifier(input.iccid);
 
-        // Vínculo histórico (quando há dono atual)
-        if (ownerEmployeeId) {
-          await AssetAssignment.create(
-            { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
-            { transaction: t }
+          // Anti-duplicação por tipo
+          if (assetType === 'Notebook') {
+            if (patrimonio) {
+              const exists = await AssetNotebook.findOne({ where: { patrimonio }, transaction: tItem });
+              if (exists) { skipped++; return; }
+            }
+            if (serial_number) {
+              const exists = await AssetNotebook.findOne({ where: { serial_number }, transaction: tItem });
+              if (exists) { skipped++; return; }
+            }
+          }
+          if (assetType === 'Celular' && imei) {
+            const exists = await AssetCelular.findOne({ where: { imei }, transaction: tItem });
+            if (exists) { skipped++; return; }
+          }
+          if (assetType === 'CHIP') {
+            if (numero) {
+              const exists = await AssetChip.findOne({ where: { numero }, transaction: tItem });
+              if (exists) { skipped++; return; }
+            }
+            if (iccid) {
+              const exists = await AssetChip.findOne({ where: { iccid }, transaction: tItem });
+              if (exists) { skipped++; return; }
+            }
+          }
+
+          const asset = await Asset.create(
+            { asset_type: assetType, status, EmployeeId: ownerEmployeeId || null },
+            { transaction: tItem }
           );
-        }
 
-        await writeAuditLog(AuditLog, {
-          action: 'IMPORT',
-          table_name: 'assets',
-          record_id: asset.id,
-          old_data: null,
-          new_data: asset.toJSON(),
-          module: 'import',
-          user: req.user?.email || req.user?.nome || null,
-          details: `Import bulk (${assetType}) idx=${idx}`,
+          if (assetType === 'Notebook') {
+            await AssetNotebook.create({
+              AssetId: asset.id,
+              serial_number,
+              patrimonio,
+              modelo: standardizeText(input.modelo_notebook),
+              garantia: standardizeText(input.garantia),
+              status_garantia: standardizeText(input.status_garantia)
+            }, { transaction: tItem });
+          } else if (assetType === 'Celular') {
+            await AssetCelular.create({
+              AssetId: asset.id,
+              imei,
+              modelo: standardizeText(input.modelo_celular),
+              grupo: standardizeText(input.grupo),
+              responsavel: standardizeText(input.responsavel)
+            }, { transaction: tItem });
+          } else if (assetType === 'CHIP') {
+            await AssetChip.create({
+              AssetId: asset.id,
+              numero,
+              iccid,
+              plano: standardizeText(input.plano),
+              grupo: standardizeText(input.grupo),
+              responsavel: standardizeText(input.responsavel),
+              vencimento_plano: input.vencimento_plano
+            }, { transaction: tItem });
+          } else if (assetType === 'Starlink') {
+            await AssetStarlink.create({
+              AssetId: asset.id,
+              modelo: standardizeText(input.modelo_starlink),
+              localizacao: standardizeText(input.localizacao),
+              projeto: standardizeText(input.projeto),
+              grupo: standardizeText(input.grupo),
+              responsavel: standardizeText(input.responsavel),
+              email_responsavel: input.email_responsavel,
+              email: input.email,
+              senha: input.senha,
+              senha_roteador: input.senha_roteador
+            }, { transaction: tItem });
+          }
+
+          // Vínculo histórico (quando há dono atual)
+          if (ownerEmployeeId) {
+            await AssetAssignment.create(
+              { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
+              { transaction: tItem }
+            );
+          }
+
+          await writeAuditLog(AuditLog, {
+            action: 'IMPORT',
+            table_name: 'assets',
+            record_id: asset.id,
+            old_data: null,
+            new_data: asset.toJSON(),
+            module: 'import',
+            user: req.user?.email || req.user?.nome || null,
+            details: `Import bulk (${assetType}) idx=${idx}`,
+          });
+
+          created++;
         });
-
-        created++;
       } catch (e) {
         errors.push({ index: idx, error: e.message || String(e) });
       }
