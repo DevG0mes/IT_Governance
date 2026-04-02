@@ -32,7 +32,9 @@ exports.create = async (req, res) => {
 
   try {
     const assetType = input.asset_type;
-    const status = input.status || 'Disponível';
+    const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
+    const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
+    const status = ownerEmployeeId ? 'Em uso' : (input.status || 'Disponível');
 
     const patrimonio = standardizeAssetIdentifier(input.patrimonio);
     const serial_number = standardizeAssetIdentifier(input.serial_number);
@@ -65,7 +67,8 @@ exports.create = async (req, res) => {
 
     const asset = await Asset.create({
       asset_type: assetType,
-      status
+      status,
+      EmployeeId: ownerEmployeeId || null
     }, { transaction: t });
 
     if (assetType === 'Notebook') {
@@ -124,6 +127,14 @@ exports.create = async (req, res) => {
         senha: input.senha,
         senha_roteador: input.senha_roteador
       }, { transaction: t });
+    }
+
+    // Vínculo histórico (quando há dono atual)
+    if (ownerEmployeeId) {
+      await AssetAssignment.create(
+        { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
+        { transaction: t }
+      );
     }
 
     await writeAuditLog(AuditLog, {
@@ -310,7 +321,9 @@ exports.importBulk = async (req, res) => {
         }
 
         const assetType = input.asset_type;
-        const status = input.status || 'Disponível';
+        const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
+        const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
+        const status = ownerEmployeeId ? 'Em uso' : (input.status || 'Disponível');
 
         const patrimonio = standardizeAssetIdentifier(input.patrimonio);
         const serial_number = standardizeAssetIdentifier(input.serial_number);
@@ -344,7 +357,10 @@ exports.importBulk = async (req, res) => {
           }
         }
 
-        const asset = await Asset.create({ asset_type: assetType, status }, { transaction: t });
+        const asset = await Asset.create(
+          { asset_type: assetType, status, EmployeeId: ownerEmployeeId || null },
+          { transaction: t }
+        );
 
         if (assetType === 'Notebook') {
           await AssetNotebook.create({
@@ -385,6 +401,14 @@ exports.importBulk = async (req, res) => {
             senha: input.senha,
             senha_roteador: input.senha_roteador
           }, { transaction: t });
+        }
+
+        // Vínculo histórico (quando há dono atual)
+        if (ownerEmployeeId) {
+          await AssetAssignment.create(
+            { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
+            { transaction: t }
+          );
         }
 
         await writeAuditLog(AuditLog, {
