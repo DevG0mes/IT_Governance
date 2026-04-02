@@ -144,6 +144,7 @@ exports.create = async (req, res) => {
         projeto: standardizeText(input.projeto),
         grupo: standardizeText(input.grupo),
         responsavel: standardizeText(input.responsavel),
+        email_responsavel: input.email_responsavel,
         email: input.email,
         senha: input.senha,
         senha_roteador: input.senha_roteador
@@ -418,6 +419,7 @@ exports.importBulk = async (req, res) => {
             projeto: standardizeText(input.projeto),
             grupo: standardizeText(input.grupo),
             responsavel: standardizeText(input.responsavel),
+            email_responsavel: input.email_responsavel,
             email: input.email,
             senha: input.senha,
             senha_roteador: input.senha_roteador

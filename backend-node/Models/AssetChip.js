@@ -19,6 +19,9 @@ module.exports = (sequelize, DataTypes) => {
     },
     responsavel: { 
       type: DataTypes.STRING 
+    },
+    vencimento_plano: {
+      type: DataTypes.DATEONLY
     }
   }, { 
     tableName: 'asset_chips', 
