@@ -7,11 +7,16 @@ export default function OffboardingModule({ employees = [], assets = [], license
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showAllDesligados, setShowAllDesligados] = useState(false);
+  const [offboardingForm, setOffboardingForm] = useState(null);
 
   // 🚨 NOVO: Tratamento de erro simplificado para o Axios
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
-  const getActiveAssets = (empId) => (assets || []).filter(a => a.status === 'Em uso' && a.assignments?.some(asg => asg.employee_id === empId && !asg.returned_at));
+  const getActiveAssets = (empId) => (assets || []).filter(a => {
+    if (!a || a.status !== 'Em uso') return false;
+    const assignments = a.Assignments || a.assignments || a.AssetAssignments || [];
+    return assignments.some(asg => (asg?.EmployeeId === empId || asg?.employee_id === empId) && !asg?.returned_at);
+  });
   
   const getActiveLicenses = (empId) => {
     const empLics = [];
@@ -84,6 +89,44 @@ export default function OffboardingModule({ employees = [], assets = [], license
     }, true, 'Concluir Desligamento');
   };
 
+  const openEmployee = (emp) => {
+    setSelectedEmployee(emp);
+    setOffboardingForm({
+      termo_url: emp?.termo_url || '',
+      offboarding_onfly: Number(emp?.offboarding_onfly || 0) === 1,
+      offboarding_mega: Number(emp?.offboarding_mega || 0) === 1,
+      offboarding_adm365: Number(emp?.offboarding_adm365 || 0) === 1,
+      offboarding_license: Number(emp?.offboarding_license || 0) === 1,
+    });
+  };
+
+  const saveChecklist = async () => {
+    if (!selectedEmployee || !offboardingForm) return;
+    try {
+      await api.put(`/api/employees/${selectedEmployee.id}`, {
+        status: 'Em desligamento',
+        termo_url: offboardingForm.termo_url,
+        offboarding_onfly: offboardingForm.offboarding_onfly ? 1 : 0,
+        offboarding_mega: offboardingForm.offboarding_mega ? 1 : 0,
+        offboarding_adm365: offboardingForm.offboarding_adm365 ? 1 : 0,
+        offboarding_license: offboardingForm.offboarding_license ? 1 : 0,
+      });
+      registerLog('UPDATE', 'Revogação', `Atualizou checklist/termo de ${selectedEmployee.nome}`);
+      fetchData();
+    } catch (err) {
+      alert(getAxiosError(err, 'Erro ao salvar checklist'));
+    }
+  };
+
+  const canFinalize = (emp) => {
+    const remainingAssets = getActiveAssets(emp.id).length;
+    const remainingLicenses = getActiveLicenses(emp.id).length;
+    const okChecklist = offboardingForm
+      ? (offboardingForm.offboarding_onfly && offboardingForm.offboarding_mega && offboardingForm.offboarding_adm365 && offboardingForm.offboarding_license && (offboardingForm.termo_url || '').trim())
+      : false;
+    return remainingAssets === 0 && remainingLicenses === 0 && okChecklist;
+  };
+
   return (
     <div className="animate-fade-in relative min-h-[500px]">
       
@@ -128,7 +171,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
               return (
                 <div 
                   key={emp.id} 
-                  onClick={() => setSelectedEmployee(emp)}
+                  onClick={() => openEmployee(emp)}
                   className={`p-4 rounded-2xl cursor-pointer transition-all border ${selectedEmployee?.id === emp.id ? 'bg-red-900/20 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-black/40 border-gray-800 hover:border-gray-600'}`}
                 >
                   <p className="font-bold text-white text-sm">{emp.nome}</p>
@@ -162,7 +205,8 @@ export default function OffboardingModule({ employees = [], assets = [], license
                 {hasAccess('employees', 'edit') && (
                   <button 
                     onClick={() => finalizeOffboarding(selectedEmployee)} 
-                    className={`px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition-all shadow-lg ${getActiveAssets(selectedEmployee.id).length === 0 && getActiveLicenses(selectedEmployee.id).length === 0 ? 'bg-brandGreen hover:bg-brandGreenHover text-white shadow-[0_4px_14px_rgba(16,185,129,0.39)] hover:-translate-y-1' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                    disabled={!canFinalize(selectedEmployee)}
+                    className={`px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition-all shadow-lg ${canFinalize(selectedEmployee) ? 'bg-brandGreen hover:bg-brandGreenHover text-white shadow-[0_4px_14px_rgba(16,185,129,0.39)] hover:-translate-y-1' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
                   >
                     <PowerOff className="w-4 h-4"/> Concluir Desligamento
                   </button>
@@ -215,6 +259,51 @@ export default function OffboardingModule({ employees = [], assets = [], license
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div className="md:col-span-2 border-t border-gray-800 pt-6">
+                  <h4 className="font-bold text-white flex items-center gap-2 mb-4"><CheckCircle className="w-5 h-5 text-brandGreen"/> Checklist Obrigatório + Termo</h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-center gap-3 bg-black/40 border border-gray-800 rounded-2xl px-4 py-3">
+                      <input type="checkbox" checked={!!offboardingForm?.offboarding_onfly} onChange={(e) => setOffboardingForm(prev => ({ ...prev, offboarding_onfly: e.target.checked }))} className="accent-brandGreen w-4 h-4" />
+                      <span className="text-gray-200 font-semibold">Onfly</span>
+                    </label>
+                    <label className="flex items-center gap-3 bg-black/40 border border-gray-800 rounded-2xl px-4 py-3">
+                      <input type="checkbox" checked={!!offboardingForm?.offboarding_mega} onChange={(e) => setOffboardingForm(prev => ({ ...prev, offboarding_mega: e.target.checked }))} className="accent-brandGreen w-4 h-4" />
+                      <span className="text-gray-200 font-semibold">MegaERP</span>
+                    </label>
+                    <label className="flex items-center gap-3 bg-black/40 border border-gray-800 rounded-2xl px-4 py-3">
+                      <input type="checkbox" checked={!!offboardingForm?.offboarding_adm365} onChange={(e) => setOffboardingForm(prev => ({ ...prev, offboarding_adm365: e.target.checked }))} className="accent-brandGreen w-4 h-4" />
+                      <span className="text-gray-200 font-semibold">Admin365</span>
+                    </label>
+                    <label className="flex items-center gap-3 bg-black/40 border border-gray-800 rounded-2xl px-4 py-3">
+                      <input type="checkbox" checked={!!offboardingForm?.offboarding_license} onChange={(e) => setOffboardingForm(prev => ({ ...prev, offboarding_license: e.target.checked }))} className="accent-brandGreen w-4 h-4" />
+                      <span className="text-gray-200 font-semibold">Equipamentos devolvidos</span>
+                    </label>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-bold text-gray-400 mb-2">URL do termo de devolução assinado (Drive/OneDrive)</label>
+                    <input
+                      type="url"
+                      value={offboardingForm?.termo_url || ''}
+                      onChange={(e) => setOffboardingForm(prev => ({ ...prev, termo_url: e.target.value }))}
+                      placeholder="https://..."
+                      className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-2xl p-3 text-white outline-none"
+                    />
+                  </div>
+
+                  {hasAccess('employees', 'edit') && (
+                    <div className="mt-4 flex flex-col md:flex-row gap-3">
+                      <button onClick={saveChecklist} className="flex-1 bg-brandGreen hover:bg-brandGreenHover text-white py-3 rounded-2xl font-bold shadow-[0_4px_14px_rgba(16,185,129,0.25)] transition-all">
+                        Salvar checklist
+                      </button>
+                      <div className="flex-1 bg-gray-900/60 border border-gray-800 rounded-2xl p-3 text-xs text-gray-400">
+                        Você só consegue concluir quando: **sem pendências** + checklist completo + URL preenchida.
+                      </div>
+                    </div>
+                  )}
                 </div>
 
               </div>

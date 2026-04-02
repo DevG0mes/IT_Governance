@@ -60,11 +60,34 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
   const processPdfImport = async () => {
     if (pdfFiles.length === 0) return;
     setIsImporting(true);
-    // Simulação de OCR para Faturas Dell/PDCs
-    setTimeout(() => { 
-        setIsImporting(false); 
-        Swal.fire('OCR Concluído', 'Dados extraídos dos PDFs com sucesso.', 'success');
-    }, 2000);
+    try {
+      let createdCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+
+      for (const file of pdfFiles) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await api.post('/api/contracts/analyze-pdf', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+
+          if (res.status === 201) createdCount++;
+          else skippedCount++;
+        } catch (err) {
+          errorCount++;
+          console.error('Erro OCR:', err);
+        }
+      }
+
+      Swal.fire('OCR Concluído', `Criados: ${createdCount} • Ignorados: ${skippedCount} • Erros: ${errorCount}`, 'success');
+      registerLog('IMPORT', 'OCR', `PDFs processados=${pdfFiles.length} Criados=${createdCount} Ignorados=${skippedCount} Erros=${errorCount}`);
+      setPdfFiles([]);
+      fetchData();
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const processImport = () => {
@@ -80,6 +103,57 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
         const foundKey = Object.keys(row).find(k => keys.some(searchKey => k.trim().toLowerCase() === searchKey.toLowerCase()));
         return foundKey ? String(row[foundKey]).trim() : '';
       };
+
+      // Preferir bulk para assets (evita N requisições e timeout/429).
+      if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
+        try {
+          const items = previewData.map(row => {
+            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'responsavel', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
+            const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
+
+            const assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
+
+            return {
+              asset_type: assetType,
+              status: emp ? 'Em uso' : (getVal(row, 'status') || 'Disponível'),
+              EmployeeId: emp ? emp.id : null,
+              patrimonio: getVal(row, 'patrimonio', 'patrimônio'),
+              serial_number: getVal(row, 'serial_number', 'serial'),
+              modelo_notebook: getVal(row, 'modelo'),
+              modelo_celular: getVal(row, 'modelo'),
+              imei: getVal(row, 'imei'),
+              numero: getVal(row, 'numero', 'linha'),
+              iccid: getVal(row, 'iccid'),
+              plano: getVal(row, 'plano'),
+              grupo: getVal(row, 'grupo'),
+              responsavel: getVal(row, 'responsavel'),
+              vencimento_plano: getVal(row, 'vencimento_plano'),
+              localizacao: getVal(row, 'localizacao'),
+              projeto: getVal(row, 'projeto'),
+              modelo_starlink: getVal(row, 'modelo'),
+              email: getVal(row, 'email_conta'),
+              senha: getVal(row, 'senha_conta'),
+              senha_roteador: getVal(row, 'senha_wifi')
+            };
+          });
+
+          const bulkRes = await api.post('/api/assets/bulk', { items });
+          const created = bulkRes.data?.created ?? 0;
+          const skipped = bulkRes.data?.skipped ?? 0;
+          const errs = bulkRes.data?.errors?.length ?? 0;
+
+          setIsImporting(false);
+          setPreviewData(null);
+          fetchData();
+          registerLog('IMPORT', 'ETL', `Assets bulk: Criados=${created} Ignorados=${skipped} Erros=${errs}`);
+          Swal.fire('Finalizado', `Criados: ${created} • Ignorados: ${skipped} • Erros: ${errs}`, errs > 0 ? 'warning' : 'success');
+          return;
+        } catch (err) {
+          setIsImporting(false);
+          Swal.fire('Erro', err.response?.data?.error || err.message || 'Falha no bulk de ativos', 'error');
+          return;
+        }
+      }
 
       for (let row of previewData) {
         try {

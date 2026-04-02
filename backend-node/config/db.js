@@ -3,20 +3,24 @@ const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
-console.log('--- 📡 Tentando conectar ao banco de dados PostgreSQL...');
+// Banco oficial atual: PostgreSQL (instância dedicada).
+// Mantemos override por env caso precise rodar em outro dialeto localmente.
+const DB_DIALECT = (process.env.DB_DIALECT || 'postgres').toLowerCase();
+const DB_PORT_DEFAULT = DB_DIALECT === 'postgres' ? 5432 : 3306;
+
+console.log(`--- 📡 Tentando conectar ao banco de dados (${DB_DIALECT})...`);
 
 // 1. Inicialização do Sequelize
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASS,
-  {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT || 5432,
-    dialect: 'postgres',
-    logging: false,
-  }
-);
+const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || DB_PORT_DEFAULT,
+  dialect: DB_DIALECT,
+  logging: false,
+  define: {
+    // Mantém o padrão do projeto (campos existentes são em snake_case/pt-br misto)
+    freezeTableName: true,
+  },
+});
 
 // 2. Importação dos Models
 const User = require('../Models/User')(sequelize, DataTypes);
@@ -50,11 +54,11 @@ AssetChip.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 Asset.hasOne(AssetStarlink, { foreignKey: 'AssetId', as: 'Starlink' });
 AssetStarlink.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
-// 2. Ligação Ativo <-> Colaborador
-Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'Employee' }); 
+// 2. Ligação Ativo <-> Colaborador (dono atual)
+Asset.belongsTo(Employee, { foreignKey: 'EmployeeId', targetKey: 'id', as: 'Employee' });
 Employee.hasMany(Asset, { foreignKey: 'EmployeeId', sourceKey: 'id', as: 'Assets' });
 
-// 3. Colaborador -> Histórico de Atribuições
+// 3. Colaborador -> Histórico de Atribuições (tabela pivô)
 Employee.hasMany(AssetAssignment, { foreignKey: 'EmployeeId', as: 'AssetAssignments' });
 AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' });
 
@@ -74,11 +78,13 @@ EmployeeLicense.belongsTo(License, { foreignKey: 'license_id', as: 'License' });
 const connectDatabase = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Conexão com o PostgreSQL GCP estabelecida com sucesso!');
+    console.log(`✅ Conexão com o banco (${DB_DIALECT}) estabelecida com sucesso!`);
     
     console.log('🔄 Sincronizando estrutura das tabelas...');
-    // 🚨 AJUSTE DE GOVERNANÇA: Usando alter: true para não apagar dados em produção
-    await sequelize.sync({ alter: true }); 
+    // 🚨 Governança: alter pode causar mudanças inesperadas em produção.
+    // Use `DB_SYNC_ALTER=true` apenas em ambientes controlados.
+    const shouldAlter = String(process.env.DB_SYNC_ALTER || '').toLowerCase() === 'true';
+    await sequelize.sync({ alter: shouldAlter });
     console.log('✅ Estrutura do banco de dados SINCRONIZADA com sucesso!');
 
     // Verifica se o admin já existe para evitar erros de duplicidade

@@ -5,17 +5,17 @@ module.exports = (sequelize, DataTypes) => {
             primaryKey: true,
             autoIncrement: true
         },
-        // 🛡️ Ajustado para bater com a coluna real do banco (asset_id)
-        asset_id: {
+        // Mantemos o nome JS em PascalCase (compatível com controllers/associações),
+        // mapeando para as colunas físicas snake_case.
+        AssetId: {
             type: DataTypes.INTEGER,
             allowNull: false,
-            field: 'asset_id' // Mapeia o nome exato da coluna no SQL
+            field: 'asset_id'
         },
-        // 🛡️ Ajustado para bater com a coluna real do banco (employee_id)
-        employee_id: {
+        EmployeeId: {
             type: DataTypes.INTEGER,
             allowNull: false,
-            field: 'employee_id' // Mapeia o nome exato da coluna no SQL
+            field: 'employee_id'
         },
         assigned_at: {
             type: DataTypes.DATE,
@@ -30,7 +30,7 @@ module.exports = (sequelize, DataTypes) => {
     }, {
         tableName: 'asset_assignments',
         timestamps: false,
-        underscored: true // Força o Sequelize a usar snake_case por padrão
+        underscored: false
     });
 
     return AssetAssignment;

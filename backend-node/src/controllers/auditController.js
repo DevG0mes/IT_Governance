@@ -5,7 +5,8 @@ exports.getAll = async (req, res) => {
   try {
     // Busca os logs ordenados do mais recente para o mais antigo 
     const logs = await AuditLog.findAll({
-      order: [['createdAt', 'DESC']],
+      // O model não usa timestamps; ordenamos por 'timestamp' (default NOW) ou 'changed_at' quando existir.
+      order: [['timestamp', 'DESC']],
       limit: 200 // Proteção de performance para a Hostinger
     });
 
@@ -21,7 +22,6 @@ exports.create = async (req, res) => {
   try {
     const input = req.body;
 
-    // O Sequelize cria o registro e preenche o 'createdAt' automaticamente
     const newLog = await AuditLog.create(input);
 
     return res.status(201).json({ 
