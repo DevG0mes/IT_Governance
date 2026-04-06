@@ -5,6 +5,7 @@ const licenseController = require('../controllers/licenseController');
 // Gestão de Licenças
 router.get('/', licenseController.getAll);
 router.post('/', licenseController.create);
+router.post('/bulk-delete', licenseController.bulkDelete);
 router.put('/:id', licenseController.update);
 
 // Atribuição e Revogação

@@ -134,3 +134,30 @@ exports.unassign = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+/** Remove vínculos de colaboradores e depois as licenças (transação única). */
+exports.bulkDelete = async (req, res) => {
+  const raw = req.body?.ids;
+  const ids = Array.isArray(raw)
+    ? [...new Set(raw.map((x) => parseInt(x, 10)).filter((n) => !isNaN(n)))]
+    : [];
+  if (ids.length === 0) {
+    return res.status(400).json({ error: 'Informe ao menos um id de licença válido.' });
+  }
+
+  const t = await sequelize.transaction();
+  try {
+    await EmployeeLicense.destroy({ where: { license_id: ids }, transaction: t });
+    const deleted = await License.destroy({ where: { id: ids }, transaction: t });
+
+    await t.commit();
+    return res.status(200).json({
+      message: `${deleted} licença(s) removida(s).`,
+      deleted,
+    });
+  } catch (error) {
+    if (t) await t.rollback();
+    console.error('❌ Erro na exclusão em massa de licenças:', error.message);
+    return res.status(500).json({ error: error.message || 'Erro ao excluir licenças' });
+  }
+};
