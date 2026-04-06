@@ -122,7 +122,11 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             // impedindo o match com employees e quebrando o vínculo em massa.
             const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
-            const assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
+            const assetType =
+              importCategory === 'Notebooks' ? 'Notebook' :
+              importCategory === 'Celulares' ? 'Celular' :
+              importCategory === 'Starlinks' ? 'Starlink' :
+              'CHIP';
 
             return {
               asset_type: assetType,
@@ -180,7 +184,11 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
             
-            let assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
+            const assetType =
+              importCategory === 'Notebooks' ? 'Notebook' :
+              importCategory === 'Celulares' ? 'Celular' :
+              importCategory === 'Starlinks' ? 'Starlink' :
+              'CHIP';
             const pat = getVal(row, 'patrimonio', 'patrimônio', 'imei', 'numero');
 
             if (assets.some(a => (a.notebook?.patrimonio === pat) || (a.celular?.imei === pat) || (a.chip?.numero === pat))) {
