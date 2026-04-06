@@ -1,7 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Database, Laptop, Smartphone, Wifi, Cpu, Search, X, ArrowDownAZ, ArrowUpZA, Trash2, MoreVertical, Info, Clock, CheckCircle, LogOut, ShieldAlert, AlertTriangle, Users, Wrench, RefreshCw, Loader2, Edit2, UserPlus } from 'lucide-react';
 import { formatCurrency } from '../utils/helpers';
 import api from '../services/api';
+
+function formatDateInput(v) {
+  if (!v) return '';
+  return String(v).slice(0, 10);
+}
+
+function formatDateDisplay(v) {
+  const s = formatDateInput(v);
+  if (!s) return '';
+  const d = new Date(`${s}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('pt-BR');
+}
 
 export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading }) {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -11,9 +23,74 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
 
-  const getInitialAsset = (type) => ({ asset_type: type === 'Todos' ? 'Notebook' : type, status: 'Disponível', serial_number: '', patrimonio: '', modelo_notebook: '', garantia: '', status_garantia: 'No prazo', grupo: '', localizacao: '', projeto: '', modelo_starlink: '', email: '', senha: '', senha_roteador: '', responsavel: '', imei: '', numero: '', iccid: '', modelo_celular: '', plano: '', vencimento_plano: '' });
+  const getInitialAsset = (type) => ({
+    asset_type: type === 'Todos' ? 'Notebook' : type,
+    status: 'Disponível',
+    serial_number: '',
+    patrimonio: '',
+    modelo_notebook: '',
+    garantia: '',
+    status_garantia: 'No prazo',
+    grupo: '',
+    localizacao: '',
+    projeto: '',
+    modelo_starlink: '',
+    email: '',
+    senha: '',
+    senha_roteador: '',
+    responsavel: '',
+    imei: '',
+    numero: '',
+    iccid: '',
+    modelo_celular: '',
+    plano: '',
+    vencimento_plano: '',
+    data_aquisicao: '',
+  });
+
   const [newAsset, setNewAsset] = useState(getInitialAsset('Todos'));
-  
+
+  const catalogNomePorCategoria = useMemo(() => {
+    const map = { Notebook: [], Celular: [], CHIP: [], Starlink: [] };
+    (catalogItems || []).forEach((c) => {
+      const cat = (c.category || '').trim();
+      const nome = (c.nome || '').trim();
+      if (nome && Object.prototype.hasOwnProperty.call(map, cat)) map[cat].push(nome);
+    });
+    Object.keys(map).forEach((k) => {
+      map[k] = [...new Set(map[k])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    });
+    return map;
+  }, [catalogItems]);
+
+  const notebookModelOptions = useMemo(() => {
+    const base = catalogNomePorCategoria.Notebook;
+    const cur = (newAsset.modelo_notebook || '').trim();
+    if (cur && !base.includes(cur)) return [cur, ...base];
+    return base;
+  }, [catalogNomePorCategoria.Notebook, newAsset.modelo_notebook]);
+
+  const celularModelOptions = useMemo(() => {
+    const base = catalogNomePorCategoria.Celular;
+    const cur = (newAsset.modelo_celular || '').trim();
+    if (cur && !base.includes(cur)) return [cur, ...base];
+    return base;
+  }, [catalogNomePorCategoria.Celular, newAsset.modelo_celular]);
+
+  const chipPlanoOptions = useMemo(() => {
+    const base = catalogNomePorCategoria.CHIP;
+    const cur = (newAsset.plano || '').trim();
+    if (cur && !base.includes(cur)) return [cur, ...base];
+    return base;
+  }, [catalogNomePorCategoria.CHIP, newAsset.plano]);
+
+  const starlinkModelOptions = useMemo(() => {
+    const base = catalogNomePorCategoria.Starlink;
+    const cur = (newAsset.modelo_starlink || '').trim();
+    if (cur && !base.includes(cur)) return [cur, ...base];
+    return base;
+  }, [catalogNomePorCategoria.Starlink, newAsset.modelo_starlink]);
+
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [isEditingAsset, setIsEditingAsset] = useState(false); 
   const [activeAsset, setActiveAsset] = useState(null);
@@ -56,11 +133,15 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
       return (
         nb?.patrimonio?.toLowerCase().includes(term) || 
         nb?.serial_number?.toLowerCase().includes(term) || 
-        cel?.imei?.toLowerCase().includes(term) || 
+        nb?.modelo?.toLowerCase().includes(term) ||
+        cel?.imei?.toLowerCase().includes(term) ||
+        cel?.modelo?.toLowerCase().includes(term) || 
         ch?.numero?.toLowerCase().includes(term) || 
         ch?.iccid?.toLowerCase().includes(term) || 
+        ch?.plano?.toLowerCase().includes(term) ||
         st?.grupo?.toLowerCase().includes(term) ||
         st?.projeto?.toLowerCase().includes(term) ||
+        st?.modelo?.toLowerCase().includes(term) ||
         cel?.grupo?.toLowerCase().includes(term) ||
         ch?.grupo?.toLowerCase().includes(term)
       );
@@ -111,7 +192,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           senha: st?.senha || '',
           senha_roteador: st?.senha_roteador || '',
           grupo: cel?.grupo || ch?.grupo || st?.grupo || '',
-          responsavel: cel?.responsavel || ch?.responsavel || st?.responsavel || ''
+          responsavel: cel?.responsavel || ch?.responsavel || st?.responsavel || '',
+          data_aquisicao: formatDateInput(nb?.data_aquisicao || cel?.data_aquisicao || ch?.data_aquisicao || st?.data_aquisicao),
       };
       setNewAsset(flatAsset);
       setIsEditingAsset(true);
@@ -303,10 +385,10 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      {asset.asset_type === 'Notebook' && nb && (<div><p className="font-semibold text-gray-200">{nb.patrimonio}</p><p className="text-xs text-gray-500">SN: {nb.serial_number}</p></div>)}
-                      {asset.asset_type === 'Celular' && cel && (<div><p className="font-semibold text-gray-200">IMEI: {cel.imei}</p></div>)}
-                      {asset.asset_type === 'CHIP' && ch && (<div><p className="font-semibold text-gray-200">Nº: {ch.numero}</p>{ch.iccid && <p className="text-xs text-gray-500">ICCID: {ch.iccid}</p>}</div>)}
-                      {asset.asset_type === 'Starlink' && st && (<div><p className="font-semibold text-gray-200">{st.modelo}</p>{st.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {st.projeto}</p>}</div>)}
+                      {asset.asset_type === 'Notebook' && nb && (<div><p className="font-semibold text-gray-200">{nb.patrimonio}</p>{nb.modelo && <p className="text-xs text-gray-400">Modelo: {nb.modelo}</p>}<p className="text-xs text-gray-500">SN: {nb.serial_number}</p>{nb.data_aquisicao && <p className="text-[10px] text-gray-500">Aquisição: {formatDateDisplay(nb.data_aquisicao)}</p>}</div>)}
+                      {asset.asset_type === 'Celular' && cel && (<div><p className="font-semibold text-gray-200">IMEI: {cel.imei || '—'}</p>{cel.modelo && <p className="text-xs text-gray-400">Modelo: {cel.modelo}</p>}{cel.data_aquisicao && <p className="text-[10px] text-gray-500">Aquisição: {formatDateDisplay(cel.data_aquisicao)}</p>}</div>)}
+                      {asset.asset_type === 'CHIP' && ch && (<div><p className="font-semibold text-gray-200">Nº: {ch.numero}</p>{ch.plano && <p className="text-xs text-gray-400">Plano: {ch.plano}</p>}{ch.iccid && <p className="text-xs text-gray-500">ICCID: {ch.iccid}</p>}{ch.data_aquisicao && <p className="text-[10px] text-gray-500">Aquisição: {formatDateDisplay(ch.data_aquisicao)}</p>}</div>)}
+                      {asset.asset_type === 'Starlink' && st && (<div><p className="font-semibold text-gray-200">{st.modelo}</p>{st.projeto && <p className="text-xs text-blue-400 mt-1">Proj: {st.projeto}</p>}{st.data_aquisicao && <p className="text-[10px] text-gray-500">Aquisição: {formatDateDisplay(st.data_aquisicao)}</p>}</div>)}
                       
                       {groupName && <p className="text-[10px] bg-gray-800 text-brandGreen px-2 py-0.5 rounded inline-block mt-1 mr-2 border border-brandGreen/20">{groupName}</p>}
                       {ch?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {ch.vencimento_plano}</p>}
@@ -376,14 +458,84 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
               <select required disabled={isEditingAsset} value={newAsset.asset_type} onChange={(e) => setNewAsset({...newAsset, asset_type: e.target.value})} className={`w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none ${isEditingAsset ? 'opacity-50 cursor-not-allowed' : 'hover:border-brandGreen/50 focus:border-brandGreen cursor-pointer transition-colors'}`}>
                 <option value="Notebook">Notebook</option><option value="Celular">Celular</option><option value="Starlink">Starlink</option><option value="CHIP">CHIP</option>
               </select>
+              <p className="text-[11px] text-gray-500 -mt-2">Modelo ou plano (CHIP) deve existir no Catálogo — cada unidade pode ter data de aquisição diferente.</p>
               
-              {newAsset.asset_type === 'Notebook' && (<><input type="text" required placeholder="Patrimônio (Ex: PSI-001)" value={newAsset.patrimonio} onChange={(e) => setNewAsset({...newAsset, patrimonio: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="text" required placeholder="Serial Number" value={newAsset.serial_number} onChange={(e) => setNewAsset({...newAsset, serial_number: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /></>)}
-              {newAsset.asset_type === 'Celular' && (<input type="text" placeholder="IMEI (Opcional)" value={newAsset.imei} onChange={(e) => setNewAsset({...newAsset, imei: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />)}
-              {newAsset.asset_type === 'CHIP' && (<><input type="text" required placeholder="Número da Linha" value={newAsset.numero} onChange={(e) => setNewAsset({...newAsset, numero: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="text" placeholder="ICCID (Opcional)" value={newAsset.iccid} onChange={(e) => setNewAsset({...newAsset, iccid: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" /><input type="date" placeholder="Vencimento do Plano" value={newAsset.vencimento_plano} onChange={(e) => setNewAsset({...newAsset, vencimento_plano: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-gray-400 outline-none" title="Vencimento do Plano"/></>)}
+              {newAsset.asset_type === 'Notebook' && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Modelo (catálogo)</label>
+                    <select required value={newAsset.modelo_notebook} onChange={(e) => setNewAsset({ ...newAsset, modelo_notebook: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none">
+                      <option value="" disabled>Selecione o modelo...</option>
+                      {notebookModelOptions.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Data de aquisição</label>
+                    <input type="date" value={newAsset.data_aquisicao} onChange={(e) => setNewAsset({ ...newAsset, data_aquisicao: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
+                  <input type="text" required placeholder="Patrimônio (Ex: PSI-001)" value={newAsset.patrimonio} onChange={(e) => setNewAsset({...newAsset, patrimonio: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <input type="text" required placeholder="Serial Number" value={newAsset.serial_number} onChange={(e) => setNewAsset({...newAsset, serial_number: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                </>
+              )}
+              {newAsset.asset_type === 'Celular' && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Modelo (catálogo)</label>
+                    <select required value={newAsset.modelo_celular} onChange={(e) => setNewAsset({ ...newAsset, modelo_celular: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none">
+                      <option value="" disabled>Selecione o modelo...</option>
+                      {celularModelOptions.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Data de aquisição</label>
+                    <input type="date" value={newAsset.data_aquisicao} onChange={(e) => setNewAsset({ ...newAsset, data_aquisicao: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
+                  <input type="text" placeholder="IMEI (Opcional)" value={newAsset.imei} onChange={(e) => setNewAsset({...newAsset, imei: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                </>
+              )}
+              {newAsset.asset_type === 'CHIP' && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Plano (catálogo)</label>
+                    <select required value={newAsset.plano} onChange={(e) => setNewAsset({ ...newAsset, plano: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none">
+                      <option value="" disabled>Selecione o plano...</option>
+                      {chipPlanoOptions.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Data de aquisição</label>
+                    <input type="date" value={newAsset.data_aquisicao} onChange={(e) => setNewAsset({ ...newAsset, data_aquisicao: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
+                  <input type="text" required placeholder="Número da Linha" value={newAsset.numero} onChange={(e) => setNewAsset({...newAsset, numero: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <input type="text" placeholder="ICCID (Opcional)" value={newAsset.iccid} onChange={(e) => setNewAsset({...newAsset, iccid: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Vencimento do plano (fatura)</label>
+                    <input type="date" value={newAsset.vencimento_plano} onChange={(e) => setNewAsset({...newAsset, vencimento_plano: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-gray-400 outline-none" title="Vencimento do Plano" />
+                  </div>
+                </>
+              )}
               
               {newAsset.asset_type === 'Starlink' && (
                 <>
-                  <input type="text" required placeholder="Modelo (Ex: Kit V2, Actuated)" value={newAsset.modelo_starlink || ''} onChange={(e) => setNewAsset({...newAsset, modelo_starlink: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Modelo (catálogo)</label>
+                    <select required value={newAsset.modelo_starlink || ''} onChange={(e) => setNewAsset({ ...newAsset, modelo_starlink: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none">
+                      <option value="" disabled>Selecione o modelo...</option>
+                      {starlinkModelOptions.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Data de aquisição</label>
+                    <input type="date" value={newAsset.data_aquisicao} onChange={(e) => setNewAsset({ ...newAsset, data_aquisicao: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
                   <input type="text" required placeholder="Localização" value={newAsset.localizacao} onChange={(e) => setNewAsset({...newAsset, localizacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
                   <input type="text" placeholder="Projeto (Ex: Parque Eólico Ventos)" value={newAsset.projeto || ''} onChange={(e) => setNewAsset({...newAsset, projeto: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
                   
@@ -462,6 +614,12 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                 <p className="text-gray-300 mb-1">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
                 <p className="text-gray-300 mb-1">Status: <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span></p>
                 <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{nb?.patrimonio || cel?.imei || ch?.numero || st?.grupo}</span></p>
+                {(nb?.modelo || cel?.modelo || st?.modelo || ch?.plano) && (
+                  <p className="text-gray-300 text-sm mt-1">Modelo / Plano: <span className="font-bold text-white">{nb?.modelo || cel?.modelo || st?.modelo || ch?.plano}</span></p>
+                )}
+                {(nb?.data_aquisicao || cel?.data_aquisicao || ch?.data_aquisicao || st?.data_aquisicao) && (
+                  <p className="text-gray-300 text-sm">Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(nb?.data_aquisicao || cel?.data_aquisicao || ch?.data_aquisicao || st?.data_aquisicao)}</span></p>
+                )}
                 
                 {viewAssetDetails.asset_type === 'CHIP' && ch?.iccid && (
                     <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{ch.iccid}</span></p>

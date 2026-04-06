@@ -359,6 +359,46 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
+      {finops && filtroAtivo === 'Todos' && finops?.hardware?.valorResidualEstimado != null && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-finops-reveal">
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-1">Valor patrimonial residual (estim.)</h3>
+            <p className="text-2xl font-bold text-cyan-300">{formatCurrency(finops.hardware.valorResidualEstimado)}</p>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Depreciação linear (~{finops.hardware.depreciacao?.mesesVidaUtil ?? 36} meses) por data de aquisição; sem data mantém o valor de catálogo no residual. Ajuste{' '}
+              <code className="text-gray-400">FINOPS_DEPRECIATION_MONTHS</code> no backend se precisar.
+            </p>
+          </div>
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl overflow-x-auto">
+            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">Investimento por modelo ou plano</h3>
+            {(finops.hardware.investimentoPorModelo || []).length > 0 ? (
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="text-gray-500 border-b border-gray-800">
+                    <th className="py-2 pr-2">Tipo</th>
+                    <th className="py-2 pr-2">Modelo / plano</th>
+                    <th className="py-2 pr-2 text-center">Unid.</th>
+                    <th className="py-2 text-right">Investido (cat.)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finops.hardware.investimentoPorModelo.slice(0, 10).map((row, i) => (
+                    <tr key={`${row.category}-${row.nomeModelo}-${i}`} className="border-b border-gray-800/50 text-gray-300">
+                      <td className="py-2 pr-2">{row.category}</td>
+                      <td className="py-2 pr-2 font-medium text-white">{row.nomeModelo}</td>
+                      <td className="py-2 pr-2 text-center">{row.count}</td>
+                      <td className="py-2 text-right text-brandGreen font-semibold">{formatCurrency(row.investimentoTotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-gray-500 text-sm italic">Nenhum ativo com correspondência no catálogo.</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {contractVariance != null && filtroAtivo === 'Todos' && (
         <div className="bg-gradient-to-r from-gray-900/90 to-gray-900/60 border border-gray-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 animate-finops-reveal hover:border-brandGreen/25 transition-colors">
           <div className="flex items-center gap-2 text-gray-300 text-sm">
@@ -687,11 +727,21 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {finops?.hardware?.assetsSemMatchCatalogo > 0 && filtroAtivo === 'Todos' && (
-        <p className="text-xs text-amber-400/90 text-center">
-          {finops.hardware.assetsSemMatchCatalogo} ativo(s) com modelo/plano sem valor no catálogo — cadastre em Catálogo para valuation completo.
-        </p>
-      )}
+      {(finops?.hardware?.assetsSemMatchCatalogo > 0 || finops?.hardware?.ativosComCatalogoSemDataAquisicao > 0) &&
+        filtroAtivo === 'Todos' && (
+          <div className="text-xs text-amber-400/90 text-center space-y-1">
+            {finops.hardware.assetsSemMatchCatalogo > 0 && (
+              <p>
+                {finops.hardware.assetsSemMatchCatalogo} ativo(s) com modelo/plano sem valor no catálogo — cadastre em Catálogo para valuation completo.
+              </p>
+            )}
+            {finops.hardware.ativosComCatalogoSemDataAquisicao > 0 && (
+              <p>
+                {finops.hardware.ativosComCatalogoSemDataAquisicao} ativo(s) já precificados no catálogo sem data de aquisição — preencha no inventário para depreciação mais fiel.
+              </p>
+            )}
+          </div>
+        )}
 
       <div className="mt-8">
         <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
