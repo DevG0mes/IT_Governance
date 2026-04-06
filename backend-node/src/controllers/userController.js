@@ -4,8 +4,9 @@ const { User } = require('../../config/db');
 exports.getAll = async (req, res) => {
   try {
     const users = await User.findAll({
-      // 🛡️ Segurança: Nunca envia o campo 'senha' para o Frontend
-      attributes: ['id', 'nome', 'email', 'cargo', 'permissionsJSON', 'createdAt']
+      // 🛡️ Segurança: Em vez de digitar os nomes das colunas e correr o risco de errar,
+      attributes: { exclude: ['senha'] },
+      order: [['id', 'ASC']]
     });
     return res.status(200).json({ data: users });
   } catch (error) {
