@@ -117,7 +117,10 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
       if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
         try {
           const items = previewData.map(row => {
-            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'responsavel', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
+            // IMPORTANTE: não usar "responsavel" aqui.
+            // Nos CSVs de CHIP/Starlink existe a coluna "Responsavel" (nome), e isso estava sendo capturado antes do e-mail,
+            // impedindo o match com employees e quebrando o vínculo em massa.
+            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
             const assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
 
@@ -174,7 +177,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           }
           
           else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
-            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'responsavel', 'email_colaborador', 'email_responsavel'));
+            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
             
             let assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
