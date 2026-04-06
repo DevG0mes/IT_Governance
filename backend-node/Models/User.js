@@ -23,19 +23,9 @@ module.exports = (sequelize, DataTypes) => {
     },
     permissionsJSON: { 
       type: DataTypes.TEXT 
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW
     }
   }, { 
     tableName: 'users', 
-    timestamps: true 
+    timestamps: false 
   });
 };
