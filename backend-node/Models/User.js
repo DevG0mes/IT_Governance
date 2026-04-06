@@ -23,9 +23,19 @@ module.exports = (sequelize, DataTypes) => {
     },
     permissionsJSON: { 
       type: DataTypes.TEXT 
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
     }
   }, { 
     tableName: 'users', 
-    timestamps: false // 🚨 CORRIGIDO: O último vilão dos Erros 500 foi desativado!
+    timestamps: true // 🚨 CORRIGIDO: O último vilão dos Erros 500 foi desativado!
   });
 };
