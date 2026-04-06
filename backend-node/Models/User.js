@@ -36,6 +36,6 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, { 
     tableName: 'users', 
-    timestamps: true // 🚨 CORRIGIDO: O último vilão dos Erros 500 foi desativado!
+    timestamps: true 
   });
 };
