@@ -477,6 +477,19 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                   </div>
                   <input type="text" required placeholder="Patrimônio (Ex: PSI-001)" value={newAsset.patrimonio} onChange={(e) => setNewAsset({...newAsset, patrimonio: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
                   <input type="text" required placeholder="Serial Number" value={newAsset.serial_number} onChange={(e) => setNewAsset({...newAsset, serial_number: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Garantia até (texto ou data)</label>
+                    <input type="text" placeholder="Ex: 06/06/2029" value={newAsset.garantia} onChange={(e) => setNewAsset({ ...newAsset, garantia: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Situação da garantia</label>
+                    <select value={newAsset.status_garantia} onChange={(e) => setNewAsset({ ...newAsset, status_garantia: e.target.value })} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none">
+                      <option value="No prazo">No prazo</option>
+                      <option value="ATIVO">ATIVO</option>
+                      <option value="VENCIDO">VENCIDO</option>
+                      <option value="Vencido">Vencido</option>
+                    </select>
+                  </div>
                 </>
               )}
               {newAsset.asset_type === 'Celular' && (
@@ -602,46 +615,122 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
         const cel = viewAssetDetails.Celular || viewAssetDetails.celular;
         const ch = viewAssetDetails.Chip || viewAssetDetails.chip;
         const st = viewAssetDetails.Starlink || viewAssetDetails.starlink;
+        const assignments = viewAssetDetails.AssetAssignments || viewAssetDetails.assignments || [];
+        const activeAsg = assignments.find((a) => !a.returned_at);
+        const empAtivo = activeAsg?.Employee || activeAsg?.employee;
 
         return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl my-8">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-white">Detalhes do Ativo</h2>
+                <h2 className="text-xl font-bold text-white">Detalhes do equipamento</h2>
                 <button onClick={() => setViewAssetDetails(null)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
               </div>
-              <div className="bg-black/50 p-5 rounded-xl border border-gray-800">
-                <p className="text-gray-300 mb-1">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
-                <p className="text-gray-300 mb-1">Status: <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span></p>
-                <p className="text-gray-300 mt-2 border-t border-gray-800 pt-2">Identificação: <span className="font-bold text-white">{nb?.patrimonio || cel?.imei || ch?.numero || st?.grupo}</span></p>
-                {(nb?.modelo || cel?.modelo || st?.modelo || ch?.plano) && (
-                  <p className="text-gray-300 text-sm mt-1">Modelo / Plano: <span className="font-bold text-white">{nb?.modelo || cel?.modelo || st?.modelo || ch?.plano}</span></p>
+              <div className="bg-black/50 p-5 rounded-xl border border-gray-800 space-y-3 text-sm">
+                <p className="text-gray-300">Tipo: <span className="font-bold text-white">{viewAssetDetails.asset_type}</span></p>
+                <p className="text-gray-300">
+                  Status operacional:{' '}
+                  <span className="font-bold text-gray-100 uppercase text-xs px-2 py-0.5 bg-gray-700 rounded-full">{viewAssetDetails.status}</span>
+                </p>
+
+                {viewAssetDetails.asset_type === 'Notebook' && nb && (
+                  <div className="border-t border-gray-800 pt-3 space-y-2">
+                    <p className="text-xs font-bold text-gray-500 uppercase">Notebook</p>
+                    <p className="text-gray-300">Patrimônio: <span className="font-bold text-white">{nb.patrimonio || '—'}</span></p>
+                    <p className="text-gray-300">Serial: <span className="font-bold text-white">{nb.serial_number || '—'}</span></p>
+                    <p className="text-gray-300">Modelo (catálogo): <span className="font-bold text-brandGreen">{nb.modelo || '—'}</span></p>
+                    {nb.garantia && <p className="text-gray-300">Garantia até: <span className="font-bold text-white">{nb.garantia}</span></p>}
+                    {nb.status_garantia && (
+                      <p className="text-gray-300">
+                        Situação garantia: <span className="font-bold text-white">{nb.status_garantia}</span>
+                      </p>
+                    )}
+                    {nb.data_aquisicao && (
+                      <p className="text-gray-300">
+                        Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(nb.data_aquisicao)}</span>
+                      </p>
+                    )}
+                  </div>
                 )}
-                {(nb?.data_aquisicao || cel?.data_aquisicao || ch?.data_aquisicao || st?.data_aquisicao) && (
-                  <p className="text-gray-300 text-sm">Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(nb?.data_aquisicao || cel?.data_aquisicao || ch?.data_aquisicao || st?.data_aquisicao)}</span></p>
+
+                {viewAssetDetails.asset_type === 'Celular' && cel && (
+                  <div className="border-t border-gray-800 pt-3 space-y-2">
+                    <p className="text-xs font-bold text-gray-500 uppercase">Celular</p>
+                    <p className="text-gray-300">IMEI: <span className="font-bold text-white">{cel.imei || '—'}</span></p>
+                    <p className="text-gray-300">Modelo (catálogo): <span className="font-bold text-brandGreen">{cel.modelo || '—'}</span></p>
+                    {cel.grupo && <p className="text-gray-300">Grupo: <span className="font-bold text-white">{cel.grupo}</span></p>}
+                    {cel.responsavel && (
+                      <p className="text-gray-300">Responsável local: <span className="font-bold text-white">{cel.responsavel}</span></p>
+                    )}
+                    {cel.data_aquisicao && (
+                      <p className="text-gray-300">
+                        Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(cel.data_aquisicao)}</span>
+                      </p>
+                    )}
+                  </div>
                 )}
-                
-                {viewAssetDetails.asset_type === 'CHIP' && ch?.iccid && (
-                    <p className="text-gray-300 mb-1">ICCID: <span className="font-bold text-white">{ch.iccid}</span></p>
+
+                {viewAssetDetails.asset_type === 'CHIP' && ch && (
+                  <div className="border-t border-gray-800 pt-3 space-y-2">
+                    <p className="text-xs font-bold text-gray-500 uppercase">CHIP / linha</p>
+                    {ch.iccid && <p className="text-gray-300">ICCID: <span className="font-bold text-white break-all">{ch.iccid}</span></p>}
+                    <p className="text-gray-300">Número: <span className="font-bold text-white">{ch.numero || '—'}</span></p>
+                    <p className="text-gray-300">Plano (catálogo): <span className="font-bold text-brandGreen">{ch.plano || '—'}</span></p>
+                    {ch.grupo && <p className="text-gray-300">Grupo: <span className="font-bold text-white">{ch.grupo}</span></p>}
+                    {ch.responsavel && (
+                      <p className="text-gray-300">Responsável: <span className="font-bold text-white">{ch.responsavel}</span></p>
+                    )}
+                    {ch.vencimento_plano && (
+                      <p className="text-gray-300">
+                        Vencimento do plano: <span className="font-bold text-red-300">{formatDateDisplay(ch.vencimento_plano)}</span>
+                      </p>
+                    )}
+                    {ch.data_aquisicao && (
+                      <p className="text-gray-300">
+                        Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(ch.data_aquisicao)}</span>
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {viewAssetDetails.asset_type === 'Starlink' && st && (
-                    <div className="mt-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
-                        <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1"><Wifi className="w-3 h-3 text-blue-400"/> Info. Rede & Credenciais</p>
-                        <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{st.modelo || '-'}</span></p>
-                        <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{st.projeto || '-'}</span></p>
-                        <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{st.localizacao || '-'}</span></p>
-                        <div className="border-t border-gray-700/50 my-2 pt-2"></div>
-                        <p className="text-gray-400 text-xs">E-mail: <span className="font-semibold text-white">{st.email || 'Não informado'}</span></p>
-                        <p className="text-gray-400 text-xs">Senha Conta: <span className="font-semibold text-white">{st.senha || 'Não informada'}</span></p>
-                        <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{st.senha_roteador || 'Não informada'}</span></p>
-                    </div>
+                  <div className="mt-2 bg-gray-800/40 p-4 rounded-xl border border-gray-700 space-y-2">
+                    <p className="text-gray-400 text-xs font-bold uppercase mb-2 flex items-center gap-1">
+                      <Wifi className="w-3 h-3 text-blue-400" /> Starlink
+                    </p>
+                    <p className="text-gray-300 text-sm">Modelo: <span className="font-bold text-white">{st.modelo || '-'}</span></p>
+                    <p className="text-gray-300 text-sm">Projeto: <span className="font-bold text-blue-400">{st.projeto || '-'}</span></p>
+                    <p className="text-gray-300 text-sm">Localização: <span className="font-bold text-white">{st.localizacao || '-'}</span></p>
+                    {st.grupo && <p className="text-gray-300 text-sm">Grupo: <span className="font-bold text-white">{st.grupo}</span></p>}
+                    {st.responsavel && (
+                      <p className="text-gray-300 text-sm">Responsável: <span className="font-bold text-white">{st.responsavel}</span></p>
+                    )}
+                    {st.data_aquisicao && (
+                      <p className="text-gray-300 text-sm">
+                        Data de aquisição: <span className="font-bold text-white">{formatDateDisplay(st.data_aquisicao)}</span>
+                      </p>
+                    )}
+                    <div className="border-t border-gray-700/50 my-2 pt-2" />
+                    <p className="text-gray-400 text-xs">E-mail conta: <span className="font-semibold text-white">{st.email || '—'}</span></p>
+                    <p className="text-gray-400 text-xs">Senha conta: <span className="font-semibold text-white">{st.senha || '—'}</span></p>
+                    <p className="text-gray-400 text-xs">Senha Wi-Fi: <span className="font-semibold text-brandGreen">{st.senha_roteador || '—'}</span></p>
+                  </div>
                 )}
 
-                {ch?.vencimento_plano && <p className="text-gray-300 mb-1 mt-2">Vencimento do Plano: <span className="font-bold text-red-400">{ch.vencimento_plano}</span></p>}
-                
-                <div className="mt-4 pt-4 border-t border-gray-700">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo Base)</p>
+                <div className="border-t border-gray-800 pt-3">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">Colaborador vinculado</p>
+                  {empAtivo ? (
+                    <div>
+                      <p className="text-white font-semibold">{empAtivo.nome}</p>
+                      <p className="text-gray-400 text-xs">{empAtivo.email}</p>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 italic text-sm">Nenhum colaborador atribuído no momento.</p>
+                  )}
+                </div>
+
+                <div className="mt-2 pt-4 border-t border-gray-700">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valuation (Catálogo)</p>
                   <p className="text-xl font-bold text-brandGreen">
                     {viewAssetDetails.catalogValue ? formatCurrency(viewAssetDetails.catalogValue) : 'Não precificado'}
                   </p>

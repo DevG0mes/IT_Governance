@@ -14,9 +14,14 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
   const downloadTemplate = () => {
     let headers = "";
     if (importCategory === 'Colaboradores') headers = "Nome;Email;Departamento";
-    if (importCategory === 'Notebooks') headers = "Patrimonio;Serial_Number;Modelo;Garantia;Status_Garantia;Status;Email";
-    if (importCategory === 'Celulares') headers = "IMEI;Modelo;Grupo;Responsavel;Status;Email";
-    if (importCategory === 'CHIPs') headers = "Numero;ICCID;Plano;Grupo;Responsavel;Vencimento_Plano;Status;Email";
+    if (importCategory === 'Notebooks')
+      headers =
+        "Patrimonio;Serial_Number;Modelo;Garantia;Status_Garantia;Status;Email_Colaborador;Data_Aquisicao";
+    if (importCategory === 'Celulares')
+      headers = "IMEI;Modelo;Status;Email_Colaborador;Grupo;Responsavel;Data_Aquisicao";
+    if (importCategory === 'CHIPs')
+      headers =
+        "ICCID;Numero;Plano;Grupo;Responsavel;Status;Email_Colaborador;Vencimento_Plano;Data_Aquisicao";
     if (importCategory === 'Starlinks') headers = "Grupo;Modelo;Localizacao;Projeto;Responsavel;Email_Responsavel;Email_Conta;Senha_Conta;Senha_Wifi;Status";
     if (importCategory === 'Medições de Contratos') headers = "Servico;Mes_Competencia;Valor_Realizado";
     if (importCategory === 'Licenças (Cadastro)') headers = "Software;Fornecedor;Plano;Custo;Quantidade";
@@ -120,7 +125,9 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             // IMPORTANTE: não usar "responsavel" aqui.
             // Nos CSVs de CHIP/Starlink existe a coluna "Responsavel" (nome), e isso estava sendo capturado antes do e-mail,
             // impedindo o match com employees e quebrando o vínculo em massa.
-            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
+            const emailColab = normalizeEmail(
+              getVal(row, 'email_colaborador', 'email', 'usuario', 'email_responsavel')
+            );
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
             const assetType =
               importCategory === 'Notebooks' ? 'Notebook' :
@@ -128,28 +135,35 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               importCategory === 'Starlinks' ? 'Starlink' :
               'CHIP';
 
+            const statusCell = getVal(row, 'status');
+            const gRaw = getVal(row, 'garantia');
+            const garantiaNorm = gRaw ? parseDateForDB(gRaw) || gRaw : '';
+
             return {
               asset_type: assetType,
-              status: emp ? 'Em uso' : (getVal(row, 'status') || 'Disponível'),
+              status: statusCell || (emp ? 'Em uso' : 'Disponível'),
               EmployeeId: emp ? emp.id : null,
               patrimonio: getVal(row, 'patrimonio', 'patrimônio'),
               serial_number: getVal(row, 'serial_number', 'serial'),
-              modelo_notebook: getVal(row, 'modelo'),
-              modelo_celular: getVal(row, 'modelo'),
+              modelo_notebook: importCategory === 'Notebooks' ? getVal(row, 'modelo') : undefined,
+              modelo_celular: importCategory === 'Celulares' ? getVal(row, 'modelo') : undefined,
+              modelo_starlink: importCategory === 'Starlinks' ? getVal(row, 'modelo') : undefined,
+              garantia: importCategory === 'Notebooks' ? garantiaNorm : undefined,
+              status_garantia: importCategory === 'Notebooks' ? getVal(row, 'status_garantia') : undefined,
               imei: getVal(row, 'imei'),
               numero: getVal(row, 'numero', 'linha'),
               iccid: getVal(row, 'iccid'),
               plano: getVal(row, 'plano'),
               grupo: getVal(row, 'grupo'),
               responsavel: getVal(row, 'responsavel'),
-              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')), // 🛡️ Proteção aplicada aqui
+              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')),
+              data_aquisicao: parseDateForDB(getVal(row, 'data_aquisicao')),
               localizacao: getVal(row, 'localizacao'),
               projeto: getVal(row, 'projeto'),
-              modelo_starlink: getVal(row, 'modelo'),
               email_responsavel: getVal(row, 'email_responsavel'),
               email: getVal(row, 'email_conta'),
               senha: getVal(row, 'senha_conta'),
-              senha_roteador: getVal(row, 'senha_wifi')
+              senha_roteador: getVal(row, 'senha_wifi'),
             };
           });
 
@@ -197,9 +211,11 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           }
           
           else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
-            const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'email_colaborador', 'email_responsavel'));
+            const emailColab = normalizeEmail(
+              getVal(row, 'email_colaborador', 'email', 'usuario', 'email_responsavel')
+            );
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
-            
+
             const assetType =
               importCategory === 'Notebooks' ? 'Notebook' :
               importCategory === 'Celulares' ? 'Celular' :
@@ -211,19 +227,35 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               throw new Error(`Item ${pat} já existe no sistema.`);
             }
 
+            const gRaw = getVal(row, 'garantia');
+            const garantiaNorm = gRaw ? parseDateForDB(gRaw) || gRaw : '';
+            const statusCell = getVal(row, 'status');
+
             const payload = {
               asset_type: assetType,
-              status: emp ? 'Em uso' : (getVal(row, 'status') || 'Disponível'),
+              status: statusCell || (emp ? 'Em uso' : 'Disponível'),
               EmployeeId: emp ? emp.id : null,
               patrimonio: getVal(row, 'patrimonio', 'patrimônio'),
               serial_number: getVal(row, 'serial_number', 'serial'),
-              modelo: getVal(row, 'modelo'),
+              modelo_notebook: assetType === 'Notebook' ? getVal(row, 'modelo') : undefined,
+              modelo_celular: assetType === 'Celular' ? getVal(row, 'modelo') : undefined,
+              modelo_starlink: assetType === 'Starlink' ? getVal(row, 'modelo') : undefined,
+              garantia: assetType === 'Notebook' ? garantiaNorm : undefined,
+              status_garantia: assetType === 'Notebook' ? getVal(row, 'status_garantia') : undefined,
+              data_aquisicao: parseDateForDB(getVal(row, 'data_aquisicao')),
               imei: getVal(row, 'imei'),
               numero: getVal(row, 'numero', 'linha'),
               iccid: getVal(row, 'iccid'),
               plano: getVal(row, 'plano'),
               grupo: getVal(row, 'grupo'),
-              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')) // 🛡️ Proteção aplicada aqui também (caso use o Fallback)
+              responsavel: getVal(row, 'responsavel'),
+              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')),
+              localizacao: getVal(row, 'localizacao'),
+              projeto: getVal(row, 'projeto'),
+              email_responsavel: getVal(row, 'email_responsavel'),
+              email: getVal(row, 'email_conta'),
+              senha: getVal(row, 'senha_conta'),
+              senha_roteador: getVal(row, 'senha_wifi'),
             };
 
             const res = await api.post('/api/assets', payload);
@@ -385,6 +417,14 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           <button onClick={downloadTemplate} className="w-full flex items-center justify-center gap-2 bg-gray-800 text-white py-2.5 rounded-xl hover:bg-gray-700 transition-all shadow-lg">
             <Download size={18} /> Baixar Modelo CSV
           </button>
+          {['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory) && (
+            <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+              Notebooks e celulares: coluna <span className="text-gray-400">Modelo</span> deve coincidir com o Catálogo. CHIPs: coluna{' '}
+              <span className="text-gray-400">Plano</span>. <span className="text-gray-400">Email_Colaborador</span> vincula o equipamento ao
+              colaborador. Opcional: <span className="text-gray-400">Data_Aquisicao</span> (AAAA-MM-DD ou DD/MM/AAAA); em notebooks{' '}
+              <span className="text-gray-400">Garantia</span> e <span className="text-gray-400">Status_Garantia</span>.
+            </p>
+          )}
         </div>
 
         <div className="p-6 bg-black/40 rounded-2xl border border-gray-800">
