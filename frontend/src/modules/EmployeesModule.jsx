@@ -3,6 +3,7 @@ import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edi
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from '../services/api';
+import { formatCurrency } from '../utils/helpers';
 
 export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog }) {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -617,7 +618,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                       <select className="w-full bg-black/80 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-lg p-2 text-white text-xs outline-none cursor-pointer" value={selectedLicenseToAssign || ''} onChange={(e) => setSelectedLicenseToAssign(e.target.value)}>
                         <option value="" disabled>Selecione o Software...</option>
                         {licenses.filter(lic => lic.quantidade_total > lic.quantidade_em_uso).map(lic => (
-                          <option key={lic.id} value={lic.id}>{lic.nome} (Disp: {lic.quantidade_total - lic.quantidade_em_uso})</option>
+                          <option key={lic.id} value={lic.id}>
+                            {lic.nome}
+                            {lic.plano ? ` — ${lic.plano}` : ''}
+                            {lic.custo != null ? ` · ${formatCurrency(lic.custo)}` : ''}
+                            {' '}(Disp: {lic.quantidade_total - lic.quantidade_em_uso})
+                          </option>
                         ))}
                       </select>
                       <button type="button" onClick={() => { if (selectedLicenseToAssign) { assignLicenseToEmployee(editEmployeeData.id, selectedLicenseToAssign); setSelectedLicenseToAssign(''); } }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors">Atribuir</button>

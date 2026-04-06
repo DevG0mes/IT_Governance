@@ -148,8 +148,16 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
                   </td>
                 )}
                 <td className="px-6 py-4 font-bold text-white">
-                  <div className="flex items-center gap-2 cursor-pointer hover:text-brandGreen" onClick={() => setViewLicenseUsers(lic)}>
-                    {lic.nome} <span className="text-xs font-normal text-blue-400 ml-2 hover:underline">(Ver Usuários)</span>
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2 cursor-pointer hover:text-brandGreen" onClick={() => setViewLicenseUsers(lic)}>
+                      <span className="truncate">{lic.nome}</span>
+                      <span className="text-xs font-normal text-blue-400 shrink-0 hover:underline">(Ver Usuários)</span>
+                    </div>
+                    {(lic.plano || lic.custo != null) && (
+                      <p className="text-xs font-normal text-gray-500">
+                        {[lic.plano, lic.custo != null ? formatCurrency(lic.custo) : null].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-brandGreen font-mono">{formatCurrency(lic.custo)}</td>

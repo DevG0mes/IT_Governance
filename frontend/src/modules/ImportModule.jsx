@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
-import { normalizeEmail, normalizeLicenseNameForMatch, parseCurrencyToFloat } from '../utils/helpers';
+import { normalizeEmail, normalizeLicenseNameForMatch, licenseSkuKey, parseCurrencyToFloat } from '../utils/helpers';
 import api from '../services/api';
 
 export default function ImportModule({ hasAccess, employees = [], contracts = [], licenses = [], assets = [], requestConfirm, registerLog, fetchData }) {
@@ -20,7 +20,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
     if (importCategory === 'Starlinks') headers = "Grupo;Modelo;Localizacao;Projeto;Responsavel;Email_Responsavel;Email_Conta;Senha_Conta;Senha_Wifi;Status";
     if (importCategory === 'Medições de Contratos') headers = "Servico;Mes_Competencia;Valor_Realizado";
     if (importCategory === 'Licenças (Cadastro)') headers = "Software;Fornecedor;Plano;Custo;Quantidade";
-    if (importCategory === 'Vínculos de Licenças') headers = "Email_Colaborador;Software";
+    if (importCategory === 'Vínculos de Licenças') headers = "Email_Colaborador;Software;Plano;Custo";
 
     if (!headers) return;
     const blob = new Blob(["\uFEFF" + headers + "\n"], { type: 'text/csv;charset=utf-8;' });
@@ -174,13 +174,16 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
       let licenseList = [...licenses];
       let employeeList = [...employees];
 
-      if (importCategory === 'Vínculos de Licenças') {
+      if (importCategory === 'Vínculos de Licenças' || importCategory === 'Licenças (Cadastro)') {
         try {
-          const [er, lr] = await Promise.all([api.get('/employees'), api.get('/licenses')]);
-          if (Array.isArray(er.data?.data) && er.data.data.length) employeeList = er.data.data;
-          if (Array.isArray(lr.data?.data) && lr.data.data.length) licenseList = lr.data.data;
+          const lr = await api.get('/licenses');
+          if (Array.isArray(lr.data?.data)) licenseList = lr.data.data;
+          if (importCategory === 'Vínculos de Licenças') {
+            const er = await api.get('/employees');
+            if (Array.isArray(er.data?.data)) employeeList = er.data.data;
+          }
         } catch (e) {
-          console.warn('Pré-carga colaboradores/licenças para vínculos:', e);
+          console.warn('Pré-carga licenças/colaboradores:', e);
         }
       }
 
@@ -244,14 +247,26 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           }
 
           else if (importCategory === 'Licenças (Cadastro)') {
-            const soft = getVal(row, 'software');
-            if (!licenses.some(l => l.nome.toLowerCase() === soft.toLowerCase())) {
-              await api.post('/api/licenses', { 
-                  nome: soft, 
-                  fornecedor: getVal(row, 'fornecedor'), 
-                  quantidade_total: parseInt(getVal(row, 'quantidade')) || 1 
-              });
-            }
+            const soft = getVal(row, 'software', 'Software');
+            if (!soft) continue;
+            const plano = getVal(row, 'plano', 'Plano') || 'Mensal';
+            const custo = parseCurrencyToFloat(getVal(row, 'custo', 'Custo'));
+            const qtd = parseInt(getVal(row, 'quantidade', 'Quantidade'), 10) || 1;
+            const sku = licenseSkuKey(soft, plano, custo, qtd);
+            const exists = licenseList.some((l) =>
+              licenseSkuKey(l.nome, l.plano, l.custo, l.quantidade_total) === sku
+            );
+            if (exists) continue;
+
+            const resLic = await api.post('/api/licenses', {
+              nome: soft,
+              fornecedor: getVal(row, 'fornecedor', 'Fornecedor'),
+              plano,
+              custo,
+              quantidade_total: qtd,
+            });
+            const createdLic = resLic.data?.data;
+            if (createdLic) licenseList.push(createdLic);
           }
           
           else if (importCategory === 'Vínculos de Licenças') {
@@ -285,11 +300,34 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             if (!emp) continue;
 
             const key = normalizeLicenseNameForMatch(software);
-            let lic =
-              licenseList.find((l) => normalizeLicenseNameForMatch(l.nome) === key) ||
-              licenseList.find(
-                (l) => (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim()
+            const planoHint = getVal(row, 'plano', 'Plano');
+            const custoHint = getVal(row, 'custo', 'Custo');
+
+            let candidates = licenseList.filter(
+              (l) =>
+                normalizeLicenseNameForMatch(l.nome) === key ||
+                (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim()
+            );
+            if (planoHint) {
+              const narrowed = candidates.filter(
+                (l) => (l.plano || '').toLowerCase().trim() === planoHint.toLowerCase().trim()
               );
+              if (narrowed.length) candidates = narrowed;
+            }
+            if (custoHint) {
+              const c = parseCurrencyToFloat(custoHint);
+              if (c > 0) {
+                const narrowed = candidates.filter((l) => Math.abs(Number(l.custo || 0) - c) < 0.02);
+                if (narrowed.length) candidates = narrowed;
+              }
+            }
+            candidates = candidates.filter((l) => {
+              const cap = Number(l.quantidade_total);
+              const used = Number(l.quantidade_em_uso) || 0;
+              const max = Number.isFinite(cap) && cap > 0 ? cap : Number.MAX_SAFE_INTEGER;
+              return used < max;
+            });
+            const lic = candidates[0];
             if (!lic) continue;
 
             const existingAssignments = lic.EmployeeLicenses || lic.assignments || [];
