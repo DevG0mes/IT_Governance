@@ -46,18 +46,16 @@ exports.getAll = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const input = req.body;
-
-    // 🛡️ TRAVA ANTI-DUPLICAÇÃO: Não permite cadastrar o mesmo software duas vezes
-    const existing = await License.findOne({ where: { nome: input.nome.trim() } });
-    if (existing) {
-      return res.status(400).json({ error: `A licença para '${input.nome}' já existe no catálogo.` });
+    const nome = (input.nome || '').trim();
+    if (!nome) {
+      return res.status(400).json({ error: 'Nome do software é obrigatório.' });
     }
 
     const license = await License.create({
-      nome: input.nome.trim(),
+      nome,
       fornecedor: input.fornecedor,
       plano: input.plano,
-      custo: input.custo,
+      custo: input.custo != null && input.custo !== '' ? Number(input.custo) : null,
       quantidade_total: input.quantidade_total,
       quantidade_em_uso: 0,
       data_renovacao: input.data_renovacao
@@ -65,7 +63,8 @@ exports.create = async (req, res) => {
 
     return res.status(201).json({ message: "Licença criada!", data: license });
   } catch (error) {
-    return res.status(400).json({ error: "Falha ao criar licença" });
+    console.error('❌ create license:', error.message);
+    return res.status(400).json({ error: error.message || 'Falha ao criar licença' });
   }
 };
 
