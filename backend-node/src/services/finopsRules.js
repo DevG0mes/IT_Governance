@@ -72,6 +72,36 @@ function findCatalogValor(catalogItems, asset) {
   return Number.isFinite(v) ? v : null;
 }
 
+/** Data de aquisição no detalhe do ativo (YYYY-MM-DD). */
+function getDataAquisicaoStr(asset) {
+  const d = getAssetDetail(asset);
+  if (!d || d.data_aquisicao == null || d.data_aquisicao === '') return null;
+  const s = d.data_aquisicao;
+  if (typeof s === 'string') return s.slice(0, 10);
+  if (s instanceof Date) return s.toISOString().slice(0, 10);
+  return String(s).slice(0, 10);
+}
+
+function calendarMonthsElapsed(startStr, refDate = new Date()) {
+  if (!startStr) return null;
+  const a = new Date(`${String(startStr).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(a.getTime())) return null;
+  const b = refDate instanceof Date ? refDate : new Date(refDate);
+  let m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  if (b.getDate() < a.getDate()) m -= 1;
+  return Math.max(0, m);
+}
+
+/** Depreciação linear aproximada: sem data de aquisição assume valor cheio (ainda não deprecia no modelo). */
+function residualLinearAproximado(valorCatalogo, dataAquisicaoStr, vidaMeses) {
+  if (valorCatalogo == null || !Number.isFinite(valorCatalogo)) return 0;
+  if (!dataAquisicaoStr || !vidaMeses || vidaMeses <= 0) return valorCatalogo;
+  const months = calendarMonthsElapsed(dataAquisicaoStr);
+  if (months === null) return valorCatalogo;
+  const frac = Math.min(1, months / vidaMeses);
+  return Math.max(0, valorCatalogo * (1 - frac));
+}
+
 function isEmUso(asset) {
   return (asset.status || '').trim().toLowerCase() === 'em uso';
 }
@@ -104,11 +134,19 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
   const lics = Array.isArray(licenses) ? licenses : [];
   const contr = Array.isArray(contracts) ? contracts : [];
 
+  const vidaMesesDepreciacao = Math.max(
+    1,
+    parseInt(process.env.FINOPS_DEPRECIATION_MONTHS || '36', 10) || 36
+  );
+
   let hardwareValorTotal = 0;
   let hardwareValorEmUso = 0;
   let hardwareValorParado = 0;
   let hardwareValorManutencao = 0;
+  let hardwareValorResidualEstimado = 0;
   let assetsSemCatalogo = 0;
+  let ativosCatalogoSemDataAquisicao = 0;
+  const investimentoPorModeloMap = new Map();
 
   const byType = {
     Notebook: { key: 'Notebook', label: 'Notebook', count: 0, valor: 0, emUso: 0, parado: 0, manutencao: 0 },
@@ -124,10 +162,31 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
     const at = (asset.asset_type || '').trim();
     const typeKey = ['Notebook', 'Celular', 'CHIP', 'Starlink'].includes(at) ? at : null;
     const valor = findCatalogValor(cats, asset);
+    const nomeCatalogo = getCatalogLookupName(asset);
 
-    if (valor == null && getCatalogLookupName(asset)) assetsSemCatalogo += 1;
+    if (valor == null && nomeCatalogo) assetsSemCatalogo += 1;
     const v = valor != null ? valor : 0;
     hardwareValorTotal += v;
+
+    if (valor != null) {
+      const dataStr = getDataAquisicaoStr(asset);
+      hardwareValorResidualEstimado += residualLinearAproximado(valor, dataStr, vidaMesesDepreciacao);
+      if (!dataStr) ativosCatalogoSemDataAquisicao += 1;
+      if (nomeCatalogo) {
+        const aggKey = `${at}|${nomeCatalogo}`;
+        const prev = investimentoPorModeloMap.get(aggKey) || {
+          category: at,
+          nomeModelo: nomeCatalogo,
+          count: 0,
+          valorUnitario: valor,
+          investimentoTotal: 0,
+        };
+        prev.count += 1;
+        prev.valorUnitario = valor;
+        prev.investimentoTotal += valor;
+        investimentoPorModeloMap.set(aggKey, prev);
+      }
+    }
 
     if (isEmUso(asset)) {
       hardwareValorEmUso += v;
@@ -219,6 +278,10 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
     contractsRealizado += parseFloat(c.valor_realizado) || 0;
   });
 
+  const investimentoPorModelo = Array.from(investimentoPorModeloMap.values())
+    .sort((a, b) => b.investimentoTotal - a.investimentoTotal)
+    .slice(0, 24);
+
   return {
     generatedAt: new Date().toISOString(),
     rulesVersion: 1,
@@ -227,8 +290,17 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
       valorCatalogoEmUso: hardwareValorEmUso,
       valorCatalogoParado: hardwareValorParado,
       valorCatalogoManutencao: hardwareValorManutencao,
+      valorResidualEstimado: hardwareValorResidualEstimado,
+      investimentoPorModelo,
+      depreciacao: {
+        mesesVidaUtil: vidaMesesDepreciacao,
+        metodo: 'linear',
+        env: 'FINOPS_DEPRECIATION_MONTHS',
+      },
       assetsSemMatchCatalogo: assetsSemCatalogo,
-      nota: 'Valores de hardware referem-se ao catálogo cadastrado (modelo/plano). Itens sem correspondência não entram no total.',
+      ativosComCatalogoSemDataAquisicao: ativosCatalogoSemDataAquisicao,
+      nota:
+        'Investimento por modelo = soma do valor de catálogo por unidade com o mesmo modelo/plano. Depreciação linear aproximada por ativo (data de aquisição + meses de vida); sem data mantém valor de catálogo no residual.',
     },
     licenses: {
       committedMonthly: licensesCommittedMonthly,
@@ -259,4 +331,6 @@ module.exports = {
   licenseMonthlyWaste,
   findCatalogValor,
   assetTypeToCatalogKey,
+  getDataAquisicaoStr,
+  residualLinearAproximado,
 };

@@ -36,7 +36,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     email_responsavel: {
       type: DataTypes.STRING
-    }
+    },
+    data_aquisicao: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
   }, { 
     tableName: 'asset_starlinks', 
     timestamps: false // 🚨 O print confirma que não há created_at nem updated_at aqui, então está certinho!

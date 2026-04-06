@@ -1,6 +1,22 @@
+const { Op } = require('sequelize');
 const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee, AssetAssignment, AuditLog } = require('../../config/db');
 const { writeAuditLog } = require('../../utils/audit');
 const { standardizeAssetIdentifier, standardizeText } = require('../../utils/sanitizer');
+
+const ASSET_INCLUDES_FULL = [
+  { model: AssetNotebook, as: 'Notebook' },
+  { model: AssetStarlink, as: 'Starlink' },
+  { model: AssetChip, as: 'Chip' },
+  { model: AssetCelular, as: 'Celular' },
+];
+
+/** Aceita string vinda de <input type="date"> (YYYY-MM-DD). */
+function parseDataAquisicao(v) {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return s;
+}
 
 const normalizeAssetStatus = (raw) => {
   if (!raw) return 'Disponível';
@@ -115,6 +131,8 @@ exports.create = async (req, res) => {
       EmployeeId: ownerEmployeeId || null
     }, { transaction: t });
 
+    const dataAquisicaoCreate = parseDataAquisicao(input.data_aquisicao);
+
     if (assetType === 'Notebook') {
       await AssetNotebook.create({
         AssetId: asset.id,
@@ -122,7 +140,8 @@ exports.create = async (req, res) => {
         patrimonio,
         modelo: standardizeText(input.modelo_notebook),
         garantia: standardizeText(input.garantia),
-        status_garantia: standardizeText(input.status_garantia)
+        status_garantia: standardizeText(input.status_garantia),
+        data_aquisicao: dataAquisicaoCreate,
       }, { transaction: t });
     } 
     else if (assetType === 'Celular') {
@@ -131,7 +150,8 @@ exports.create = async (req, res) => {
         imei,
         modelo: standardizeText(input.modelo_celular),
         grupo: standardizeText(input.grupo),
-        responsavel: standardizeText(input.responsavel)
+        responsavel: standardizeText(input.responsavel),
+        data_aquisicao: dataAquisicaoCreate,
       }, { transaction: t });
     }
     else if (assetType === 'CHIP') {
@@ -156,7 +176,8 @@ exports.create = async (req, res) => {
         plano: standardizeText(input.plano),
         grupo: standardizeText(input.grupo),
         responsavel: standardizeText(input.responsavel),
-        vencimento_plano: input.vencimento_plano
+        vencimento_plano: input.vencimento_plano,
+        data_aquisicao: dataAquisicaoCreate,
       }, { transaction: t });
     }
     else if (assetType === 'Starlink') {
@@ -170,7 +191,8 @@ exports.create = async (req, res) => {
         email_responsavel: input.email_responsavel,
         email: input.email,
         senha: input.senha,
-        senha_roteador: input.senha_roteador
+        senha_roteador: input.senha_roteador,
+        data_aquisicao: dataAquisicaoCreate,
       }, { transaction: t });
     }
 
@@ -205,17 +227,124 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { transaction: t });
+    const asset = await Asset.findByPk(req.params.id, { transaction: t, include: ASSET_INCLUDES_FULL });
     if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
 
     const oldAsset = asset.toJSON();
+    const input = req.body;
+    const assetType = normalizeAssetType(asset.asset_type);
+    const dataAq = parseDataAquisicao(input.data_aquisicao);
+
+    const patrimonio = standardizeAssetIdentifier(input.patrimonio);
+    const serial_number = standardizeAssetIdentifier(input.serial_number);
+    const imei = standardizeAssetIdentifier(input.imei);
+    const numero = standardizeAssetIdentifier(input.numero);
+    const iccid = standardizeAssetIdentifier(input.iccid);
+
     await asset.update(
       {
-        status: req.body.status ?? asset.status,
-        observacao: req.body.observacao ?? asset.observacao,
+        status: input.status != null ? normalizeAssetStatus(input.status) : asset.status,
+        observacao: input.observacao ?? asset.observacao,
       },
       { transaction: t }
     );
+
+    if (assetType === 'Notebook') {
+      const nb = await AssetNotebook.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (!nb) throw new Error('Detalhe do notebook não encontrado');
+      if (patrimonio) {
+        const clash = await AssetNotebook.findOne({ where: { patrimonio, AssetId: { [Op.ne]: asset.id } }, transaction: t });
+        if (clash) {
+          await t.rollback();
+          return res.status(400).json({ error: `O patrimônio ${patrimonio} já existe.` });
+        }
+      }
+      if (serial_number) {
+        const clash = await AssetNotebook.findOne({ where: { serial_number, AssetId: { [Op.ne]: asset.id } }, transaction: t });
+        if (clash) {
+          await t.rollback();
+          return res.status(400).json({ error: `O serial ${serial_number} já existe.` });
+        }
+      }
+      await nb.update(
+        {
+          patrimonio,
+          serial_number,
+          modelo: standardizeText(input.modelo_notebook),
+          garantia: standardizeText(input.garantia),
+          status_garantia: standardizeText(input.status_garantia),
+          data_aquisicao: dataAq,
+        },
+        { transaction: t }
+      );
+    } else if (assetType === 'Celular') {
+      const cel = await AssetCelular.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (!cel) throw new Error('Detalhe do celular não encontrado');
+      if (imei) {
+        const clash = await AssetCelular.findOne({ where: { imei, AssetId: { [Op.ne]: asset.id } }, transaction: t });
+        if (clash) {
+          await t.rollback();
+          return res.status(400).json({ error: `O IMEI ${imei} já está cadastrado.` });
+        }
+      }
+      await cel.update(
+        {
+          imei,
+          modelo: standardizeText(input.modelo_celular),
+          grupo: standardizeText(input.grupo),
+          responsavel: standardizeText(input.responsavel),
+          data_aquisicao: dataAq,
+        },
+        { transaction: t }
+      );
+    } else if (assetType === 'CHIP') {
+      const chip = await AssetChip.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (!chip) throw new Error('Detalhe do CHIP não encontrado');
+      if (numero) {
+        const clash = await AssetChip.findOne({ where: { numero, AssetId: { [Op.ne]: asset.id } }, transaction: t });
+        if (clash) {
+          await t.rollback();
+          return res.status(400).json({ error: `O número ${numero} já está cadastrado.` });
+        }
+      }
+      if (iccid) {
+        const clash = await AssetChip.findOne({ where: { iccid, AssetId: { [Op.ne]: asset.id } }, transaction: t });
+        if (clash) {
+          await t.rollback();
+          return res.status(400).json({ error: `O ICCID ${iccid} já está cadastrado.` });
+        }
+      }
+      await chip.update(
+        {
+          numero,
+          iccid,
+          plano: standardizeText(input.plano),
+          grupo: standardizeText(input.grupo),
+          responsavel: standardizeText(input.responsavel),
+          vencimento_plano: input.vencimento_plano || null,
+          data_aquisicao: dataAq,
+        },
+        { transaction: t }
+      );
+    } else if (assetType === 'Starlink') {
+      const st = await AssetStarlink.findOne({ where: { AssetId: asset.id }, transaction: t });
+      if (!st) throw new Error('Detalhe do Starlink não encontrado');
+      await st.update(
+        {
+          modelo: standardizeText(input.modelo_starlink),
+          localizacao: standardizeText(input.localizacao),
+          projeto: standardizeText(input.projeto),
+          grupo: standardizeText(input.grupo),
+          responsavel: standardizeText(input.responsavel),
+          email_responsavel: input.email_responsavel,
+          email: input.email,
+          senha: input.senha,
+          senha_roteador: input.senha_roteador,
+          data_aquisicao: dataAq,
+        },
+        { transaction: t }
+      );
+    }
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',
@@ -229,7 +358,11 @@ exports.update = async (req, res) => {
     });
 
     await t.commit();
-    return res.status(200).json({ data: asset });
+
+    const full = await Asset.findByPk(asset.id, { include: ASSET_INCLUDES_FULL });
+    const json = full.toJSON();
+    json.asset_type = normalizeAssetType(json.asset_type);
+    return res.status(200).json({ data: json });
   } catch (error) {
     if (t) await t.rollback();
     return res.status(400).json({ error: error.message });
@@ -378,6 +511,7 @@ exports.importBulk = async (req, res) => {
           const imei = standardizeAssetIdentifier(input.imei);
           const numero = standardizeAssetIdentifier(input.numero);
           const iccid = standardizeAssetIdentifier(input.iccid);
+          const dataAquisicaoBulk = parseDataAquisicao(input.data_aquisicao);
 
           // Anti-duplicação por tipo
           if (assetType === 'Notebook') {
@@ -417,7 +551,8 @@ exports.importBulk = async (req, res) => {
               patrimonio,
               modelo: standardizeText(input.modelo_notebook),
               garantia: standardizeText(input.garantia),
-              status_garantia: standardizeText(input.status_garantia)
+              status_garantia: standardizeText(input.status_garantia),
+              data_aquisicao: dataAquisicaoBulk,
             }, { transaction: tItem });
           } else if (assetType === 'Celular') {
             await AssetCelular.create({
@@ -425,7 +560,8 @@ exports.importBulk = async (req, res) => {
               imei,
               modelo: standardizeText(input.modelo_celular),
               grupo: standardizeText(input.grupo),
-              responsavel: standardizeText(input.responsavel)
+              responsavel: standardizeText(input.responsavel),
+              data_aquisicao: dataAquisicaoBulk,
             }, { transaction: tItem });
           } else if (assetType === 'CHIP') {
             await AssetChip.create({
@@ -435,7 +571,8 @@ exports.importBulk = async (req, res) => {
               plano: standardizeText(input.plano),
               grupo: standardizeText(input.grupo),
               responsavel: standardizeText(input.responsavel),
-              vencimento_plano: input.vencimento_plano
+              vencimento_plano: input.vencimento_plano,
+              data_aquisicao: dataAquisicaoBulk,
             }, { transaction: tItem });
           } else if (assetType === 'Starlink') {
             await AssetStarlink.create({
@@ -448,7 +585,8 @@ exports.importBulk = async (req, res) => {
               email_responsavel: input.email_responsavel,
               email: input.email,
               senha: input.senha,
-              senha_roteador: input.senha_roteador
+              senha_roteador: input.senha_roteador,
+              data_aquisicao: dataAquisicaoBulk,
             }, { transaction: tItem });
           }
 

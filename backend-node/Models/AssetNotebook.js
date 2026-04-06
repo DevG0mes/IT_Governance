@@ -24,7 +24,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     status_garantia: { 
       type: DataTypes.STRING 
-    }
+    },
+    data_aquisicao: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
   }, { 
     tableName: 'asset_notebooks', 
     timestamps: false // 🚨 CORRIGIDO: Desligando a busca por createdAt e updatedAt
