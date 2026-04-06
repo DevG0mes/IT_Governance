@@ -23,6 +23,23 @@ const normalizeAssetStatus = (raw) => {
   return map[s] || raw;
 };
 
+const normalizeAssetType = (raw) => {
+  if (!raw) return raw;
+  const s = String(raw).trim().toLowerCase();
+  const map = {
+    notebook: 'Notebook',
+    notebooks: 'Notebook',
+    celular: 'Celular',
+    celulares: 'Celular',
+    celulare: 'Celular', // legado do slice(0,-1)
+    chip: 'CHIP',
+    chips: 'CHIP',
+    starlink: 'Starlink',
+    starlinks: 'Starlink',
+  };
+  return map[s] || raw;
+};
+
 exports.getAll = async (req, res) => {
   try {
     const assets = await Asset.findAll({
@@ -40,7 +57,13 @@ exports.getAll = async (req, res) => {
         },
       ]
     });
-    return res.status(200).json({ data: assets });
+    // Normaliza tipos na saída para não quebrar filtros do frontend
+    const normalized = assets.map(a => {
+      const json = a.toJSON();
+      json.asset_type = normalizeAssetType(json.asset_type);
+      return json;
+    });
+    return res.status(200).json({ data: normalized });
   } catch (error) {
     console.error("❌ Erro na listagem de ativos:", error);
     return res.status(500).json({ error: "Erro no servidor: " + error.message });
@@ -52,7 +75,7 @@ exports.create = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    const assetType = input.asset_type;
+    const assetType = normalizeAssetType(input.asset_type);
     const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
     const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
@@ -345,7 +368,7 @@ exports.importBulk = async (req, res) => {
             return;
           }
 
-          const assetType = input.asset_type;
+          const assetType = normalizeAssetType(input.asset_type);
           const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
           const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
           const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
