@@ -3,7 +3,6 @@ import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edi
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from '../services/api';
-import { Toast } from '../App';
 
 export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog }) {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
@@ -41,15 +40,9 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
   const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'Celulare', 'CHIP', 'Starlink'].includes(a.asset_type));
 
-  // 🛡️ CORREÇÃO DA IMPORTAÇÃO EM MASSA (O "Olho Biônico")
   const getActiveAssetsForEmployee = (empId) => assets.filter(a => {
     const assignments = a.AssetAssignments || a.assignments || [];
-    const hasHistory = assignments.some(asg => (asg.EmployeeId === empId || asg.employee_id === empId) && !asg.returned_at);
-    
-    // Se a importação em massa gravou direto no ativo, ele encontra aqui:
-    const isDirectlyAssigned = a.EmployeeId === empId || a.employee_id === empId;
-
-    return a.status === 'Em uso' && (hasHistory || isDirectlyAssigned);
+    return a.status === 'Em uso' && assignments.some(asg => (asg.EmployeeId === empId || asg.employee_id === empId) && !asg.returned_at);
   });
 
   const getLicensesForEmployee = (empId) => {
@@ -75,7 +68,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         registerLog('DELETE BULK', 'COLABORADORES', `Excluiu ${selectedIds.length} cols.`);
         setSelectedIds([]);
         fetchData();
-        Toast.fire({ icon: 'success', title: 'Colaboradores excluídos!' });
       } catch (err) { alert(`❌ Erro: ${getAxiosError(err, 'Falha na exclusão em massa')}`); }
     }, true, 'Excluir');
   };
@@ -88,7 +80,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       setIsEmployeeModalOpen(false);
       setNewEmployee({ nome: '', email: '', departamento: '', url_termo: '' });
       fetchData();
-      Toast.fire({ icon: 'success', title: 'Colaborador cadastrado!' });
     } catch (err) { alert(getAxiosError(err, 'Erro ao salvar colaborador')); }
   };
 
@@ -99,7 +90,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       registerLog('UPDATE', 'Colaboradores', `Editou dados do colab ID ${editEmployeeData.id}`);
       setEditEmployeeData(null);
       fetchData();
-      Toast.fire({ icon: 'success', title: 'Perfil atualizado!' });
     } catch (err) { alert(getAxiosError(err, 'Erro ao editar colaborador')); }
   };
 
@@ -110,7 +100,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         registerLog('DELETE', 'Colaboradores', `Deletou colab ID ${empId}`);
         setOpenActionMenu(null);
         fetchData();
-        Toast.fire({ icon: 'success', title: 'Colaborador excluído!' });
       } catch (err) { alert(getAxiosError(err, 'Erro ao excluir colaborador')); }
     }, true, 'Excluir Colaborador');
   };
@@ -141,11 +130,10 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         url_termo_devolucao: offboardingTermoUrl.trim(),
       });
 
-      registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${offboardingTarget.id}`);
+      registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${offboardingTarget.id} — Checks: Onfly✓ MegaERP✓ Admin365✓ Equipamentos✓`);
       setIsOffboardingModalOpen(false);
       setOffboardingTarget(null);
       fetchData();
-      Toast.fire({ icon: 'success', title: 'Offboarding iniciado!' });
     } catch (err) {
       alert(`❌ Erro Crítico: ${getAxiosError(err, 'Erro na rota de offboarding do servidor.')}`);
     } finally {
@@ -161,7 +149,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       setIsAssignEmployeeModalOpen(false);
       setSelectedItemForAssign('');
       fetchData();
-      Toast.fire({ icon: 'success', title: 'Equipamento atribuído!' });
     } catch (err) { alert(getAxiosError(err, 'Erro ao atribuir equipamento')); }
   };
 
@@ -171,7 +158,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         await api.put(`/api/assets/${assetId}/${action}`);
         registerLog('UPDATE', 'Inventário', `Devolveu o ativo ID ${assetId}`);
         fetchData();
-        Toast.fire({ icon: 'success', title: 'Equipamento devolvido ao estoque!' });
       } catch (err) { alert(getAxiosError(err, 'Erro ao devolver equipamento')); }
     }, true, 'Devolver');
   };
@@ -181,7 +167,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       await api.post('/api/licenses/assign', { employee_id: empId, license_id: parseInt(licenseId) });
       registerLog('UPDATE', 'Licenças', `Atribuiu licença ${licenseId} ao colab ${empId}`);
       fetchData();
-      Toast.fire({ icon: 'success', title: 'Licença atribuída!' });
     } catch (err) { alert(getAxiosError(err, 'Erro ao atribuir licença')); }
   };
 
@@ -190,7 +175,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       await api.delete(`/api/licenses/unassign/${assignmentId}`);
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`);
       fetchData();
-      Toast.fire({ icon: 'info', title: 'Licença revogada!' });
     } catch (err) { alert(getAxiosError(err, 'Erro ao revogar licença')); }
   };
 
@@ -228,6 +212,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     doc.setFont("helvetica", "normal");
     addText("O(a) RESPONSÁVEL reconhece ter recebido os seguintes equipamentos e ferramentas de trabalho, de propriedade da PSI Energy:");
 
+    // 🛡️ CORREÇÃO DEFINITIVA: Fallbacks gigantescos e blindagem do typo "Celulare"
     const tableData = empAssets.map(a => {
       const nb = a.Notebook || a.notebook || a.asset_notebook || a.asset_notebooks;
       const cel = a.Celular || a.celular || a.asset_celular || a.asset_celulares;
@@ -236,12 +221,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
       const typeStr = a.asset_type || '';
       const isNotebook = typeStr.includes('Notebook');
-      const isCelular = typeStr.includes('Celular');
+      const isCelular = typeStr.includes('Celular'); // Cobre 'Celular' e 'Celulare'
       const isChip = typeStr.toUpperCase().includes('CHIP');
       const isStarlink = typeStr.includes('Starlink');
 
       let assetTitle = typeStr.toUpperCase();
-      if (isCelular) assetTitle = 'CELULAR';
+      if (isCelular) assetTitle = 'CELULAR'; // Corrige o PDF
 
       let descInfo = 'Modelo não cadastrado';
       if (isNotebook) descInfo = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || 'S/N'})`;
@@ -579,6 +564,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 <h3 className="text-brandGreen font-bold mb-4">Hardware Físico</h3>
                 <div className="space-y-3">
                   {getActiveAssetsForEmployee(editEmployeeData.id).map(asset => {
+                    // 🛡️ CORREÇÃO DEFINITIVA: Fallbacks gigantescos para o Modal UI
                     const nb = asset.Notebook || asset.notebook || asset.asset_notebook || asset.asset_notebooks;
                     const cel = asset.Celular || asset.celular || asset.asset_celular || asset.asset_celulares;
                     const ch = asset.Chip || asset.chip || asset.asset_chip || asset.asset_chips;
@@ -591,7 +577,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                     const isStarlink = typeStr.includes('Starlink');
 
                     let assetTitle = typeStr;
-                    if (isCelular) assetTitle = 'Celular'; 
+                    if (isCelular) assetTitle = 'Celular'; // Corrige visualmente o 'Celulare'
 
                     let assetDesc = 'Modelo não cadastrado';
                     if (isNotebook) assetDesc = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || '-'})`;
@@ -651,6 +637,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             <form onSubmit={submitAssignment} className="flex flex-col gap-4">
               <select required value={selectedItemForAssign} onChange={(e) => setSelectedItemForAssign(e.target.value)} className="w-full bg-black/50 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none cursor-pointer">
                 <option value="" disabled>Escolha na lista de Disponíveis...</option>
+                {/* 🛡️ CORREÇÃO DEFINITIVA: Variáveis blindadas dentro do Select */}
                 {availableAssignables.map(asset => {
                   const nb = asset.Notebook || asset.notebook || asset.asset_notebook || asset.asset_notebooks;
                   const cel = asset.Celular || asset.celular || asset.asset_celular || asset.asset_celulares;
@@ -659,7 +646,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                   
                   const typeStr = asset.asset_type || '';
                   let assetTitle = typeStr;
-                  if (typeStr.includes('Celular')) assetTitle = 'Celular'; 
+                  if (typeStr.includes('Celular')) assetTitle = 'Celular'; // Arruma visualmente no Select
 
                   const identifier = nb?.patrimonio || cel?.imei || ch?.numero || st?.projeto || 'Sem identificação';
                   return (<option key={asset.id} value={asset.id}>{assetTitle}: {identifier}</option>);
