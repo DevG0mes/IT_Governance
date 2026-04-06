@@ -1,22 +1,24 @@
 import axios from 'axios';
-// 🚨 A importação do 'helpers' foi removida para matar o IP antigo na raiz
 
-// 1. CRIAÇÃO DA INSTÂNCIA BLINDADA (Google Cloud Edition)
-// Tenta ler o .env de produção do Vite. Se falhar, aciona o Fallback de Segurança.
-const API_URL_OFICIAL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000';
+// Vazio = mesma origem + proxy Vite (`/api` → Node). Evita mixed content se o front for HTTPS.
+// API em outro host: VITE_API_URL=http://34.95.207.232:3000 (build) ou VITE_PROXY_TARGET no vite.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
-  baseURL: API_URL_OFICIAL,
-  timeout: 10000, // 🚨 REGRA DE OURO: Se o GCP não responder em 10s, o React cancela para liberar conexão!
+  baseURL: API_BASE,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// 2. INTERCEPTOR DE IDA (Segurança e Autenticação)
+// Prefixa /api nas rotas relativas (/licenses → /api/licenses). Rotas já em /api/ não alteram.
 api.interceptors.request.use((config) => {
-  // Recupera o token do localStorage
-  const token = localStorage.getItem('token'); 
+  const u = config.url;
+  if (typeof u === 'string' && u.startsWith('/') && !u.startsWith('/api')) {
+    config.url = '/api' + u;
+  }
+  const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

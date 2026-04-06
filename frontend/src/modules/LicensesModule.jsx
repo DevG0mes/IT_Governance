@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { CreditCard, Edit2, X, Users } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { CreditCard, Edit2, X, Users, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { parseCurrencyToFloat } from '../utils/helpers';
-// 🚨 NOVO: Importando a sua API centralizada e blindada
 import api from '../services/api';
 
 export default function LicensesModule({ licenses, hasAccess, fetchData, registerLog, formatCurrency }) {
@@ -9,6 +9,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
   const [editLicenseData, setEditLicenseData] = useState(null);
   const [newLicense, setNewLicense] = useState({ nome: '', fornecedor: '', plano: 'Mensal', custo: '', quantidade_total: '', data_renovacao: '' });
   const [viewLicenseUsers, setViewLicenseUsers] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   // 🚨 NOVO: Tratamento de erro simplificado para o Axios
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
@@ -42,7 +43,6 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
 
   const unassignLicense = async (assignmentId) => { 
     try {
-      // 🚨 NOVO: api.delete limpo
       await api.delete(`/licenses/unassign/${assignmentId}`);
       
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); 
@@ -50,24 +50,103 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
     } catch(err) { alert(getAxiosError(err, 'Erro ao revogar licença')); }
   };
 
+  const licenseRows = useMemo(() => licenses || [], [licenses]);
+  const allSelected = licenseRows.length > 0 && selectedIds.size === licenseRows.length;
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(licenseRows.map((l) => l.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
+    const names = licenseRows.filter((l) => ids.includes(l.id)).map((l) => l.nome).join(', ');
+    const ok = await Swal.fire({
+      title: 'Excluir licenças em massa?',
+      html: `<p class="text-left text-sm">Serão removidas <strong>${ids.length}</strong> licença(s) e todos os vínculos com colaboradores.</p><p class="text-left text-xs text-gray-400 mt-2">${names}</p>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Excluir',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+      background: '#1f2937',
+      color: '#fff',
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      await api.post('/licenses/bulk-delete', { ids });
+      registerLog('DELETE', 'Licenças', `Exclusão em massa: ${ids.length} licença(s) — ${names}`);
+      setSelectedIds(new Set());
+      fetchData();
+      Swal.fire({ icon: 'success', title: 'Licenças removidas', background: '#1f2937', color: '#fff', timer: 2200, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Erro', text: getAxiosError(err, 'Falha ao excluir licenças'), background: '#1f2937', color: '#fff' });
+    }
+  };
+
   return (
     <div className="animate-fade-in">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h2 className="text-2xl font-bold text-white flex items-center gap-2"><CreditCard className="text-brandGreen"/> Gestão de FinOps & Software</h2>
-        {hasAccess('licenses', 'edit') && (
-          <button onClick={() => setIsLicenseModalOpen(true)} className="bg-brandGreen hover:bg-brandGreenHover text-white px-6 py-2.5 rounded-full font-semibold shadow-[0_4px_14px_rgba(16,185,129,0.39)] hover:-translate-y-1 transition-all duration-300">
-            + Nova Licença
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {hasAccess('licenses', 'edit') && selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-full font-semibold shadow-lg transition-all duration-300"
+            >
+              <Trash2 className="w-4 h-4" />
+              Excluir selecionadas ({selectedIds.size})
+            </button>
+          )}
+          {hasAccess('licenses', 'edit') && (
+            <button onClick={() => setIsLicenseModalOpen(true)} className="bg-brandGreen hover:bg-brandGreenHover text-white px-6 py-2.5 rounded-full font-semibold shadow-[0_4px_14px_rgba(16,185,129,0.39)] hover:-translate-y-1 transition-all duration-300">
+              + Nova Licença
+            </button>
+          )}
+        </div>
       </div>
       <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-3xl shadow-xl min-h-[400px] overflow-hidden">
         <table className="w-full text-left text-sm text-gray-300">
           <thead className="bg-black/60 text-gray-400 border-b border-gray-800">
-            <tr><th className="px-6 py-4">Software</th><th className="px-6 py-4">Custo Un.</th><th className="px-6 py-4">Estoque</th><th className="px-6 py-4">Ações</th></tr>
+            <tr>
+              {hasAccess('licenses', 'edit') && (
+                <th className="px-4 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-600 bg-black/50 text-brandGreen focus:ring-brandGreen"
+                    title="Selecionar todas"
+                  />
+                </th>
+              )}
+              <th className="px-6 py-4">Software</th><th className="px-6 py-4">Custo Un.</th><th className="px-6 py-4">Estoque</th><th className="px-6 py-4">Ações</th>
+            </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
-            {licenses.map(lic => (
+            {licenseRows.map(lic => (
               <tr key={lic.id} className="hover:bg-gray-800/80 transition-colors duration-200">
+                {hasAccess('licenses', 'edit') && (
+                  <td className="px-4 py-4 align-middle">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(lic.id)}
+                      onChange={() => toggleSelect(lic.id)}
+                      className="rounded border-gray-600 bg-black/50 text-brandGreen focus:ring-brandGreen"
+                    />
+                  </td>
+                )}
                 <td className="px-6 py-4 font-bold text-white">
                   <div className="flex items-center gap-2 cursor-pointer hover:text-brandGreen" onClick={() => setViewLicenseUsers(lic)}>
                     {lic.nome} <span className="text-xs font-normal text-blue-400 ml-2 hover:underline">(Ver Usuários)</span>
@@ -117,13 +196,13 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
               <button onClick={() => setViewLicenseUsers(null)} className="text-gray-400 hover:text-white p-2 transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-3 custom-scrollbar">
-              {viewLicenseUsers.assignments?.map((asg) => (
+              {(viewLicenseUsers.EmployeeLicenses || viewLicenseUsers.assignments || []).map((asg) => (
                 <div key={asg.id} className="bg-black/50 p-4 rounded-xl flex justify-between items-center border border-gray-800 hover:border-gray-700 transition-colors">
                   <div><p className="text-brandGreen font-bold">{asg.employee?.nome}</p></div>
                   <button onClick={() => { unassignLicense(asg.id); setViewLicenseUsers(null); }} className="text-xs font-semibold text-red-400 hover:text-red-300 hover:underline transition-colors">Revogar Acesso</button>
                 </div>
               ))}
-              {(!viewLicenseUsers.assignments || viewLicenseUsers.assignments.length === 0) && (
+              {(viewLicenseUsers.EmployeeLicenses || viewLicenseUsers.assignments || []).length === 0 && (
                  <p className="text-gray-500 italic">Nenhum usuário alocado.</p>
               )}
             </div>
