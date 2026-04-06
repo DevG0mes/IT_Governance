@@ -196,12 +196,20 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
               <button onClick={() => setViewLicenseUsers(null)} className="text-gray-400 hover:text-white p-2 transition-colors"><X className="w-6 h-6" /></button>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-3 custom-scrollbar">
-              {(viewLicenseUsers.EmployeeLicenses || viewLicenseUsers.assignments || []).map((asg) => (
-                <div key={asg.id} className="bg-black/50 p-4 rounded-xl flex justify-between items-center border border-gray-800 hover:border-gray-700 transition-colors">
-                  <div><p className="text-brandGreen font-bold">{asg.employee?.nome}</p></div>
-                  <button onClick={() => { unassignLicense(asg.id); setViewLicenseUsers(null); }} className="text-xs font-semibold text-red-400 hover:text-red-300 hover:underline transition-colors">Revogar Acesso</button>
+              {(viewLicenseUsers.EmployeeLicenses || viewLicenseUsers.assignments || []).map((asg) => {
+                const colab = asg.Employee || asg.employee;
+                const titulo = colab?.nome || colab?.email || (asg.employee_id ? `Colaborador #${asg.employee_id}` : 'Titular não encontrado');
+                const emailLinha = colab?.nome && colab?.email ? colab.email : null;
+                return (
+                <div key={asg.id} className="bg-black/50 p-4 rounded-xl flex justify-between items-center gap-4 border border-gray-800 hover:border-gray-700 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-brandGreen font-bold truncate">{titulo}</p>
+                    {emailLinha && <p className="text-xs text-gray-400 truncate mt-0.5">{emailLinha}</p>}
+                  </div>
+                  <button type="button" onClick={() => { unassignLicense(asg.id); setViewLicenseUsers(null); }} className="text-xs font-semibold text-red-400 hover:text-red-300 hover:underline transition-colors shrink-0">Revogar Acesso</button>
                 </div>
-              ))}
+                );
+              })}
               {(viewLicenseUsers.EmployeeLicenses || viewLicenseUsers.assignments || []).length === 0 && (
                  <p className="text-gray-500 italic">Nenhum usuário alocado.</p>
               )}

@@ -35,3 +35,15 @@ export const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: '
 export const normalizeEmail = (email) => {
   return !email ? '' : email.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
+
+/** Compara nomes de licença CSV vs cadastro (ex.: "for" vs "para", acentos). */
+export const normalizeLicenseNameForMatch = (name) => {
+  if (!name) return '';
+  let s = String(name)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  s = s.replace(/\b(para|for)\b/g, '·');
+  return s;
+};

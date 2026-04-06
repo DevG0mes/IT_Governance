@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, Download, CheckCircle, Loader2, FileText, X, Send } from 'lucide-react';
 import Papa from 'papaparse';
 import Swal from 'sweetalert2';
-import { normalizeEmail, parseCurrencyToFloat } from '../utils/helpers';
+import { normalizeEmail, normalizeLicenseNameForMatch, parseCurrencyToFloat } from '../utils/helpers';
 import api from '../services/api';
 
 export default function ImportModule({ hasAccess, employees = [], contracts = [], licenses = [], assets = [], requestConfirm, registerLog, fetchData }) {
@@ -171,6 +171,19 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
         }
       }
 
+      let licenseList = [...licenses];
+      let employeeList = [...employees];
+
+      if (importCategory === 'Vínculos de Licenças') {
+        try {
+          const [er, lr] = await Promise.all([api.get('/employees'), api.get('/licenses')]);
+          if (Array.isArray(er.data?.data) && er.data.data.length) employeeList = er.data.data;
+          if (Array.isArray(lr.data?.data) && lr.data.data.length) licenseList = lr.data.data;
+        } catch (e) {
+          console.warn('Pré-carga colaboradores/licenças para vínculos:', e);
+        }
+      }
+
       for (let row of previewData) {
         try {
           if (importCategory === 'Colaboradores') {
@@ -242,21 +255,55 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           }
           
           else if (importCategory === 'Vínculos de Licenças') {
-            const email = normalizeEmail(getVal(row, 'email_colaborador', 'email', 'e-mail'));
-            const software = getVal(row, 'software');
+            const email = normalizeEmail(getVal(row, 'email_colaborador', 'Email_Colaborador', 'email', 'e-mail'));
+            const software = getVal(row, 'software', 'Software');
             if (!email || !software) continue;
 
-            const emp = employees.find(e => normalizeEmail(e.email) === email);
-            if (!emp) continue; 
+            let emp = employeeList.find((e) => normalizeEmail(e.email) === email);
+            if (!emp) {
+              try {
+                const local = email.split('@')[0] || 'conta';
+                const pretty = local.replace(/[._-]+/g, ' ').trim() || 'Conta';
+                const resEmp = await api.post('/api/employees', {
+                  nome: `${pretty} (caixa postal)`,
+                  email,
+                  departamento: 'Conta genérica / importação licenças',
+                });
+                emp = resEmp.data?.data;
+                if (emp) employeeList.push(emp);
+              } catch (err) {
+                if (err.response?.status === 400) {
+                  try {
+                    const er = await api.get('/employees');
+                    const list = er.data?.data || [];
+                    emp = list.find((e) => normalizeEmail(e.email) === email);
+                    if (emp) employeeList.push(emp);
+                  } catch (_) { /* ignore */ }
+                }
+              }
+            }
+            if (!emp) continue;
 
-            const lic = licenses.find(l => (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim());
+            const key = normalizeLicenseNameForMatch(software);
+            let lic =
+              licenseList.find((l) => normalizeLicenseNameForMatch(l.nome) === key) ||
+              licenseList.find(
+                (l) => (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim()
+              );
             if (!lic) continue;
 
             const existingAssignments = lic.EmployeeLicenses || lic.assignments || [];
-            const already = existingAssignments.some(a => (a.EmployeeId === emp.id || a.employee_id === emp.id) && (a.license_id === lic.id || a.LicenseId === lic.id));
+            const already = existingAssignments.some(
+              (a) =>
+                (a.employee_id === emp.id || a.EmployeeId === emp.id) &&
+                (a.license_id === lic.id || a.LicenseId === lic.id)
+            );
             if (already) continue;
 
             await api.post('/api/licenses/assign', { employee_id: emp.id, license_id: lic.id });
+            lic.quantidade_em_uso = (lic.quantidade_em_uso || 0) + 1;
+            if (!lic.EmployeeLicenses) lic.EmployeeLicenses = [];
+            lic.EmployeeLicenses.push({ employee_id: emp.id, license_id: lic.id, Employee: emp });
           }
 
           successCount++;
