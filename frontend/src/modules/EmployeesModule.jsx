@@ -38,15 +38,13 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     e.nome.toLowerCase().includes(employeeSearchTerm.toLowerCase())
   );
 
-  const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'CHIP', 'Starlink'].includes(a.asset_type));
+  const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'Celulare', 'CHIP', 'Starlink'].includes(a.asset_type));
 
-  // 🛡️ CORREÇÃO: Buscando Hardwares do funcionário com Fallback
   const getActiveAssetsForEmployee = (empId) => assets.filter(a => {
     const assignments = a.AssetAssignments || a.assignments || [];
     return a.status === 'Em uso' && assignments.some(asg => (asg.EmployeeId === empId || asg.employee_id === empId) && !asg.returned_at);
   });
 
-  // 🛡️ CORREÇÃO: Buscando Softwares do funcionário com Fallback
   const getLicensesForEmployee = (empId) => {
     const empLics = [];
     licenses.forEach(lic => { 
@@ -214,20 +212,29 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     doc.setFont("helvetica", "normal");
     addText("O(a) RESPONSÁVEL reconhece ter recebido os seguintes equipamentos e ferramentas de trabalho, de propriedade da PSI Energy:");
 
-    // 🛡️ CORREÇÃO: Variáveis Blindadas para gerar PDF com os dados corretos
+    // 🛡️ CORREÇÃO DEFINITIVA: Fallbacks gigantescos e blindagem do typo "Celulare"
     const tableData = empAssets.map(a => {
-      const nb = a.Notebook || a.notebook;
-      const cel = a.Celular || a.celular;
-      const ch = a.Chip || a.chip;
-      const st = a.Starlink || a.starlink;
+      const nb = a.Notebook || a.notebook || a.asset_notebook || a.asset_notebooks;
+      const cel = a.Celular || a.celular || a.asset_celular || a.asset_celulares;
+      const ch = a.Chip || a.chip || a.asset_chip || a.asset_chips;
+      const st = a.Starlink || a.starlink || a.asset_starlink || a.asset_starlinks;
+
+      const typeStr = a.asset_type || '';
+      const isNotebook = typeStr.includes('Notebook');
+      const isCelular = typeStr.includes('Celular'); // Cobre 'Celular' e 'Celulare'
+      const isChip = typeStr.toUpperCase().includes('CHIP');
+      const isStarlink = typeStr.includes('Starlink');
+
+      let assetTitle = typeStr.toUpperCase();
+      if (isCelular) assetTitle = 'CELULAR'; // Corrige o PDF
 
       let descInfo = 'Modelo não cadastrado';
-      if (a.asset_type === 'Notebook') descInfo = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || 'S/N'})`;
-      else if (a.asset_type === 'Celular') descInfo = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
-      else if (a.asset_type === 'CHIP') descInfo = `Linha: ${ch?.numero || '-'} (${ch?.plano || 'Sem plano'})`;
-      else if (a.asset_type === 'Starlink') descInfo = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
+      if (isNotebook) descInfo = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || 'S/N'})`;
+      else if (isCelular) descInfo = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
+      else if (isChip) descInfo = `Linha: ${ch?.numero || '-'} (${ch?.plano || 'Sem plano'})`;
+      else if (isStarlink) descInfo = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
       
-      return [a.asset_type.toUpperCase(), descInfo, '[  ] SIM    [  ] NÃO'];
+      return [assetTitle, descInfo, '[  ] SIM    [  ] NÃO'];
     });
 
     if (tableData.length === 0) tableData.push(['-', '-', '[  ] SIM    [  ] NÃO']);
@@ -557,22 +564,31 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 <h3 className="text-brandGreen font-bold mb-4">Hardware Físico</h3>
                 <div className="space-y-3">
                   {getActiveAssetsForEmployee(editEmployeeData.id).map(asset => {
-                    // 🛡️ CORREÇÃO: Variáveis blindadas dentro do painel
-                    const nb = asset.Notebook || asset.notebook;
-                    const cel = asset.Celular || asset.celular;
-                    const ch = asset.Chip || asset.chip;
-                    const st = asset.Starlink || asset.starlink;
+                    // 🛡️ CORREÇÃO DEFINITIVA: Fallbacks gigantescos para o Modal UI
+                    const nb = asset.Notebook || asset.notebook || asset.asset_notebook || asset.asset_notebooks;
+                    const cel = asset.Celular || asset.celular || asset.asset_celular || asset.asset_celulares;
+                    const ch = asset.Chip || asset.chip || asset.asset_chip || asset.asset_chips;
+                    const st = asset.Starlink || asset.starlink || asset.asset_starlink || asset.asset_starlinks;
+
+                    const typeStr = asset.asset_type || '';
+                    const isNotebook = typeStr.includes('Notebook');
+                    const isCelular = typeStr.includes('Celular');
+                    const isChip = typeStr.toUpperCase().includes('CHIP');
+                    const isStarlink = typeStr.includes('Starlink');
+
+                    let assetTitle = typeStr;
+                    if (isCelular) assetTitle = 'Celular'; // Corrige visualmente o 'Celulare'
 
                     let assetDesc = 'Modelo não cadastrado';
-                    if (asset.asset_type === 'Notebook') assetDesc = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || '-'})`;
-                    else if (asset.asset_type === 'Celular') assetDesc = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
-                    else if (asset.asset_type === 'CHIP') assetDesc = `Nº: ${ch?.numero || '-'} (${ch?.plano || '-'})`;
-                    else if (asset.asset_type === 'Starlink') assetDesc = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
+                    if (isNotebook) assetDesc = `${nb?.modelo || 'Modelo não cadastrado'} (Patrimônio: ${nb?.patrimonio || '-'})`;
+                    else if (isCelular) assetDesc = `${cel?.modelo || 'Modelo não cadastrado'} ${cel?.imei ? `(IMEI: ${cel.imei})` : ''}`;
+                    else if (isChip) assetDesc = `Nº: ${ch?.numero || '-'} (${ch?.plano || '-'})`;
+                    else if (isStarlink) assetDesc = `${st?.modelo || 'Modelo não cadastrado'} (Projeto: ${st?.projeto || '-'})`;
                     
                     return (
                       <div key={asset.id} className="bg-black/50 p-3 rounded-lg flex justify-between items-center border border-gray-800 hover:border-gray-700 transition-colors">
                         <div>
-                          <p className="text-white font-bold text-sm">{asset.asset_type}</p>
+                          <p className="text-white font-bold text-sm">{assetTitle}</p>
                           <p className="text-xs text-gray-400">{assetDesc}</p>
                         </div>
                         <button onClick={() => handleAction(asset.id, 'unassign')} className="text-xs text-red-400 hover:text-red-300 hover:underline">Devolver</button>
@@ -621,13 +637,19 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             <form onSubmit={submitAssignment} className="flex flex-col gap-4">
               <select required value={selectedItemForAssign} onChange={(e) => setSelectedItemForAssign(e.target.value)} className="w-full bg-black/50 border border-gray-700 hover:border-brandGreen/50 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none cursor-pointer">
                 <option value="" disabled>Escolha na lista de Disponíveis...</option>
-                {/* 🛡️ CORREÇÃO: Variáveis blindadas dentro do Select */}
+                {/* 🛡️ CORREÇÃO DEFINITIVA: Variáveis blindadas dentro do Select */}
                 {availableAssignables.map(asset => {
-                  const nb = asset.Notebook || asset.notebook;
-                  const cel = asset.Celular || asset.celular;
-                  const ch = asset.Chip || asset.chip;
-                  const st = asset.Starlink || asset.starlink;
-                  return (<option key={asset.id} value={asset.id}>{asset.asset_type}: {nb?.patrimonio || cel?.imei || ch?.numero || st?.projeto}</option>);
+                  const nb = asset.Notebook || asset.notebook || asset.asset_notebook || asset.asset_notebooks;
+                  const cel = asset.Celular || asset.celular || asset.asset_celular || asset.asset_celulares;
+                  const ch = asset.Chip || asset.chip || asset.asset_chip || asset.asset_chips;
+                  const st = asset.Starlink || asset.starlink || asset.asset_starlink || asset.asset_starlinks;
+                  
+                  const typeStr = asset.asset_type || '';
+                  let assetTitle = typeStr;
+                  if (typeStr.includes('Celular')) assetTitle = 'Celular'; // Arruma visualmente no Select
+
+                  const identifier = nb?.patrimonio || cel?.imei || ch?.numero || st?.projeto || 'Sem identificação';
+                  return (<option key={asset.id} value={asset.id}>{assetTitle}: {identifier}</option>);
                 })}
               </select>
               <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Confirmar Atribuição</button>
