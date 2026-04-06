@@ -12,11 +12,31 @@ exports.getAll = async (req, res) => {
         {
           model: EmployeeLicense,
           as: 'EmployeeLicenses',
-          include: [{ model: Employee, as: 'Employee' }]
+          required: false,
+          include: [{ model: Employee, as: 'Employee', required: false }]
         }
-      ]
+      ],
+      order: [['nome', 'ASC']]
     });
-    return res.status(200).json({ data: licenses });
+
+    const patch = [];
+    const data = licenses.map((l) => {
+      const j = l.toJSON();
+      const assignments = j.EmployeeLicenses || [];
+      const n = assignments.length;
+      if (Number(j.quantidade_em_uso) !== n) {
+        patch.push({ id: j.id, n });
+      }
+      return { ...j, quantidade_em_uso: n };
+    });
+
+    if (patch.length) {
+      await Promise.all(
+        patch.map(({ id, n }) => License.update({ quantidade_em_uso: n }, { where: { id } }))
+      );
+    }
+
+    return res.status(200).json({ data });
   } catch (error) {
     console.error("❌ Erro na listagem de licenças:", error.message);
     return res.status(500).json({ error: "Erro no banco de dados" });
