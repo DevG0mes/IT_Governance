@@ -104,13 +104,21 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
         return foundKey ? String(row[foundKey]).trim() : '';
       };
 
-      // Preferir bulk para assets (evita N requisições e timeout/429).
+      // 🛡️ NOVO: Função para blindar o banco contra datas vazias ou no formato brasileiro
+      const parseDateForDB = (dateStr) => {
+        if (!dateStr || dateStr.trim() === '') return null;
+        if (dateStr.includes('/')) {
+          const parts = dateStr.split('/');
+          if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        return dateStr;
+      };
+
       if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
         try {
           const items = previewData.map(row => {
             const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'responsavel', 'email_colaborador', 'email_responsavel', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
-
             const assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
 
             return {
@@ -127,7 +135,7 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               plano: getVal(row, 'plano'),
               grupo: getVal(row, 'grupo'),
               responsavel: getVal(row, 'responsavel'),
-              vencimento_plano: getVal(row, 'vencimento_plano'),
+              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')), // 🛡️ Proteção aplicada aqui
               localizacao: getVal(row, 'localizacao'),
               projeto: getVal(row, 'projeto'),
               modelo_starlink: getVal(row, 'modelo'),
@@ -158,7 +166,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
 
       for (let row of previewData) {
         try {
-          // 1. COLABORADORES (Usa 'employees' para evitar duplicados)
           if (importCategory === 'Colaboradores') {
             const email = normalizeEmail(getVal(row, 'email', 'e-mail'));
             if (!employees.some(e => normalizeEmail(e.email) === email)) {
@@ -166,7 +173,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             }
           }
           
-          // 2. ATIVOS (Usa 'assets' para validar e 'employees' para vincular)
           else if (['Notebooks', 'Celulares', 'CHIPs', 'Starlinks'].includes(importCategory)) {
             const emailColab = normalizeEmail(getVal(row, 'email', 'usuario', 'responsavel', 'email_colaborador', 'email_responsavel'));
             const emp = employees.find(e => normalizeEmail(e.email) === emailColab);
@@ -174,7 +180,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             let assetType = importCategory === 'CHIPs' ? 'CHIP' : importCategory.slice(0, -1);
             const pat = getVal(row, 'patrimonio', 'patrimônio', 'imei', 'numero');
 
-            // Verifica duplicidade no array local antes de enviar
             if (assets.some(a => (a.notebook?.patrimonio === pat) || (a.celular?.imei === pat) || (a.chip?.numero === pat))) {
               throw new Error(`Item ${pat} já existe no sistema.`);
             }
@@ -190,15 +195,14 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
               numero: getVal(row, 'numero', 'linha'),
               iccid: getVal(row, 'iccid'),
               plano: getVal(row, 'plano'),
-              grupo: getVal(row, 'grupo')
+              grupo: getVal(row, 'grupo'),
+              vencimento_plano: parseDateForDB(getVal(row, 'vencimento_plano')) // 🛡️ Proteção aplicada aqui também (caso use o Fallback)
             };
 
             const res = await api.post('/api/assets', payload);
             const newAsset = res.data.data || res.data;
 
-            // 🛡️ VÍNCULO HISTÓRICO: Garante que o hardware apareça no painel do colaborador
             if (emp && newAsset?.id) {
-              // O segredo está no nome das chaves: asset_id e employee_id
               await api.put(`/api/employees/${emp.id}/assign`, { 
                   asset_id: newAsset.id, 
                   employee_id: emp.id 
@@ -206,7 +210,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             }
           }
 
-          // 3. MEDIÇÕES (Usa 'contracts' para verificação)
           else if (importCategory === 'Medições de Contratos') {
              const serv = getVal(row, 'servico');
              const mes = getVal(row, 'mes_competencia');
@@ -216,7 +219,6 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
              }
           }
 
-          // 4. LICENÇAS (Usa 'licenses' para verificação)
           else if (importCategory === 'Licenças (Cadastro)') {
             const soft = getVal(row, 'software');
             if (!licenses.some(l => l.nome.toLowerCase() === soft.toLowerCase())) {
@@ -228,19 +230,17 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
             }
           }
           
-          // 5. VÍNCULOS DE LICENÇAS (Employee <-> License)
           else if (importCategory === 'Vínculos de Licenças') {
             const email = normalizeEmail(getVal(row, 'email_colaborador', 'email', 'e-mail'));
             const software = getVal(row, 'software');
             if (!email || !software) continue;
 
             const emp = employees.find(e => normalizeEmail(e.email) === email);
-            if (!emp) continue; // sem e-mail corporativo no sistema, não há como vincular
+            if (!emp) continue; 
 
             const lic = licenses.find(l => (l.nome || '').toLowerCase().trim() === software.toLowerCase().trim());
             if (!lic) continue;
 
-            // evita duplicidade com base no array local (quando já carregado)
             const existingAssignments = lic.EmployeeLicenses || lic.assignments || [];
             const already = existingAssignments.some(a => (a.EmployeeId === emp.id || a.employee_id === emp.id) && (a.license_id === lic.id || a.LicenseId === lic.id));
             if (already) continue;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { ShieldCheck, X, LayoutDashboard, Database, CreditCard, UploadCloud, DownloadCloud, FileSignature, PowerOff, Shield, KeyRound, Tag, AlertTriangle, Info, Users, Wrench, FileCheck, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -50,7 +50,7 @@ export default function App() {
     setConfirmDialog({ isOpen: true, title, message, onConfirm, isDanger, confirmText });
   }
 
-  function handleLogout() { 
+  const handleLogout = useCallback(() => { 
     const userName = currentUser ? currentUser.nome : 'Sistema';
     // 🛡️ Ajuste de Rota: removido o /api duplicado
     api.post('/audit-logs', { user: userName, action: 'LOGOUT', module: 'Autenticação', details: 'Saiu do sistema.' }).catch(() => {});
@@ -58,9 +58,9 @@ export default function App() {
     localStorage.clear(); 
     setCurrentUser(null); 
     setLoginForm({ email: '', senha: '' }); 
-  }
+  }, [currentUser]);
 
-  async function fetchAdminData() {
+  const fetchAdminData = useCallback(async () => {
     try {
       const [usersRes, logsRes] = await Promise.all([
           // 🛡️ Ajuste de Rotas: removido o /api duplicado
@@ -73,9 +73,9 @@ export default function App() {
     } catch (e) {
       if(e.response?.status === 401) handleLogout();
     }
-  }
+  }, [handleLogout]);
 
-  async function registerLog(action, module, details) {
+  const registerLog = useCallback(async (action, module, details) => {
     const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
     try {
       // 🛡️ Ajuste de Rota
@@ -84,9 +84,9 @@ export default function App() {
     } catch (e) {
       if(e.response?.status === 401) handleLogout();
     }
-  }
+  }, [currentUser, activeTab, fetchAdminData, handleLogout]);
 
-  function fetchData() {
+  const fetchData = useCallback(() => {
     setIsLoading(true);
     const requests = [];
 
@@ -124,7 +124,7 @@ export default function App() {
         if (err.response?.status === 401) handleLogout();
       })
       .finally(() => setIsLoading(false));
-  }
+  }, [activeTab, handleLogout]);
 
   // ─── EFFECTS ───
 
@@ -133,53 +133,52 @@ export default function App() {
       fetchData(); 
       if (currentUser.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData(); 
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, activeTab]);
+  }, [currentUser, activeTab, fetchData, fetchAdminData]);
 
   const handleLogin = async (e) => {
-  e.preventDefault(); 
-  Swal.fire({
-    title: 'Autenticando...',
-    allowOutsideClick: false,
-    didOpen: () => { Swal.showLoading(); }
-  });
-
-  try {
-    // 🛡️ Ajuste Crítico: De /api/login para /login
-    const res = await api.post('/login', loginForm);
-    const data = res.data;
-    
-    const loggedUser = data.data;
-    const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
-    
-    loggedUser.permissions = rawPerms 
-      ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
-      : (roleTemplates[loggedUser.cargo] || {});
-
-    // 1. SALVA AS CREDENCIAIS NO NAVEGADOR
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('logged_user', JSON.stringify(loggedUser));
-    
-    Swal.close();
-
-    // 2. ATUALIZA O ESTADO GLOBAL
-    setCurrentUser(loggedUser);
-
-    // 3. REDIRECIONAMENTO
-    window.location.href = '/dashboard';
-
-  } catch (err) {
-    console.error("Erro completo:", err);
+    e.preventDefault(); 
     Swal.fire({
-      title: 'Erro no Login',
-      text: err.response?.data?.error || "E-mail ou senha incorretos.",
-      icon: 'error',
-      background: '#1f2937',
-      color: '#ffffff',
-      confirmButtonColor: '#ef4444'
+      title: 'Autenticando...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
     });
-  }
-};
+
+    try {
+      // 🛡️ Ajuste Crítico: De /api/login para /login
+      const res = await api.post('/login', loginForm);
+      const data = res.data;
+      
+      const loggedUser = data.data;
+      const rawPerms = loggedUser.permissions_json || loggedUser.permissionsJSON;
+      
+      loggedUser.permissions = rawPerms 
+        ? (typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms) 
+        : (roleTemplates[loggedUser.cargo] || {});
+
+      // 1. SALVA AS CREDENCIAIS NO NAVEGADOR
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('logged_user', JSON.stringify(loggedUser));
+      
+      Swal.close();
+
+      // 2. ATUALIZA O ESTADO GLOBAL
+      setCurrentUser(loggedUser);
+
+      // 3. REDIRECIONAMENTO
+      window.location.href = '/dashboard';
+
+    } catch (err) {
+      console.error("Erro completo:", err);
+      Swal.fire({
+        title: 'Erro no Login',
+        text: err.response?.data?.error || "E-mail ou senha incorretos.",
+        icon: 'error',
+        background: '#1f2937',
+        color: '#ffffff',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
 
   const hasAccess = (module, requiredLevel = 'read') => { 
     if (!currentUser) return false; 

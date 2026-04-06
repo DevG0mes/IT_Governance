@@ -36,7 +36,7 @@ export default function AdminModule({
               <div key={user.id} className="bg-black/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:border-gray-700 transition-colors">
                 <div>
                   <p className="text-white font-bold text-sm">{user.nome}</p>
-                  <p className="text-xs text-brandGreen">{user.cargo || 'Usuário Padrão'}</p>
+                  <p className="text-xs text-brandGreen">{user.email}</p>
                 </div>
                 {hasAccess('admin', 'edit') && user.id !== 1 && (
                   <button onClick={() => deleteSystemUser(user.id)} className="text-gray-500 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
