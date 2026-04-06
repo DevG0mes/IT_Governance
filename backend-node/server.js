@@ -21,6 +21,7 @@ const contractRoutes = require('./src/routes/contracts');
 const catalogRoutes = require('./src/routes/catalog');    
 const auditRoutes = require('./src/routes/audit'); 
 const userRoutes = require('./src/routes/users'); 
+const finopsRoutes = require('./src/routes/finops');
 
 const app = express();
 
@@ -101,6 +102,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
+app.use('/api/dashboard', finopsRoutes);
 app.use('/api/users', verificarAdmin, userRoutes);
 
 app.use((err, req, res, next) => {
