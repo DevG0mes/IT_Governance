@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // 1. CRIAÇÃO DA INSTÂNCIA BLINDADA (Google Cloud Edition)
 // Tenta ler o .env de produção do Vite. Se falhar, aciona o Fallback de Segurança.
-const API_URL_OFICIAL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000/api';
+const API_URL_OFICIAL = import.meta.env.VITE_API_URL || 'http://34.95.207.232:3000';
 
 const api = axios.create({
   baseURL: API_URL_OFICIAL,
