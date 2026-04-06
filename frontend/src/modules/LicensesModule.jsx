@@ -18,7 +18,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
     const payload = {...newLicense, custo: parseCurrencyToFloat(newLicense.custo), quantidade_total: parseInt(newLicense.quantidade_total)}; 
     try {
       // 🚨 NOVO: api.post limpo
-      await api.post('/api/licenses', payload);
+      await api.post('/licenses', payload);
       
       registerLog('CREATE', 'Licenças', `Cadastrou licença ${payload.nome}`); 
       setIsLicenseModalOpen(false); 
@@ -32,7 +32,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
     const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; 
     try {
       // 🚨 NOVO: api.put limpo
-      await api.put(`/api/licenses/${editLicenseData.id}`, payload);
+      await api.put(`/licenses/${editLicenseData.id}`, payload);
       
       registerLog('UPDATE', 'Licenças', `Atualizou licença ${payload.nome}`); 
       setEditLicenseData(null); 
@@ -43,7 +43,7 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
   const unassignLicense = async (assignmentId) => { 
     try {
       // 🚨 NOVO: api.delete limpo
-      await api.delete(`/api/licenses/unassign/${assignmentId}`);
+      await api.delete(`/licenses/unassign/${assignmentId}`);
       
       registerLog('UPDATE', 'Licenças', `Revogou atribuição de licença ID ${assignmentId}`); 
       fetchData(); 

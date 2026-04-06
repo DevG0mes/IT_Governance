@@ -1,5 +1,5 @@
 ﻿IMEI;Modelo;Status;Email_Colaborador
-356722917059932/01;Modelos de Celulares;Em Uso;alessandro.santos@psienergy.com.br
+356722917059932/01;;Em Uso;alessandro.santos@psienergy.com.br
 ;Motorola E6i;Em Uso;alexandre.faraco@psienergy.com.br
 352058/60/836609/4;Samsungs galaxy A05 ;Em Uso;allanis.praes@psienergy.com.br
 354974/38/877057/8;Samsungs galaxy A06 ;Em Uso;amauri.loschi@psienergy.com.br
@@ -11,7 +11,7 @@
 352058/60/832118/0;Samsungs galaxy A05 ;Em Uso;antonio.almeida@psienergy.com.br
 ;Samsungs galaxy A06 ;Em Uso;
 ;Samsungs galaxy A15 ;Em Uso;bernardo.martins@psienergy.com.br
-352686597183102;Motorola E6i;Em Uso;bruno.dias@psienergy.com.br
+3,52687E+14;Motorola E6i;Em Uso;bruno.dias@psienergy.com.br
 ;SAMSUNG GALAXY A06;Em Uso;bruno.ferreira@psienergy.com.br
 ;Samsungs galaxy A15 ;Em Uso;bruno.lima@psienergy.com.br
 354974/38/833681/8;Samsungs galaxy A05 ;Em Uso;bruno.manfrin@psienergy.com.br
@@ -32,7 +32,7 @@
 "352686597183045
 ";Samsung galaxy A03Core ;Em Uso;fabiano.santos@psienergy.com.br
 ;Samsungs galaxy A06 ;Em Uso;fabricio.martinez@psienergy.com.br
-352686597182625;Samsungs galaxy A05 ;Em Uso;felipe.duran@psienergy.com.br
+3,52687E+14;Samsungs galaxy A05 ;Em Uso;felipe.duran@psienergy.com.br
 354974/38/833710/5;Samsungs galaxy A05 ;Em Uso;felipe.nadai@psienergy.com.br
 354974/38/833667/7;Samsungs galaxy A05 ;Em Uso;felipe.oliveira@psienergy.com.br
 354974/38/833104/8;Samsungs galaxy A05 ;Em Uso;fernanda.fanton@psienergy.com.br
@@ -59,8 +59,8 @@
 ;Motorola E6i;Em Uso;natalli.pereira@psienergy.com.br
 ;Samsung galaxy A03Core ;Em Uso;nilson.machado@psienergy.com.br
 354974/38/877088/3;Motorola E6i;Em Uso;patricia.grella@psienergy.com.br
-352686597182989;Samsungs galaxy A06 ;Em Uso;
-352686597182989;Samsungs galaxy A06 ;Em Uso;
+3,52687E+14;Samsungs galaxy A06 ;Em Uso;
+3,52687E+14;Samsungs galaxy A06 ;Em Uso;
 ;Samsungs galaxy A06 ;Em Uso;
 ;Motorola E6i;Em Uso;
 ;Samsungs galaxy A06 ;Em Uso;
@@ -86,7 +86,3 @@
 359102103140894/07;Samsungs galaxy A15 ;Em Uso;
 35497438833678/4;MOTO6ES;Em Uso;william.lima@psienergy.com.br
 ;Samsungs galaxy A05 ;Disponivel;
-;;;
-;;;
-;;;
-;;;
