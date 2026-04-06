@@ -10,17 +10,26 @@ const ASSET_INCLUDES_FULL = [
   { model: AssetCelular, as: 'Celular' },
 ];
 
-/** Aceita string vinda de <input type="date"> (YYYY-MM-DD). */
+/** YYYY-MM-DD ou DD/MM/AAAA (importação). */
 function parseDataAquisicao(v) {
   if (v == null || v === '') return null;
-  const s = String(v).trim().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  return s;
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      const d = parts[0].padStart(2, '0');
+      const m = parts[1].padStart(2, '0');
+      const y = parts[2].slice(0, 4);
+      if (/^\d{4}$/.test(y)) return `${y}-${m}-${d}`;
+    }
+  }
+  return null;
 }
 
 const normalizeAssetStatus = (raw) => {
   if (!raw) return 'Disponível';
-  const s = String(raw).trim().toLowerCase();
+  const s = String(raw).trim().toLowerCase().replace(/\s+/g, ' ');
   const map = {
     disponivel: 'Disponível',
     'disponível': 'Disponível',
@@ -30,11 +39,15 @@ const normalizeAssetStatus = (raw) => {
     'manutenção': 'Manutenção',
     renovacao: 'Renovação',
     'renovação': 'Renovação',
+    renovar: 'Renovação',
     inutilizado: 'Inutilizado',
     descartado: 'Descartado',
     'extraviado/roubado': 'Extraviado/Roubado',
     extraviado: 'Extraviado/Roubado',
     roubado: 'Extraviado/Roubado',
+    cancelar: 'Descartado',
+    cancelado: 'Descartado',
+    bloqueado: 'Manutenção',
   };
   return map[s] || raw;
 };
@@ -504,7 +517,12 @@ exports.importBulk = async (req, res) => {
           const assetType = normalizeAssetType(input.asset_type);
           const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
           const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-          const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
+          const status =
+            input.status != null && String(input.status).trim() !== ''
+              ? normalizeAssetStatus(input.status)
+              : ownerEmployeeId
+                ? 'Em uso'
+                : 'Disponível';
 
           const patrimonio = standardizeAssetIdentifier(input.patrimonio);
           const serial_number = standardizeAssetIdentifier(input.serial_number);

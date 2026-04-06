@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS asset_notebooks (
   patrimonio VARCHAR(100) UNIQUE,
   modelo VARCHAR(100),
   garantia VARCHAR(100),
-  status_garantia VARCHAR(50)
+  status_garantia VARCHAR(50),
+  data_aquisicao DATE NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_celulares (
@@ -67,7 +68,8 @@ CREATE TABLE IF NOT EXISTS asset_celulares (
   imei VARCHAR(80) UNIQUE,
   modelo VARCHAR(100),
   grupo VARCHAR(100),
-  responsavel VARCHAR(150)
+  responsavel VARCHAR(150),
+  data_aquisicao DATE NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_chips (
@@ -78,7 +80,8 @@ CREATE TABLE IF NOT EXISTS asset_chips (
   plano VARCHAR(100),
   grupo VARCHAR(100),
   responsavel VARCHAR(150),
-  vencimento_plano DATE NULL
+  vencimento_plano DATE NULL,
+  data_aquisicao DATE NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_starlinks (
@@ -92,7 +95,8 @@ CREATE TABLE IF NOT EXISTS asset_starlinks (
   senha VARCHAR(150),
   senha_roteador VARCHAR(150),
   projeto VARCHAR(150),
-  email_responsavel VARCHAR(150)
+  email_responsavel VARCHAR(150),
+  data_aquisicao DATE NULL
 );
 
 -- =========================
@@ -114,7 +118,7 @@ CREATE INDEX IF NOT EXISTS ix_assign_asset ON asset_assignments(asset_id);
 -- =========================
 CREATE TABLE IF NOT EXISTS licenses (
   id BIGSERIAL PRIMARY KEY,
-  nome VARCHAR(150) NOT NULL UNIQUE,
+  nome VARCHAR(255) NOT NULL,
   fornecedor VARCHAR(150),
   plano VARCHAR(150),
   custo NUMERIC(10,2),
