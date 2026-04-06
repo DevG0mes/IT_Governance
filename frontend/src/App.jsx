@@ -67,11 +67,30 @@ export default function App() {
           api.get('/users'),
           api.get('/audit-logs')
       ]);
-      const usersFromDB = (usersRes.data.data || []).map(u => ({ ...u, permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) }));
+
+      // 🔍 RAIO-X: Vamos ver o que o Node.js está devolvendo!
+      console.log("RESPOSTA DA API (USERS):", usersRes.data);
+      console.log("RESPOSTA DA API (LOGS):", logsRes.data);
+
+      // Proteção extra caso o backend não mande dentro de "data"
+      const rawUsers = usersRes.data.data || usersRes.data || [];
+      const rawLogs = logsRes.data.data || logsRes.data || [];
+
+      const usersFromDB = rawUsers.map(u => ({ 
+          ...u, 
+          permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) 
+      }));
+      
       setSystemUsers(usersFromDB);
-      setAuditLogs(logsRes.data.data || []);
+      setAuditLogs(rawLogs);
+      
     } catch (e) {
-      if(e.response?.status === 401) handleLogout();
+      // 🚨 AGORA O ERRO NÃO PASSA BATIDO!
+      console.error("❌ ERRO NO FETCH ADMIN DATA:", e);
+      
+      if(e.response?.status === 401) {
+          handleLogout();
+      }
     }
   }, [handleLogout]);
 
