@@ -13,6 +13,7 @@ const {
 } = require('../../config/db');
 const { standardizeText, standardizeEmail } = require('../../utils/sanitizer');
 const { writeAuditLog } = require('../../utils/audit');
+const { tryFinalizeOffboarding } = require('../services/offboardingService');
 
 exports.getAll = async (req, res) => {
   try {
@@ -98,6 +99,11 @@ exports.update = async (req, res) => {
     }
 
     await employee.update(patch, { transaction: t });
+
+    // Se estiver na fila de desligamento, tenta finalizar automaticamente quando tudo estiver ok
+    if (String(employee.status || '').trim().toLowerCase() === 'em desligamento') {
+      await tryFinalizeOffboarding(employee.id, t);
+    }
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',

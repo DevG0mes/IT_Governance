@@ -4,6 +4,7 @@ const {
   EmployeeLicense, 
   Employee 
 } = require('../../config/db');
+const { tryFinalizeOffboarding } = require('../services/offboardingService');
 
 exports.getAll = async (req, res) => {
   try {
@@ -137,6 +138,7 @@ exports.unassign = async (req, res) => {
     const { id } = req.params;
     const empLicense = await EmployeeLicense.findByPk(id, { transaction: t });
     if (!empLicense) throw new Error('Vínculo não encontrado');
+    const employeeId = empLicense.employee_id;
 
     const license = await License.findByPk(empLicense.license_id, { transaction: t });
     if (license) {
@@ -146,6 +148,12 @@ exports.unassign = async (req, res) => {
     }
 
     await empLicense.destroy({ transaction: t });
+
+    // best-effort: se colaborador está em desligamento e ficou tudo ok, marca como Desligado
+    try {
+      await tryFinalizeOffboarding(employeeId, t);
+    } catch (_) {}
+
     await t.commit();
     return res.status(200).json({ message: 'Licença revogada e slot liberado.' });
   } catch (error) {

@@ -13,6 +13,7 @@ const {
 } = require('../../config/db');
 const { writeAuditLog } = require('../../utils/audit');
 const { standardizeAssetIdentifier, standardizeText } = require('../../utils/sanitizer');
+const { tryFinalizeOffboarding } = require('../services/offboardingService');
 
 const ASSET_INCLUDES_FULL = [
   { model: AssetNotebook, as: 'Notebook' },
@@ -407,6 +408,7 @@ exports.unassign = async (req, res) => {
     const asset = await Asset.findByPk(req.params.id, { transaction: t });
     if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
 
+    const prevEmployeeId = asset.EmployeeId;
     const activeAssignment = await AssetAssignment.findOne({
       where: { AssetId: asset.id, returned_at: null },
       order: [['assigned_at', 'DESC']],
@@ -432,6 +434,16 @@ exports.unassign = async (req, res) => {
     });
 
     await t.commit();
+
+    if (prevEmployeeId) {
+      // best-effort: se colaborador está em desligamento e ficou tudo ok, marca como Desligado
+      try {
+        await sequelize.transaction(async (t2) => {
+          await tryFinalizeOffboarding(prevEmployeeId, t2);
+        });
+      } catch (_) {}
+    }
+
     return res.status(200).json({ message: 'Ativo devolvido ao estoque' });
   } catch (error) {
     if (t) await t.rollback();
