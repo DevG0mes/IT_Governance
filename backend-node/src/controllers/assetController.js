@@ -629,9 +629,14 @@ exports.importBulk = async (req, res) => {
 
           created++;
         });
-      } catch (e) {
-        errors.push({ index: idx, error: e.message || String(e) });
-      }
+      } catch (error) {
+        let menssagem = error.message || String(error);
+        if(error.name ==='SequelizeValidationError'){
+          menssagem = error.errors.map(e => e.message).join(' | ');
+        }
+        console.error(`❌ Erro no import bulk (idx=${idx}): ${menssagem}`);
+        return res.status(400).json({ error: "Erro de Validação: " + menssagem,  details: menssagem});
+        }
     }
 
     await t.commit();
