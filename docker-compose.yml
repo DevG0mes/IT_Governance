@@ -20,17 +20,17 @@ services:
     restart: always
     ports:
       - "3000:3000"
-    depends_on:
-      - db
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=admin
-      - DB_PASS=senha_secreta_123
-      - DB_NAME=inventario_db
-      - DB_DIALECT=postgres
-      - JWT_SECRET=PS1_En3rgy_G0vTI_2026_Secure_TrUst_N0_On3_9971
-      - PORT=3000
+      - NODE_ENV=production
+      # Cloud SQL via .env (recomendado). Defaults apontam para o postgres local do compose.
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-admin}
+      - DB_PASS=${DB_PASS:-senha_secreta_123}
+      - DB_NAME=${DB_NAME:-inventario_db}
+      - DB_DIALECT=${DB_DIALECT:-postgres}
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=${PORT:-3000}
     networks:
       - rede-governance
 
