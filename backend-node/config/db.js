@@ -7,6 +7,8 @@ require('dotenv').config();
 // Mantemos override por env caso precise rodar em outro dialeto localmente.
 const DB_DIALECT = (process.env.DB_DIALECT || 'postgres').toLowerCase();
 const DB_PORT_DEFAULT = DB_DIALECT === 'postgres' ? 5432 : 3306;
+const DB_SSLMODE = String(process.env.DB_SSLMODE || process.env.PGSSLMODE || '').toLowerCase();
+const SHOULD_USE_SSL = DB_DIALECT === 'postgres' && ['require', 'verify-ca', 'verify-full'].includes(DB_SSLMODE);
 
 console.log(`--- 📡 Tentando conectar ao banco de dados (${DB_DIALECT})...`);
 
@@ -16,6 +18,16 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
   port: process.env.DB_PORT || DB_PORT_DEFAULT,
   dialect: DB_DIALECT,
   logging: false,
+  ...(SHOULD_USE_SSL
+    ? {
+        dialectOptions: {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false,
+          },
+        },
+      }
+    : {}),
   define: {
     // Mantém o padrão do projeto (campos existentes são em snake_case/pt-br misto)
     freezeTableName: true,
