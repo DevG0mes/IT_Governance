@@ -22,6 +22,7 @@ const catalogRoutes = require('./src/routes/catalog');
 const auditRoutes = require('./src/routes/audit'); 
 const userRoutes = require('./src/routes/users'); 
 const finopsRoutes = require('./src/routes/finops');
+const profilesRoutes = require('./src/routes/profiles');
 
 const app = express();
 
@@ -104,6 +105,7 @@ app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/dashboard', finopsRoutes);
 app.use('/api/users', verificarAdmin, userRoutes);
+app.use('/api/profiles', verificarAdmin, profilesRoutes);
 
 app.use((err, req, res, next) => {
   if (req.timedout) {

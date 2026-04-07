@@ -37,6 +37,10 @@ const AssetCelular = require('../Models/AssetCelular')(sequelize, DataTypes);
 const AssetMaintenanceLog = require('../Models/AssetMaintenanceLog')(sequelize, DataTypes);
 const EmployeeLicense = require('../Models/EmployeeLicense')(sequelize, DataTypes);
 const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataTypes);
+const AccessProfile = require('../Models/AccessProfile')(sequelize, DataTypes);
+
+User.belongsTo(AccessProfile, { foreignKey: 'profile_id', as: 'AccessProfile' });
+AccessProfile.hasMany(User, { foreignKey: 'profile_id', as: 'Users' });
 
 // ==========================================
 // 3. RELACIONAMENTOS DO BANCO
@@ -116,7 +120,8 @@ const connectDatabase = async () => {
           offboarding: "edit",
           export: "edit",
           import: "edit",
-          admin: "edit"
+          admin: "edit",
+          settings: "edit"
         })
       });
       console.log('✅ Usuário Administrador [admin@psienergy.com.br] criado!');
@@ -132,5 +137,5 @@ const connectDatabase = async () => {
 // EXPORTAÇÃO COMPLETA
 module.exports = { 
   sequelize, User, Employee, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, 
-  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, AssetMaintenanceLog, connectDatabase 
+  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, AssetMaintenanceLog, AccessProfile, connectDatabase 
 };

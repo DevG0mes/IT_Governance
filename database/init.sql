@@ -16,6 +16,20 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- =========================
+-- 1.1) ACCESS PROFILES (Perfis)
+-- =========================
+CREATE TABLE IF NOT EXISTS access_profiles (
+  id BIGSERIAL PRIMARY KEY,
+  nome VARCHAR(80) NOT NULL UNIQUE,
+  "permissionsJSON" TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_id BIGINT NULL REFERENCES access_profiles(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS ix_users_profile_id ON users(profile_id);
+
+-- =========================
 -- 2) EMPLOYEES (Colaboradores)
 -- =========================
 CREATE TABLE IF NOT EXISTS employees (
@@ -43,6 +57,8 @@ CREATE TABLE IF NOT EXISTS assets (
   id BIGSERIAL PRIMARY KEY,
   asset_type VARCHAR(50) NOT NULL,
   status VARCHAR(50) DEFAULT 'Disponível',
+  status_raw VARCHAR(80) NULL,
+  status_source VARCHAR(30) NULL,
   observacao TEXT,
   "EmployeeId" BIGINT NULL REFERENCES employees(id) ON DELETE SET NULL
 );
@@ -112,6 +128,19 @@ CREATE TABLE IF NOT EXISTS asset_assignments (
 );
 CREATE INDEX IF NOT EXISTS ix_assign_employee ON asset_assignments(employee_id);
 CREATE INDEX IF NOT EXISTS ix_assign_asset ON asset_assignments(asset_id);
+
+-- =========================
+-- 5.1) Logs de manutenção (histórico)
+-- =========================
+CREATE TABLE IF NOT EXISTS asset_maintenance_logs (
+  id BIGSERIAL PRIMARY KEY,
+  "AssetId" BIGINT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  chamado VARCHAR(80) NOT NULL,
+  observacao TEXT NULL,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ NULL,
+  created_by VARCHAR(150) NULL
+);
 
 -- =========================
 -- 6) Licenças e vínculos

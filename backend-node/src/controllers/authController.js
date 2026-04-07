@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { User } = require('../../config/db');
+const { User, AccessProfile } = require('../../config/db');
 
 // 🛡️ GOVERNANÇA: Chave do JWT. Em produção, sempre virá do .env
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
@@ -37,9 +37,25 @@ exports.login = async (req, res) => {
       { expiresIn: '12h' }
     );
 
+    const plain = user.get({ plain: true });
+    delete plain.senha;
+
+    let effectivePermissionsJSON = plain.permissionsJSON;
+    if (plain.profile_id) {
+      const prof = await AccessProfile.findByPk(plain.profile_id);
+      if (prof && prof.permissionsJSON) {
+        effectivePermissionsJSON =
+          typeof prof.permissionsJSON === 'string'
+            ? prof.permissionsJSON
+            : JSON.stringify(prof.permissionsJSON);
+      }
+    }
+    plain.permissionsJSON = effectivePermissionsJSON;
+    plain.permissions_json = effectivePermissionsJSON;
+
     return res.status(200).json({
       token: token,
-      data: user 
+      data: plain
     });
 
   } catch (error) {
@@ -70,7 +86,7 @@ exports.setupAdmin = async (req, res) => {
         "dashboard":"edit","inventory":"edit","licenses":"edit",
         "contracts":"edit","catalog":"edit","employees":"edit",
         "maintenance":"edit","offboarding":"edit","export":"edit",
-        "import":"edit","admin":"edit"
+        "import":"edit","admin":"edit","settings":"edit"
       })
     });
 

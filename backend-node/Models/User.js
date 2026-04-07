@@ -23,7 +23,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     permissionsJSON: { 
       type: DataTypes.TEXT 
-    }
+    },
+    profile_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
   }, { 
     tableName: 'users', 
     timestamps: false 
