@@ -1,8 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { KeyRound, Plus, Search, X, Trash2, Edit2, Save, Settings2, UserPlus } from 'lucide-react';
+import { Edit2, KeyRound, Plus, Save, Search, Settings2, Trash2, UserPlus, X } from 'lucide-react';
 import api from '../services/api';
 
-const MODULES = [
+type PermissionLevel = 'none' | 'read' | 'edit';
+type ModuleId =
+  | 'dashboard'
+  | 'inventory'
+  | 'employees'
+  | 'contracts'
+  | 'catalog'
+  | 'licenses'
+  | 'maintenance'
+  | 'offboarding'
+  | 'import'
+  | 'export'
+  | 'admin'
+  | 'settings';
+
+const MODULES: { id: ModuleId; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'inventory', label: 'Inventário' },
   { id: 'employees', label: 'Colaboradores' },
@@ -17,20 +32,64 @@ const MODULES = [
   { id: 'settings', label: 'Configurações' },
 ];
 
-function emptyPerms() {
-  const out = {};
+type PermissionsMap = Record<ModuleId, PermissionLevel>;
+
+type AccessProfile = {
+  id: number;
+  nome: string;
+  permissionsJSON?: unknown;
+  permissions?: Partial<PermissionsMap> | Record<string, unknown>;
+};
+
+type SystemUser = {
+  id: number;
+  nome: string;
+  email: string;
+  cargo?: string | null;
+  profile_id?: number | null;
+  profileNome?: string | null;
+};
+
+type UiSettings = {
+  inventoryPageSize: number;
+};
+
+type Props = {
+  hasAccess: (module: string, requiredLevel?: 'read' | 'edit') => boolean;
+  systemUsers?: SystemUser[];
+  accessProfiles?: AccessProfile[];
+  refreshAdminData?: () => Promise<void> | void;
+  registerLog?: (action: string, module: string, details: string) => Promise<void> | void;
+  deleteSystemUser?: (id: number) => void;
+  uiSettings: UiSettings;
+  setUiSettings: (next: UiSettings) => void;
+};
+
+function emptyPerms(): PermissionsMap {
+  const out = {} as PermissionsMap;
   MODULES.forEach((m) => {
     out[m.id] = 'none';
   });
   return out;
 }
 
-function countPerms(perms, level) {
+function safeParse<T>(raw: unknown, fallback: T): T {
+  try {
+    if (raw == null) return fallback;
+    if (typeof raw === 'object') return raw as T;
+    if (typeof raw === 'string') return JSON.parse(raw) as T;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function countPerms(perms: Record<string, unknown> | undefined, level: PermissionLevel) {
   const p = perms || {};
   return Object.values(p).filter((v) => v === level).length;
 }
 
-function paginate(list, page, pageSize) {
+function paginate<T>(list: T[], page: number, pageSize: number) {
   const total = list.length;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const cur = Math.min(Math.max(1, page), pages);
@@ -47,16 +106,19 @@ export default function SettingsModule({
   deleteSystemUser,
   uiSettings,
   setUiSettings,
-}) {
-  const [activeSub, setActiveSub] = useState('profiles');
+}: Props) {
+  const [activeSub, setActiveSub] = useState<'profiles' | 'users' | 'ui'>('profiles');
 
   // Perfis
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(null);
-  const [profileForm, setProfileForm] = useState({ nome: '', permissions: emptyPerms() });
+  const [editingProfile, setEditingProfile] = useState<AccessProfile | null>(null);
+  const [profileForm, setProfileForm] = useState<{ nome: string; permissions: PermissionsMap }>({
+    nome: '',
+    permissions: emptyPerms(),
+  });
 
   const safeProfiles = Array.isArray(accessProfiles) ? accessProfiles : [];
 
@@ -74,36 +136,43 @@ export default function SettingsModule({
     setIsProfileModalOpen(true);
   };
 
-  const openEditProfile = (p) => {
+  const openEditProfile = (p: AccessProfile) => {
     setEditingProfile(p);
+    const perms = (p.permissions as Record<string, unknown>) || safeParse(p.permissionsJSON, {});
     setProfileForm({
       nome: p.nome || '',
-      permissions: { ...emptyPerms(), ...(p.permissions || (p.permissionsJSON ? JSON.parse(p.permissionsJSON) : {})) },
+      permissions: { ...emptyPerms(), ...(perms as Partial<PermissionsMap>) },
     });
     setIsProfileModalOpen(true);
   };
 
-  const saveProfile = async (e) => {
+  const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasAccess('settings', 'edit')) return;
     try {
       if (editingProfile?.id) {
-        await api.put(`/api/profiles/${editingProfile.id}`, {
-          nome: profileForm.nome,
-          permissions: profileForm.permissions,
-        });
+        await api.put(`/api/profiles/${editingProfile.id}`, { nome: profileForm.nome, permissions: profileForm.permissions });
         registerLog?.('UPDATE', 'Configurações', `Atualizou perfil ${profileForm.nome}`);
       } else {
-        await api.post('/api/profiles', {
-          nome: profileForm.nome,
-          permissions: profileForm.permissions,
-        });
+        await api.post('/api/profiles', { nome: profileForm.nome, permissions: profileForm.permissions });
         registerLog?.('CREATE', 'Configurações', `Criou perfil ${profileForm.nome}`);
       }
       setIsProfileModalOpen(false);
       await refreshAdminData?.();
-    } catch (err) {
-      alert(err.response?.data?.error || err.message || 'Erro ao salvar perfil');
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.message || 'Erro ao salvar perfil');
+    }
+  };
+
+  const deleteProfile = async (p: AccessProfile) => {
+    if (!hasAccess('settings', 'edit')) return;
+    if (!window.confirm(`Remover o perfil "${p.nome}"?`)) return;
+    try {
+      await api.delete(`/api/profiles/${p.id}`);
+      registerLog?.('DELETE', 'Configurações', `Removeu perfil ${p.nome}`);
+      await refreshAdminData?.();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.message || 'Erro ao remover perfil');
     }
   };
 
@@ -112,8 +181,13 @@ export default function SettingsModule({
   const [uPage, setUPage] = useState(1);
   const [uPageSize, setUPageSize] = useState(10);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [userForm, setUserForm] = useState({ nome: '', email: '', senha: '', profile_id: '' });
+  const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
+  const [userForm, setUserForm] = useState<{ nome: string; email: string; senha: string; profile_id: number | '' }>({
+    nome: '',
+    email: '',
+    senha: '',
+    profile_id: '',
+  });
 
   const safeUsers = Array.isArray(systemUsers) ? systemUsers : [];
 
@@ -121,12 +195,7 @@ export default function SettingsModule({
     const term = userQ.trim().toLowerCase();
     if (!term) return safeUsers;
     return safeUsers.filter(
-      (u) =>
-        String(u.nome || '')
-          .toLowerCase()
-          .includes(term) || String(u.email || '')
-          .toLowerCase()
-          .includes(term)
+      (u) => String(u.nome || '').toLowerCase().includes(term) || String(u.email || '').toLowerCase().includes(term)
     );
   }, [userQ, safeUsers]);
 
@@ -138,18 +207,13 @@ export default function SettingsModule({
     setIsUserModalOpen(true);
   };
 
-  const openEditUser = (u) => {
+  const openEditUser = (u: SystemUser) => {
     setEditingUser(u);
-    setUserForm({
-      nome: u.nome || '',
-      email: u.email || '',
-      senha: '',
-      profile_id: u.profile_id || '',
-    });
+    setUserForm({ nome: u.nome || '', email: u.email || '', senha: '', profile_id: u.profile_id || '' });
     setIsUserModalOpen(true);
   };
 
-  const submitUser = async (e) => {
+  const submitUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasAccess('settings', 'edit')) return;
     try {
@@ -163,44 +227,26 @@ export default function SettingsModule({
         return;
       }
       if (editingUser) {
-        const body = { nome: userForm.nome, email: userForm.email, profile_id: pid };
+        const body: any = { nome: userForm.nome, email: userForm.email, profile_id: pid };
         if (userForm.senha?.trim()) body.senha = userForm.senha;
         await api.put(`/api/users/${editingUser.id}`, body);
         registerLog?.('UPDATE', 'Configurações', `Atualizou usuário ${userForm.email}`);
       } else {
-        await api.post('/api/users', {
-          nome: userForm.nome,
-          email: userForm.email,
-          senha: userForm.senha,
-          profile_id: pid,
-        });
+        await api.post('/api/users', { nome: userForm.nome, email: userForm.email, senha: userForm.senha, profile_id: pid });
         registerLog?.('CREATE', 'Configurações', `Criou usuário ${userForm.email}`);
       }
       setIsUserModalOpen(false);
       await refreshAdminData?.();
-    } catch (err) {
-      alert(err.response?.data?.error || err.message || 'Erro ao salvar usuário');
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.message || 'Erro ao salvar usuário');
     }
   };
 
-  const removeUser = (u) => {
+  const removeUser = (u: SystemUser) => {
     if (!hasAccess('settings', 'edit')) return;
     deleteSystemUser?.(u.id);
   };
 
-  const deleteProfile = async (p) => {
-    if (!hasAccess('settings', 'edit')) return;
-    if (!window.confirm(`Remover o perfil "${p.nome}"?`)) return;
-    try {
-      await api.delete(`/api/profiles/${p.id}`);
-      registerLog?.('DELETE', 'Configurações', `Removeu perfil ${p.nome}`);
-      await refreshAdminData?.();
-    } catch (err) {
-      alert(err.response?.data?.error || err.message || 'Erro ao remover perfil');
-    }
-  };
-
-  // Preferências UI
   const uiInventoryPageSize = Number(uiSettings?.inventoryPageSize || 50);
 
   return (
@@ -305,7 +351,7 @@ export default function SettingsModule({
                   </tr>
                 ) : (
                   pg.items.map((p) => {
-                    const perms = p.permissions || (p.permissionsJSON ? JSON.parse(p.permissionsJSON) : {});
+                    const perms = (p.permissions as Record<string, unknown>) || safeParse(p.permissionsJSON, {});
                     return (
                       <tr key={p.id} className="hover:bg-gray-800/60 transition-colors">
                         <td className="px-6 py-4 font-bold text-white">{p.nome}</td>
@@ -343,14 +389,9 @@ export default function SettingsModule({
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="text-xs text-gray-500">
               Mostrando{' '}
-              <span className="text-gray-200 font-semibold">
-                {pg.total === 0 ? 0 : (pg.cur - 1) * pageSize + 1}
-              </span>
-              –
-              <span className="text-gray-200 font-semibold">
-                {Math.min(pg.cur * pageSize, pg.total)}
-              </span>{' '}
-              de <span className="text-gray-200 font-semibold">{pg.total}</span>
+              <span className="text-gray-200 font-semibold">{pg.total === 0 ? 0 : (pg.cur - 1) * pageSize + 1}</span>–
+              <span className="text-gray-200 font-semibold">{Math.min(pg.cur * pageSize, pg.total)}</span> de{' '}
+              <span className="text-gray-200 font-semibold">{pg.total}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-xs text-gray-500">Registros por página:</div>
@@ -428,11 +469,13 @@ export default function SettingsModule({
               </button>
             )}
           </div>
+
           {safeProfiles.length === 0 && (
             <p className="text-sm text-amber-400 mb-4">
               Cadastre pelo menos um perfil em <span className="font-semibold">Perfis & Acessos</span> antes de criar usuários.
             </p>
           )}
+
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
             <div className="flex items-center gap-3 bg-black/40 border border-gray-700 rounded-full px-4 py-2.5 focus-within:border-brandGreen transition-colors w-full lg:max-w-md">
               <Search className="w-5 h-5 text-gray-400" />
@@ -506,14 +549,9 @@ export default function SettingsModule({
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="text-xs text-gray-500">
               Mostrando{' '}
-              <span className="text-gray-200 font-semibold">
-                {userPg.total === 0 ? 0 : (userPg.cur - 1) * uPageSize + 1}
-              </span>
-              –
-              <span className="text-gray-200 font-semibold">
-                {Math.min(userPg.cur * uPageSize, userPg.total)}
-              </span>{' '}
-              de <span className="text-gray-200 font-semibold">{userPg.total}</span>
+              <span className="text-gray-200 font-semibold">{userPg.total === 0 ? 0 : (userPg.cur - 1) * uPageSize + 1}</span>–
+              <span className="text-gray-200 font-semibold">{Math.min(userPg.cur * uPageSize, userPg.total)}</span> de{' '}
+              <span className="text-gray-200 font-semibold">{userPg.total}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="text-xs text-gray-500">Registros por página:</div>
@@ -583,10 +621,7 @@ export default function SettingsModule({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              setUiSettings?.({
-                ...(uiSettings || {}),
-                inventoryPageSize: uiInventoryPageSize,
-              });
+              setUiSettings({ ...(uiSettings || { inventoryPageSize: 50 }), inventoryPageSize: uiInventoryPageSize });
               alert('Preferências salvas.');
             }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
@@ -602,12 +637,7 @@ export default function SettingsModule({
                 <label className="text-xs text-gray-400 block mb-1">Itens por página</label>
                 <select
                   value={uiInventoryPageSize}
-                  onChange={(e) =>
-                    setUiSettings?.({
-                      ...(uiSettings || {}),
-                      inventoryPageSize: Number(e.target.value),
-                    })
-                  }
+                  onChange={(e) => setUiSettings({ ...(uiSettings || { inventoryPageSize: 50 }), inventoryPageSize: Number(e.target.value) })}
                   className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
                 >
                   {[10, 25, 50, 100].map((n) => (
@@ -677,9 +707,7 @@ export default function SettingsModule({
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  As permissões do usuário seguem o perfil escolhido (e atualizam quando o perfil mudar).
-                </p>
+                <p className="text-[11px] text-gray-500 mt-1">As permissões do usuário seguem o perfil escolhido.</p>
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">
@@ -719,9 +747,7 @@ export default function SettingsModule({
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[200] overflow-y-auto">
           <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-3xl shadow-2xl my-8">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white">
-                {editingProfile ? 'Editar Perfil' : 'Novo Perfil'}
-              </h2>
+              <h2 className="text-xl font-bold text-white">{editingProfile ? 'Editar Perfil' : 'Novo Perfil'}</h2>
               <button onClick={() => setIsProfileModalOpen(false)} className="text-gray-400 hover:text-white">
                 <X className="w-6 h-6" />
               </button>
@@ -749,7 +775,7 @@ export default function SettingsModule({
                         onChange={(e) =>
                           setProfileForm({
                             ...profileForm,
-                            permissions: { ...(profileForm.permissions || {}), [m.id]: e.target.value },
+                            permissions: { ...(profileForm.permissions || emptyPerms()), [m.id]: e.target.value as PermissionLevel },
                           })
                         }
                         className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"

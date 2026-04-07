@@ -13,6 +13,7 @@
     "strict": true,
     "allowJs": true,
     "checkJs": false,
+    "allowImportingTsExtensions": true,
     "types": ["vite/client"]
   },
   "include": ["src"]

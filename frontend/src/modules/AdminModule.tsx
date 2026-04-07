@@ -1,12 +1,16 @@
 import React from 'react';
-import { Shield, UserCheck, History, Settings } from 'lucide-react';
+import { History, Settings, Shield, UserCheck } from 'lucide-react';
 
-export default function AdminModule({
-  hasAccess,
-  systemUsers = [],
-  auditLogs = [],
-  onGoToSettings,
-}) {
+type Props = {
+  hasAccess: (module: string, requiredLevel?: 'read' | 'edit') => boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  systemUsers?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  auditLogs?: any[];
+  onGoToSettings?: () => void;
+};
+
+export default function AdminModule({ hasAccess, systemUsers = [], auditLogs = [], onGoToSettings }: Props) {
   const safeUsers = Array.isArray(systemUsers) ? systemUsers : [];
   const safeLogs = Array.isArray(auditLogs) ? auditLogs : [];
 
@@ -18,8 +22,7 @@ export default function AdminModule({
             <Shield className="text-brandGreen" /> Segurança Corporativa
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            Cadastro de usuários e perfis de acesso está em{' '}
-            <span className="text-gray-300 font-semibold">Configurações</span>.
+            Cadastro de usuários e perfis de acesso está em <span className="text-gray-300 font-semibold">Configurações</span>.
           </p>
         </div>
         {hasAccess('settings', 'read') && (
@@ -49,10 +52,7 @@ export default function AdminModule({
                     <p className="text-white font-bold text-sm truncate">{user.nome}</p>
                     <p className="text-xs text-brandGreen break-all">{user.email}</p>
                     <p className="text-[10px] text-gray-500 mt-1">
-                      Perfil:{' '}
-                      <span className="text-gray-300">
-                        {user.profileNome || user.cargo || '—'}
-                      </span>
+                      Perfil: <span className="text-gray-300">{user.profileNome || user.cargo || '—'}</span>
                     </p>
                   </div>
                 </div>
@@ -85,7 +85,6 @@ export default function AdminModule({
                     const logDate = log.created_at || log.timestamp;
                     const dateFormatted = logDate ? new Date(logDate).toLocaleString('pt-BR') : '-';
                     const userEmail = log.user_email || log.user || 'Sistema';
-
                     return (
                       <tr key={log.id} className="hover:bg-gray-800/80 transition-all duration-200">
                         <td className="px-4 py-3 text-[11px] text-gray-500 whitespace-nowrap">{dateFormatted}</td>
@@ -106,3 +105,4 @@ export default function AdminModule({
     </div>
   );
 }
+
