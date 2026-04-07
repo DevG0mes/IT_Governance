@@ -2,8 +2,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User, AccessProfile } = require('../../config/db');
 
-// 🛡️ GOVERNANÇA: Chave do JWT. Em produção, sempre virá do .env
+// 🛡️ GOVERNANÇA: Em produção, exigimos JWT_SECRET. Fallback só com flag explícita.
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
+const isProd = process.env.NODE_ENV === 'production';
+const allowInsecureFallback = String(process.env.ALLOW_INSECURE_JWT_FALLBACK || '').toLowerCase() === 'true';
+if (isProd && !process.env.JWT_SECRET && !allowInsecureFallback) {
+  throw new Error('JWT_SECRET ausente no ambiente de produção. Defina JWT_SECRET ou ALLOW_INSECURE_JWT_FALLBACK=true (não recomendado).');
+}
 
 exports.login = async (req, res) => {
   try {

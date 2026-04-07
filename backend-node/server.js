@@ -11,7 +11,7 @@ require('dotenv').config();
 
 const { connectDatabase } = require('./config/db');
 const verificarToken = require('./middlewares/auth'); 
-const verificarAdmin = require('./middlewares/admin'); 
+const { requirePermission } = require('./middlewares/permissions');
 
 const authRoutes = require('./src/routes/auth'); 
 const employeeRoutes = require('./src/routes/employees'); 
@@ -104,8 +104,8 @@ app.use('/api/contracts', contractRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/dashboard', finopsRoutes);
-app.use('/api/users', verificarAdmin, userRoutes);
-app.use('/api/profiles', verificarAdmin, profilesRoutes);
+app.use('/api/users', requirePermission('settings', 'edit'), userRoutes);
+app.use('/api/profiles', requirePermission('settings', 'edit'), profilesRoutes);
 
 app.use((err, req, res, next) => {
   if (req.timedout) {
