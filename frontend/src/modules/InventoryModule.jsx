@@ -15,7 +15,7 @@ function formatDateDisplay(v) {
   return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('pt-BR');
 }
 
-export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading }) {
+export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading, pageSize: pageSizeProp }) {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [inventorySearchTerm, setInventorySearchTerm] = useState('');
   const [inventorySortOrder, setInventorySortOrder] = useState('asc');
@@ -23,7 +23,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = Math.max(1, Number(pageSizeProp || 50));
 
   const getInitialAsset = (type) => ({
     asset_type: type === 'Todos' ? 'Notebook' : type,

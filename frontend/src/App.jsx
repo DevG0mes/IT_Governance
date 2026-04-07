@@ -18,6 +18,7 @@ const LicensesModule = React.lazy(() => import('./modules/LicensesModule'));
 const ContractsModule = React.lazy(() => import('./modules/ContractsModule'));
 const CatalogModule = React.lazy(() => import('./modules/CatalogModule'));
 const OffboardingModule = React.lazy(() => import('./modules/OffboardingModule')); 
+const SettingsModule = React.lazy(() => import('./modules/SettingsModule'));
 
 // 🍞 CONFIGURAÇÃO GLOBAL DO TOAST (Pop-ups de notificação)
 export const Toast = Swal.mixin({
@@ -53,12 +54,22 @@ export default function App() {
   const [catalogItems, setCatalogItems] = useState([]);
   const [systemUsers, setSystemUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [accessProfiles, setAccessProfiles] = useState([]);
+
+  const [uiSettings, setUiSettings] = useState(() => {
+    try {
+      const raw = localStorage.getItem('ui_settings');
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        inventoryPageSize: Number(parsed.inventoryPageSize || 50),
+      };
+    } catch {
+      return { inventoryPageSize: 50 };
+    }
+  });
 
   const [activeTab, setActiveTab] = useState('dashboard'); 
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: false, confirmText: 'Confirmar' });
-
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ nome: '', email: '', senha: '', cargo: 'Gestor' });
 
   // ─── FUNÇÕES CORE ───
 
@@ -79,21 +90,44 @@ export default function App() {
 
   const fetchAdminData = useCallback(async () => {
     try {
-      const [usersRes, logsRes] = await Promise.all([
+      const [usersRes, logsRes, profilesRes] = await Promise.all([
           api.get('/users'),
-          api.get('/audit-logs')
+          api.get('/audit-logs'),
+          api.get('/profiles')
       ]);
 
       const rawUsers = usersRes.data.data || usersRes.data || [];
       const rawLogs = logsRes.data.data || logsRes.data || [];
+      const rawProfiles = profilesRes.data.data || profilesRes.data || [];
 
-      const usersFromDB = rawUsers.map(u => ({ 
-          ...u, 
-          permissions: u.permissions_json ? JSON.parse(u.permissions_json) : (roleTemplates[u.cargo] || {}) 
+      const mappedProfiles = (Array.isArray(rawProfiles) ? rawProfiles : []).map((p) => ({
+        ...p,
+        permissions: p.permissions || (p.permissionsJSON ? (typeof p.permissionsJSON === 'string' ? JSON.parse(p.permissionsJSON) : p.permissionsJSON) : {}),
       }));
-      
+
+      const profById = Object.fromEntries(mappedProfiles.map((p) => [p.id, p]));
+
+      const usersFromDB = rawUsers.map((u) => {
+        let permissions = {};
+        if (u.profile_id && profById[u.profile_id]) {
+          const pj = profById[u.profile_id].permissionsJSON;
+          permissions = pj ? (typeof pj === 'string' ? JSON.parse(pj) : pj) : {};
+        } else {
+          const raw = u.permissions_json || u.permissionsJSON;
+          permissions = raw
+            ? (typeof raw === 'string' ? JSON.parse(raw) : raw)
+            : (roleTemplates[u.cargo] || {});
+        }
+        return {
+          ...u,
+          permissions,
+          profileNome: u.profile_id ? profById[u.profile_id]?.nome : null,
+        };
+      });
+
       setSystemUsers(usersFromDB);
       setAuditLogs(rawLogs);
+      setAccessProfiles(mappedProfiles);
       
     } catch (e) {
       console.error("❌ ERRO NO FETCH ADMIN DATA:", e);
@@ -107,7 +141,7 @@ export default function App() {
     const logEntry = { user: currentUser ? currentUser.nome : 'Sistema', action, module, details };
     try {
       await api.post('/audit-logs', logEntry);
-      if (currentUser?.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData();
+      if (currentUser?.cargo === 'Administrator' && (activeTab === 'admin' || activeTab === 'settings')) fetchAdminData();
     } catch (e) {
       if(e.response?.status === 401) handleLogout();
     }
@@ -163,7 +197,7 @@ export default function App() {
     if (currentUser) { 
       // Passa true apenas se for a primeira carga ou mudança brusca para dar o feedback
       fetchData(true); 
-      if (currentUser.cargo === 'Administrator' && activeTab === 'admin') fetchAdminData(); 
+      if (currentUser.cargo === 'Administrator' && (activeTab === 'admin' || activeTab === 'settings')) fetchAdminData(); 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
@@ -220,25 +254,6 @@ export default function App() {
     return false; 
   };
 
-  const handleRoleChange = (cargo) => {
-    setNewUser({ ...newUser, cargo: cargo, permissions: { ...roleTemplates[cargo] } });
-  };
-  
-  const handleCreateSystemUser = async (e) => { 
-    e.preventDefault(); 
-    const payload = { ...newUser, permissions_json: JSON.stringify(newUser.permissions) }; 
-    try {
-      await api.post('/users', payload);
-      setIsUserModalOpen(false); 
-      fetchAdminData(); 
-      registerLog('CREATE', 'Segurança', `Criou usuário ${newUser.nome}`); 
-      
-      Toast.fire({ icon: 'success', title: `Usuário ${newUser.nome} cadastrado!` });
-    } catch(err){ 
-      Swal.fire('Erro', err.response?.data?.error || err.message, 'error');
-    }
-  };
-  
   const deleteSystemUser = (id) => { 
     requestConfirm('Excluir Acesso', 'Tem certeza que deseja excluir este acesso permanentemente?', async () => { 
       try {
@@ -324,6 +339,7 @@ export default function App() {
               <MenuItem id="import" icon={UploadCloud} label="Importar Dados" hasDivider />
               <MenuItem id="export" icon={DownloadCloud} label="Exportar Relatórios" />
               <MenuItem id="admin" icon={Shield} label="Segurança Corporativa" />
+              <MenuItem id="settings" icon={KeyRound} label="Configurações" />
             </div>
 
             <div className="p-4 border-t border-gray-800">
@@ -340,7 +356,11 @@ export default function App() {
             <header className="h-16 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-6 flex-shrink-0 z-30">
               <div className="flex items-center gap-4">
                 <h1 className="text-lg font-bold text-white capitalize hidden sm:block">
-                  {activeTab === 'admin' ? 'Segurança Corporativa' : activeTab.replace('-', ' ')}
+                  {activeTab === 'admin'
+                    ? 'Segurança Corporativa'
+                    : activeTab === 'settings'
+                      ? 'Configurações'
+                      : activeTab.replace('-', ' ')}
                 </h1>
               </div>
               <div className="flex items-center gap-4">
@@ -359,8 +379,27 @@ export default function App() {
               <div className="max-w-7xl mx-auto">
                 <Suspense fallback={<FallbackLoader />}>
                   {activeTab === 'dashboard' && hasAccess('dashboard', 'read') && <DashboardModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} catalogItems={catalogItems} formatCurrency={formatCurrency} isLoading={isLoading} />}
-                  {activeTab === 'admin' && hasAccess('admin', 'read') && <AdminModule hasAccess={hasAccess} systemUsers={systemUsers} auditLogs={auditLogs} deleteSystemUser={deleteSystemUser} setNewUser={setNewUser} setIsUserModalOpen={setIsUserModalOpen} roleTemplates={roleTemplates} />}
-                  {activeTab === 'inventory' && hasAccess('inventory', 'read') && <InventoryModule assets={assets} catalogItems={catalogItems} employees={employees} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
+                  {activeTab === 'admin' && hasAccess('admin', 'read') && (
+                    <AdminModule
+                      hasAccess={hasAccess}
+                      systemUsers={systemUsers}
+                      auditLogs={auditLogs}
+                      onGoToSettings={() => setActiveTab('settings')}
+                    />
+                  )}
+                  {activeTab === 'inventory' && hasAccess('inventory', 'read') && (
+                    <InventoryModule
+                      assets={assets}
+                      catalogItems={catalogItems}
+                      employees={employees}
+                      hasAccess={hasAccess}
+                      fetchData={fetchData}
+                      requestConfirm={requestConfirm}
+                      registerLog={registerLog}
+                      isLoading={isLoading}
+                      pageSize={uiSettings.inventoryPageSize}
+                    />
+                  )}
                   {activeTab === 'employees' && hasAccess('employees', 'read') && <EmployeesModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} isLoading={isLoading} />}
                   {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && <MaintenanceModule assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} />}
                   {activeTab === 'catalog' && hasAccess('catalog', 'read') && <CatalogModule catalogItems={catalogItems} assets={assets} hasAccess={hasAccess} fetchData={fetchData} requestConfirm={requestConfirm} registerLog={registerLog} formatCurrency={formatCurrency} isLoading={isLoading} />}            
@@ -369,6 +408,23 @@ export default function App() {
                   {activeTab === 'offboarding' && hasAccess('offboarding', 'read') && <OffboardingModule employees={employees} assets={assets} licenses={licenses} hasAccess={hasAccess} fetchData={fetchData} registerLog={registerLog} requestConfirm={requestConfirm} />}
                   {activeTab === 'import' && hasAccess('import', 'read') && <ImportModule hasAccess={hasAccess} employees={employees} contracts={contracts} licenses={licenses} assets={assets} requestConfirm={requestConfirm} registerLog={registerLog} fetchData={fetchData} isLoading={isLoading} />}
                   {activeTab === 'export' && hasAccess('export', 'read') && <ExportModule assets={assets} employees={employees} licenses={licenses} contracts={contracts} registerLog={registerLog} isLoading={isLoading} />}
+                  {activeTab === 'settings' && hasAccess('settings', 'read') && (
+                    <SettingsModule
+                      hasAccess={hasAccess}
+                      systemUsers={systemUsers}
+                      accessProfiles={accessProfiles}
+                      refreshAdminData={fetchAdminData}
+                      registerLog={registerLog}
+                      deleteSystemUser={deleteSystemUser}
+                      uiSettings={uiSettings}
+                      setUiSettings={(next) => {
+                        setUiSettings(next);
+                        try {
+                          localStorage.setItem('ui_settings', JSON.stringify(next));
+                        } catch {}
+                      }}
+                    />
+                  )}
                 </Suspense>
               </div>
             </main>
@@ -393,29 +449,6 @@ export default function App() {
             </div>
           )}
 
-          {isUserModalOpen && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-xl shadow-2xl">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2"><KeyRound className="w-6 h-6 text-brandGreen"/> Conceder Acesso</h2>
-                  <button onClick={() => setIsUserModalOpen(false)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
-                </div>
-                <form onSubmit={handleCreateSystemUser} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="text" required placeholder="Nome" value={newUser.nome} onChange={(e) => setNewUser({...newUser, nome: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none" />
-                    <input type="email" required placeholder="E-mail" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="password" required placeholder="Senha" value={newUser.senha} onChange={(e) => setNewUser({...newUser, senha: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none" />
-                    <select required value={newUser.cargo} onChange={(e) => handleRoleChange(e.target.value)} className="w-full bg-black/50 border border-brandGreen/50 rounded-xl p-3 text-brandGreen font-bold outline-none cursor-pointer">
-                      {Object.keys(roleTemplates).map(role => <option key={role} value={role}>{role}</option>)}
-                    </select>
-                  </div>
-                  <button type="submit" className="w-full bg-brandGreen text-white py-4 rounded-full font-bold mt-4 shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1">Criar Usuário</button>
-                </form>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
