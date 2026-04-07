@@ -500,14 +500,12 @@ exports.importBulk = async (req, res) => {
   const t = await sequelize.transaction();
   let created = 0;
   let skipped = 0;
-  const errors = [];
 
   try {
     for (let idx = 0; idx < items.length; idx++) {
       const input = items[idx];
       try {
-        // Em PostgreSQL, uma falha dentro de uma transaction aborta o bloco inteiro.
-        // Usamos SAVEPOINT por item (nested transaction) para não perder o lote completo.
+        // O Savepoint: Se falhar 1 linha, as outras continuam.
         await sequelize.transaction({ transaction: t }, async (tItem) => {
           if (!input || !input.asset_type) {
             skipped++;
@@ -531,7 +529,7 @@ exports.importBulk = async (req, res) => {
           const iccid = standardizeAssetIdentifier(input.iccid);
           const dataAquisicaoBulk = parseDataAquisicao(input.data_aquisicao);
 
-          // Anti-duplicação por tipo
+          // Anti-duplicação por tipo (Ignora o item se já existir e passa para o próximo)
           if (assetType === 'Notebook') {
             if (patrimonio) {
               const exists = await AssetNotebook.findOne({ where: { patrimonio }, transaction: tItem });
@@ -608,7 +606,6 @@ exports.importBulk = async (req, res) => {
             }, { transaction: tItem });
           }
 
-          // Vínculo histórico (quando há dono atual)
           if (ownerEmployeeId) {
             await AssetAssignment.create(
               { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
@@ -630,26 +627,40 @@ exports.importBulk = async (req, res) => {
           created++;
         });
       } catch (error) {
-        let menssagem = error.message || String(error);
-        if(error.name ==='SequelizeValidationError'){
-          menssagem = error.errors.map(e => e.message).join(' | ');
+        // 🚨 O RAIO-X DO ERRO COMEÇA AQUI
+        let mensagemExata = error.message || String(error);
+        
+        // Descasca o erro do Sequelize para pegar a coluna e o motivo exato
+        if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+          if (error.errors && Array.isArray(error.errors)) {
+            mensagemExata = error.errors.map(e => e.message).join(' | ');
+          }
         }
-        console.error(`❌ Erro no import bulk (idx=${idx}): ${menssagem}`);
-        return res.status(400).json({ error: "Erro de Validação: " + menssagem,  details: menssagem});
-        }
+        
+        console.error(`❌ Erro no import bulk (idx=${idx}, Linha do Excel=${idx + 2}): ${mensagemExata}`);
+        
+        // Desfaz a transação pai para não corromper o banco
+        if (t) await t.rollback();
+        
+        // Devolve o erro na hora e mastigado para o popup do React!
+        return res.status(400).json({ 
+          error: `Erro na linha ${idx + 2} do arquivo Excel.`, 
+          details: mensagemExata 
+        });
+      }
     }
 
     await t.commit();
     return res.status(201).json({
-      message: `Importação concluída! ${created} criados, ${skipped} ignorados, ${errors.length} erros.`,
+      message: `Importação concluída com sucesso! ${created} ativos criados, ${skipped} ignorados (já existiam).`,
       created,
       skipped,
-      errors
+      errors: [] // Zero erros se chegou até aqui
     });
   } catch (error) {
     if (t) await t.rollback();
     console.error("❌ Erro no processamento em massa:", error);
-    return res.status(500).json({ error: "Erro na importação em lote: " + error.message });
+    return res.status(500).json({ error: "Erro crítico na importação em lote.", details: error.message });
   }
 };
 
