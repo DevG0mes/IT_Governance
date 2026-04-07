@@ -1,5 +1,7 @@
 const bcrypt = require('bcrypt');
 const { User, AccessProfile } = require('../../config/db');
+const { validateBody } = require('../utils/validate');
+const { userCreateSchema, userUpdateSchema } = require('../validators/userSchemas');
 
 async function permissionsFromProfileId(profileId) {
   if (profileId == null || profileId === '') return null;
@@ -39,7 +41,10 @@ exports.getAll = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const input = pickUserPayload(req.body || {}, { forUpdate: false });
+    const parsed = validateBody(userCreateSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const input = pickUserPayload(parsed.data || {}, { forUpdate: false });
     if (!input.nome || !input.email) {
       return res.status(400).json({ error: 'Nome e e-mail são obrigatórios' });
     }
@@ -79,7 +84,10 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
-    const input = pickUserPayload(req.body || {}, { forUpdate: true });
+    const parsed = validateBody(userUpdateSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const input = pickUserPayload(parsed.data || {}, { forUpdate: true });
 
     const user = await User.findByPk(id);
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });

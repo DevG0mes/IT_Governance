@@ -1,4 +1,6 @@
 const { AccessProfile, User } = require('../../config/db');
+const { validateBody } = require('../utils/validate');
+const { profileCreateSchema, profileUpdateSchema } = require('../validators/profileSchemas');
 
 function safeParseJSON(raw) {
   if (raw == null) return null;
@@ -66,7 +68,10 @@ exports.getAll = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const { nome, permissions } = req.body || {};
+    const parsed = validateBody(profileCreateSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const { nome, permissions } = parsed.data || {};
     const nomeTrim = String(nome || '').trim();
     if (!nomeTrim) return res.status(400).json({ error: 'Nome do perfil é obrigatório' });
 
@@ -94,7 +99,10 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, permissions } = req.body || {};
+    const parsed = validateBody(profileUpdateSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const { nome, permissions } = parsed.data || {};
 
     const row = await AccessProfile.findByPk(id);
     if (!row) return res.status(404).json({ error: 'Perfil não encontrado' });

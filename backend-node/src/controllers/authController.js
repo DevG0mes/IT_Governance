@@ -1,6 +1,8 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User, AccessProfile } = require('../../config/db');
+const { validateBody } = require('../utils/validate');
+const { loginSchema } = require('../validators/authSchemas');
 
 // 🛡️ GOVERNANÇA: Em produção, exigimos JWT_SECRET. Fallback só com flag explícita.
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
@@ -12,7 +14,10 @@ if (isProd && !process.env.JWT_SECRET && !allowInsecureFallback) {
 
 exports.login = async (req, res) => {
   try {
-    const { email, senha } = req.body;
+    const parsed = validateBody(loginSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const { email, senha } = parsed.data;
 
     if (!email || !senha) {
       return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
