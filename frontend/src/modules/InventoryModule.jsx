@@ -23,7 +23,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const pageSize = 50;
 
   const getInitialAsset = (type) => ({
     asset_type: type === 'Todos' ? 'Notebook' : type,
@@ -173,7 +173,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   React.useEffect(() => {
     setPage(1);
     setSelectedIds([]);
-  }, [selectedCategory, assetStatusFilter, inventorySearchTerm, inventorySortOrder, pageSize]);
+  }, [selectedCategory, assetStatusFilter, inventorySearchTerm, inventorySortOrder]);
 
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () =>
@@ -357,16 +357,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             <span className="text-gray-200 font-semibold">{totalItems}</span>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Itens/página</label>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-              className="bg-gray-900/80 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer focus:border-brandGreen transition-colors"
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            <div className="text-xs text-gray-500">Limite: <span className="text-gray-200 font-semibold">50</span>/página</div>
             <div className="flex items-center gap-1 ml-2">
               <button
                 type="button"

@@ -98,9 +98,10 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {kanbanColumns.map((col) => (
-          <div key={col} className="bg-gray-900/60 border border-gray-800 rounded-3xl overflow-hidden">
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-4 min-w-[980px]">
+          {kanbanColumns.map((col) => (
+            <div key={col} className="bg-gray-900/60 border border-gray-800 rounded-3xl overflow-hidden w-[320px] shrink-0">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white">{col}</span>
@@ -188,12 +189,13 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
               )}
             </div>
           </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {isEditMaintenanceModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl my-8">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Atualizar Tratativa</h2>
               <button onClick={() => setIsEditMaintenanceModalOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>

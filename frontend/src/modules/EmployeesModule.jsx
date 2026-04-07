@@ -113,25 +113,36 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     setIsOffboardingModalOpen(true);
   };
 
-  const allChecksValid =
-    offboardingChecks.onfly &&
-    offboardingChecks.megaErp &&
-    offboardingChecks.admin365 &&
-    offboardingChecks.equipamentos &&
-    offboardingTermoUrl.trim().length > 0;
+  const stepsDone = [
+    offboardingChecks.onfly,
+    offboardingChecks.megaErp,
+    offboardingChecks.admin365,
+    offboardingChecks.equipamentos,
+    offboardingTermoUrl.trim().length > 0,
+  ];
+  const doneCount = stepsDone.filter(Boolean).length;
 
   const confirmOffboarding = async () => {
-    if (!allChecksValid || !offboardingTarget) return;
+    if (!offboardingTarget) return;
 
     setIsSubmittingOffboarding(true);
     try {
-      await api.put(`/api/employees/${offboardingTarget.id}/offboarding`, {
-        status: 'Em Desligamento',
-        offboarding: true,
-        url_termo_devolucao: offboardingTermoUrl.trim(),
+      // Inicia desligamento e já manda para a fila de Revogação, mesmo com itens pendentes.
+      // O progresso fica salvo no cadastro do colaborador.
+      await api.put(`/api/employees/${offboardingTarget.id}`, {
+        status: 'Em desligamento',
+        termo_url: offboardingTermoUrl.trim(),
+        offboarding_onfly: offboardingChecks.onfly ? 1 : 0,
+        offboarding_mega: offboardingChecks.megaErp ? 1 : 0,
+        offboarding_adm365: offboardingChecks.admin365 ? 1 : 0,
+        offboarding_license: offboardingChecks.equipamentos ? 1 : 0, // legado: equipamentos devolvidos
       });
 
-      registerLog('UPDATE', 'Revogação', `Iniciou Offboarding do colab ID ${offboardingTarget.id} — Checks: Onfly✓ MegaERP✓ Admin365✓ Equipamentos✓`);
+      registerLog(
+        'UPDATE',
+        'Revogação',
+        `Iniciou Desligamento do colab ID ${offboardingTarget.id} — Progresso ${doneCount}/5`
+      );
       setIsOffboardingModalOpen(false);
       setOffboardingTarget(null);
       fetchData();
@@ -300,10 +311,10 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     doc.save(`Termo_PSI_${employee.nome.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const OffboardingCheckItem = ({ id, label, sublabel, checked, onChange }) => (
+  const OffboardingCheckItem = ({ id, label, sublabel, checked, onChange, disabled }) => (
     <label
       htmlFor={id}
-      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-200 select-none
+      className={`flex items-start gap-3 p-3 rounded-xl border transition-all duration-200 select-none
         ${checked
           ? 'bg-emerald-900/30 border-emerald-500/60'
           : 'bg-gray-800/60 border-gray-700 hover:border-gray-500'
@@ -317,8 +328,8 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
           </svg>
         )}
       </div>
-      <input id={id} type="checkbox" checked={checked} onChange={onChange} className="hidden" />
-      <div>
+      <input id={id} type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="hidden" />
+      <div className={disabled ? 'opacity-50' : ''}>
         <p className={`text-sm font-semibold transition-colors ${checked ? 'text-emerald-300' : 'text-gray-200'}`}>
           {label}
         </p>
@@ -425,8 +436,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
             <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-3 mb-5">
               <p className="text-xs text-yellow-300/80 leading-relaxed">
-                Confirme que <strong className="text-yellow-300">todos os acessos foram bloqueados</strong> e os <strong className="text-yellow-300">equipamentos foram devolvidos</strong> antes de mover o colaborador para a fila de Revogação.
-              </p>
+                Você pode <strong className="text-yellow-300">iniciar a fila agora</strong> e ir marcando as etapas conforme executa.\n+                A ordem é guiada (Onfly → Mega ERP → Admin 365 → Devolução física).\n               </p>
             </div>
 
             <div className="space-y-2.5 mb-5">
@@ -446,6 +456,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 label="Acesso bloqueado no Mega ERP"
                 sublabel="Sistema de gestão empresarial"
                 checked={offboardingChecks.megaErp}
+                disabled={!offboardingChecks.onfly}
                 onChange={() => setOffboardingChecks(p => ({ ...p, megaErp: !p.megaErp }))}
               />
               <OffboardingCheckItem
@@ -453,6 +464,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 label="Acesso bloqueado no ADMIN 365"
                 sublabel="Microsoft 365 / Azure AD — e-mail e apps"
                 checked={offboardingChecks.admin365}
+                disabled={!offboardingChecks.megaErp}
                 onChange={() => setOffboardingChecks(p => ({ ...p, admin365: !p.admin365 }))}
               />
               <OffboardingCheckItem
@@ -460,6 +472,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 label="Equipamentos fisicamente devolvidos"
                 sublabel="Notebook, celular, chip, Starlink, acessórios"
                 checked={offboardingChecks.equipamentos}
+                disabled={!offboardingChecks.admin365}
                 onChange={() => setOffboardingChecks(p => ({ ...p, equipamentos: !p.equipamentos }))}
               />
             </div>
@@ -501,19 +514,14 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
               </button>
               <button
                 onClick={confirmOffboarding}
-                disabled={!allChecksValid || isSubmittingOffboarding}
+                disabled={isSubmittingOffboarding}
                 className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all
-                  ${allChecksValid && !isSubmittingOffboarding
+                  ${!isSubmittingOffboarding
                     ? 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-[0_4px_14px_rgba(234,179,8,0.35)] hover:-translate-y-0.5'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                   }`}
               >
-                {isSubmittingOffboarding
-                  ? 'Enviando...'
-                  : allChecksValid
-                    ? '✓ Confirmar Desligamento'
-                    : `Aguardando ${[offboardingChecks.onfly, offboardingChecks.megaErp, offboardingChecks.admin365, offboardingChecks.equipamentos, offboardingTermoUrl.trim().length > 0].filter(Boolean).length}/5`
-                }
+                {isSubmittingOffboarding ? 'Enviando...' : `Iniciar fila (${doneCount}/5 concluído)`}
               </button>
             </div>
           </div>
