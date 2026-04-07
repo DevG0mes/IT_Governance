@@ -175,6 +175,12 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     setSelectedIds([]);
   }, [selectedCategory, assetStatusFilter, inventorySearchTerm, inventorySortOrder]);
 
+  // Ao trocar página, rolar o container principal para o topo (evita sensação de "lista infinita")
+  React.useEffect(() => {
+    const main = document.querySelector('main');
+    if (main && typeof main.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
+
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () =>
     selectedIds.length === visibleAssets.length && visibleAssets.length > 0
@@ -506,6 +512,48 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Paginação (rodapé) */}
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-xs text-gray-500">
+            Página <span className="text-gray-200 font-semibold">{currentPage}</span>/{totalPages} —{' '}
+            <span className="text-gray-200 font-semibold">{totalItems}</span> item(ns)
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(1)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              Próxima
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(totalPages)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              »
+            </button>
           </div>
         </div>
       </div>

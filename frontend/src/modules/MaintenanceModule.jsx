@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Wrench, Monitor, MoreVertical, Edit2, CheckCircle, X, Filter } from 'lucide-react';
 // 🚨 NOVO: Importando a sua API centralizada e blindada
 import api from '../services/api';
@@ -193,21 +194,49 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
         </div>
       </div>
 
-      {isEditMaintenanceModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl my-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white">Atualizar Tratativa</h2>
-              <button onClick={() => setIsEditMaintenanceModalOpen(false)} className="text-gray-400 hover:text-white transition-colors"><X className="w-6 h-6" /></button>
+      {isEditMaintenanceModalOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[200] overflow-y-auto"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setIsEditMaintenanceModalOpen(false);
+            }}
+          >
+            <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl my-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white">Atualizar Tratativa</h2>
+                <button
+                  onClick={() => setIsEditMaintenanceModalOpen(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <form onSubmit={submitEditMaintenance} className="flex flex-col gap-4">
+                <input
+                  type="text"
+                  required
+                  value={editMaintenanceForm.chamado}
+                  onChange={(e) => setEditMaintenanceForm({ ...editMaintenanceForm, chamado: e.target.value })}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors"
+                />
+                <textarea
+                  required
+                  value={editMaintenanceForm.observacao}
+                  onChange={(e) => setEditMaintenanceForm({ ...editMaintenanceForm, observacao: e.target.value })}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white h-24 focus:border-brandGreen outline-none transition-colors custom-scrollbar"
+                />
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-all duration-300"
+                >
+                  Salvar Histórico
+                </button>
+              </form>
             </div>
-            <form onSubmit={submitEditMaintenance} className="flex flex-col gap-4">
-              <input type="text" required value={editMaintenanceForm.chamado} onChange={(e) => setEditMaintenanceForm({...editMaintenanceForm, chamado: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors" />
-              <textarea required value={editMaintenanceForm.observacao} onChange={(e) => setEditMaintenanceForm({...editMaintenanceForm, observacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white h-24 focus:border-brandGreen outline-none transition-colors custom-scrollbar" />
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-all duration-300">Salvar Histórico</button>
-            </form>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
