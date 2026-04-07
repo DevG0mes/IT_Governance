@@ -22,6 +22,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [assetStatusFilter, setAssetStatusFilter] = useState('Todos');
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const getInitialAsset = (type) => ({
     asset_type: type === 'Todos' ? 'Notebook' : type,
@@ -160,8 +162,24 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     return inventorySortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); 
   });
 
+  const totalItems = filteredAssets.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIdx = (currentPage - 1) * pageSize;
+  const endIdx = startIdx + pageSize;
+  const visibleAssets = filteredAssets.slice(startIdx, endIdx);
+
+  // Reset de paginação quando filtros mudam
+  React.useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [selectedCategory, assetStatusFilter, inventorySearchTerm, inventorySortOrder, pageSize]);
+
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  const toggleAll = () => selectedIds.length === filteredAssets.length && filteredAssets.length > 0 ? setSelectedIds([]) : setSelectedIds(filteredAssets.map(item => item.id));
+  const toggleAll = () =>
+    selectedIds.length === visibleAssets.length && visibleAssets.length > 0
+      ? setSelectedIds([])
+      : setSelectedIds(visibleAssets.map(item => item.id));
 
   // 🛡️ Lógica Blindada no Edit Modal
   const openEditModal = (asset) => {
@@ -331,6 +349,63 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             </select>
           </div>
         </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="text-xs text-gray-500">
+            Mostrando <span className="text-gray-200 font-semibold">{totalItems === 0 ? 0 : startIdx + 1}</span>–
+            <span className="text-gray-200 font-semibold">{Math.min(endIdx, totalItems)}</span> de{' '}
+            <span className="text-gray-200 font-semibold">{totalItems}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500">Itens/página</label>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+              className="bg-gray-900/80 border border-gray-700 rounded-xl px-3 py-2 text-xs text-white outline-none cursor-pointer focus:border-brandGreen transition-colors"
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <div className="flex items-center gap-1 ml-2">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(1)}
+                className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+              >
+                Anterior
+              </button>
+              <div className="px-3 py-2 text-xs text-gray-400">
+                Página <span className="text-gray-200 font-semibold">{currentPage}</span>/{totalPages}
+              </div>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+              >
+                Próxima
+              </button>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage(totalPages)}
+                className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        </div>
         
         {selectedIds.length > 0 && hasAccess('inventory', 'edit') && (
           <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-2xl mb-4 flex justify-between items-center relative z-10 animate-fade-in">
@@ -347,16 +422,17 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             </div>
           ) : null}
 
-          <table className="w-full text-left text-sm text-gray-300">
-            <thead className="bg-black/60 border-b border-gray-800 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4 w-12 rounded-tl-3xl">{hasAccess('inventory', 'edit') && <input type="checkbox" checked={selectedIds.length === filteredAssets.length && filteredAssets.length > 0} onChange={toggleAll} className="accent-brandGreen cursor-pointer w-4 h-4" />}</th>
-                <th className="px-6 py-4">Equipamento</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Identificador / Grupo</th><th className="px-6 py-4 text-center rounded-tr-3xl">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800/50">
-              {assets && filteredAssets.length > 0 ? filteredAssets.map((asset, idx) => { 
-                if (!asset) return null;
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-300 min-w-[860px]">
+              <thead className="bg-black/60 border-b border-gray-800 uppercase text-xs">
+                <tr>
+                  <th className="px-6 py-4 w-12 rounded-tl-3xl">{hasAccess('inventory', 'edit') && <input type="checkbox" checked={selectedIds.length === visibleAssets.length && visibleAssets.length > 0} onChange={toggleAll} className="accent-brandGreen cursor-pointer w-4 h-4" />}</th>
+                  <th className="px-6 py-4">Equipamento</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Identificador / Grupo</th><th className="px-6 py-4 text-center rounded-tr-3xl">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {assets && visibleAssets.length > 0 ? visibleAssets.map((asset, idx) => { 
+                  if (!asset) return null;
 
                 // 🛡️ Lógica Blindada nas sub-tabelas
                 const nb = asset.Notebook || asset.notebook;
@@ -372,7 +448,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                 let catModel = nb?.modelo || cel?.modelo || st?.modelo || ch?.plano || '';
                 const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
 
-                const isLastRows = idx >= filteredAssets.length - 2 && filteredAssets.length > 2;
+                const isLastRows = idx >= visibleAssets.length - 2 && visibleAssets.length > 2;
                 const menuPositionClass = isLastRows ? "bottom-10 right-8 origin-bottom-right" : "top-10 right-8 origin-top-right";
 
                 return (
@@ -434,11 +510,12 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                     </td>
                   </tr>
                 )
-              }) : (
-                <tr><td colSpan="5" className="text-center py-20 text-gray-500 font-medium">Nenhum equipamento encontrado.</td></tr>
-              )}
-            </tbody>
-          </table>
+                }) : (
+                  <tr><td colSpan="5" className="text-center py-20 text-gray-500 font-medium">Nenhum equipamento encontrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

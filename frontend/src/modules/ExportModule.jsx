@@ -1,10 +1,27 @@
 import React, { useState } from 'react';
 import { DownloadCloud, Database, ListChecks } from 'lucide-react';
 import Papa from 'papaparse';
+import {
+  getActiveEmployee,
+  getAssetIdentifier,
+  getAssetSecondaryIdentifier,
+  getModeloOuPlano,
+  getGrupo,
+  getResponsavelLocal,
+  getGarantiaNotebook,
+  getStatusGarantiaNotebook,
+  getDataAquisicao,
+} from '../utils/exporters';
 
 export default function ExportModule({ assets, employees, licenses, contracts, registerLog }) {
   const [exportModule, setExportModule] = useState('Ativos');
-  const [exportColumns, setExportColumns] = useState({ patrimonio_serial: true, tipo: true, status: true, modelo: true, dono: true });
+  const [exportColumns, setExportColumns] = useState({
+    identificadores: true,
+    tipo: true,
+    status: true,
+    modelo: true,
+    dono: true,
+  });
 
   const handleExportCSV = () => {
     let dataToExport = [];
@@ -39,18 +56,33 @@ export default function ExportModule({ assets, employees, licenses, contracts, r
     } 
     else {
         dataToExport = assets.map(a => {
-            const activeAsg = a.assignments?.find(asg => !asg.returned_at); 
-            const ownerName = activeAsg?.employee?.nome || a.starlink?.responsavel || a.celular?.responsavel || a.chip?.responsavel || 'Sem Dono'; 
+            const emp = getActiveEmployee(a);
+            const ownerName = emp?.nome || getResponsavelLocal(a) || 'Sem Dono';
             
             let exportRow = {};
             if (exportColumns.tipo) exportRow['Tipo'] = a.asset_type; 
-            if (exportColumns.patrimonio_serial) { 
-              exportRow['Patrimonio / Grupo'] = a.notebook?.patrimonio || a.starlink?.grupo || a.celular?.grupo || a.chip?.grupo || '-'; 
-              exportRow['Serial / IMEI / Linha'] = a.notebook?.serial_number || a.celular?.imei || a.chip?.numero || '-'; 
+            if (exportColumns.identificadores) { 
+              exportRow['Identificador'] = getAssetIdentifier(a) || '-';
+              exportRow['Secundário (SN/ICCID/IMEI)'] = getAssetSecondaryIdentifier(a) || '-';
             }
-            if (exportColumns.modelo) exportRow['Modelo'] = a.notebook?.modelo || a.celular?.modelo || a.starlink?.modelo || '-'; 
-            if (exportColumns.status) exportRow['Status'] = a.status; 
-            if (exportColumns.dono) exportRow['Dono / Resp'] = ownerName;
+            if (exportColumns.modelo) exportRow['Modelo/Plano (Catálogo)'] = getModeloOuPlano(a) || '-'; 
+            if (exportColumns.status) {
+              exportRow['Status operacional'] = a.status || '-';
+              exportRow['Status (raw)'] = a.status_raw || '';
+              exportRow['Origem status'] = a.status_source || '';
+            }
+            exportRow['Grupo'] = getGrupo(a) || '';
+            exportRow['Responsável local'] = getResponsavelLocal(a) || '';
+            exportRow['Email colaborador'] = emp?.email || '';
+            exportRow['Data aquisição'] = getDataAquisicao(a) || '';
+            if ((a.asset_type || '').toLowerCase() === 'notebook' || (a.asset_type || '') === 'Notebook') {
+              exportRow['Garantia'] = getGarantiaNotebook(a) || '';
+              exportRow['Status garantia'] = getStatusGarantiaNotebook(a) || '';
+            } else {
+              exportRow['Garantia'] = '';
+              exportRow['Status garantia'] = '';
+            }
+            if (exportColumns.dono) exportRow['Dono atual / resp'] = ownerName;
             
             return exportRow;
         });
@@ -98,10 +130,13 @@ export default function ExportModule({ assets, employees, licenses, contracts, r
                 <input type="checkbox" checked={exportColumns.tipo} onChange={(e) => setExportColumns({...exportColumns, tipo: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Tipo
               </label>
               <label className="flex items-center gap-3 text-gray-300 cursor-pointer hover:text-white transition-colors">
-                <input type="checkbox" checked={exportColumns.patrimonio_serial} onChange={(e) => setExportColumns({...exportColumns, patrimonio_serial: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Patrimônio/Grupo
+                <input type="checkbox" checked={exportColumns.identificadores} onChange={(e) => setExportColumns({...exportColumns, identificadores: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Identificadores
               </label>
               <label className="flex items-center gap-3 text-gray-300 cursor-pointer hover:text-white transition-colors">
                 <input type="checkbox" checked={exportColumns.status} onChange={(e) => setExportColumns({...exportColumns, status: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Status
+              </label>
+              <label className="flex items-center gap-3 text-gray-300 cursor-pointer hover:text-white transition-colors">
+                <input type="checkbox" checked={exportColumns.modelo} onChange={(e) => setExportColumns({...exportColumns, modelo: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Modelo/Plano
               </label>
               <label className="flex items-center gap-3 text-gray-300 cursor-pointer hover:text-white transition-colors">
                 <input type="checkbox" checked={exportColumns.dono} onChange={(e) => setExportColumns({...exportColumns, dono: e.target.checked})} className="w-4 h-4 accent-brandGreen"/> Dono Atual / Responsável
