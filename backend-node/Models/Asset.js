@@ -12,6 +12,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING, 
       defaultValue: 'Disponível' 
     },
+    status_raw: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    status_source: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     observacao: { 
       type: DataTypes.TEXT 
     }

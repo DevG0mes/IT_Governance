@@ -34,6 +34,7 @@ const AssetNotebook = require('../Models/AssetNotebook')(sequelize, DataTypes);
 const AssetStarlink = require('../Models/AssetStarlink')(sequelize, DataTypes);
 const AssetChip = require('../Models/AssetChip')(sequelize, DataTypes);
 const AssetCelular = require('../Models/AssetCelular')(sequelize, DataTypes);
+const AssetMaintenanceLog = require('../Models/AssetMaintenanceLog')(sequelize, DataTypes);
 const EmployeeLicense = require('../Models/EmployeeLicense')(sequelize, DataTypes);
 const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataTypes);
 
@@ -66,6 +67,10 @@ AssetAssignment.belongsTo(Employee, { foreignKey: 'EmployeeId', as: 'Employee' }
 // Padronizamos o alias do lado do Asset para 'AssetAssignments'.
 Asset.hasMany(AssetAssignment, { foreignKey: 'AssetId', as: 'AssetAssignments' });
 AssetAssignment.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
+
+// 3.1 Logs de manutenção (histórico)
+Asset.hasMany(AssetMaintenanceLog, { foreignKey: 'AssetId', as: 'maintenance_logs' });
+AssetMaintenanceLog.belongsTo(Asset, { foreignKey: 'AssetId', as: 'Asset' });
 
 // 4. Colaborador -> Licenças de Software
 Employee.hasMany(EmployeeLicense, { foreignKey: 'employee_id', as: 'EmployeeLicenses' });
@@ -127,5 +132,5 @@ const connectDatabase = async () => {
 // EXPORTAÇÃO COMPLETA
 module.exports = { 
   sequelize, User, Employee, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, 
-  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, connectDatabase 
+  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, AssetMaintenanceLog, connectDatabase 
 };

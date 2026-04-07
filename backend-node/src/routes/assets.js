@@ -9,6 +9,8 @@ router.post('/', assetController.create);
 router.put('/:id', assetController.update);
 router.put('/:id/unassign', assetController.unassign);
 router.put('/:id/maintenance', assetController.maintenance);
+router.put('/:id/update-maintenance', assetController.updateMaintenance);
+router.put('/:id/resolve-maintenance', assetController.resolveMaintenance);
 router.put('/:id/discard', assetController.discard);
 router.post('/bulk', assetController.importBulk);
 router.post('/bulk-delete', assetController.bulkDelete);

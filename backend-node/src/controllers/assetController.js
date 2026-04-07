@@ -1,5 +1,16 @@
 const { Op } = require('sequelize');
-const { sequelize, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, Employee, AssetAssignment, AuditLog } = require('../../config/db');
+const {
+  sequelize,
+  Asset,
+  AssetNotebook,
+  AssetStarlink,
+  AssetChip,
+  AssetCelular,
+  Employee,
+  AssetAssignment,
+  AssetMaintenanceLog,
+  AuditLog,
+} = require('../../config/db');
 const { writeAuditLog } = require('../../utils/audit');
 const { standardizeAssetIdentifier, standardizeText } = require('../../utils/sanitizer');
 
@@ -8,6 +19,7 @@ const ASSET_INCLUDES_FULL = [
   { model: AssetStarlink, as: 'Starlink' },
   { model: AssetChip, as: 'Chip' },
   { model: AssetCelular, as: 'Celular' },
+  { model: AssetMaintenanceLog, as: 'maintenance_logs', required: false },
 ];
 
 /** YYYY-MM-DD ou DD/MM/AAAA (importação). */
@@ -77,6 +89,7 @@ exports.getAll = async (req, res) => {
         { model: AssetStarlink, as: 'Starlink' },
         { model: AssetChip, as: 'Chip' },
         { model: AssetCelular, as: 'Celular' },
+        { model: AssetMaintenanceLog, as: 'maintenance_logs', required: false },
         { model: Employee, as: 'Employee' },
         {
           model: AssetAssignment,
@@ -106,7 +119,8 @@ exports.create = async (req, res) => {
     const assetType = normalizeAssetType(input.asset_type);
     const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-    const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
+    const statusRaw = input.status != null ? String(input.status).trim() : '';
+    const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(statusRaw || 'Disponível');
 
     // 🚨 A MÁGICA: Se for texto vazio (""), ele converte para NULL na hora!
     const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
@@ -141,6 +155,8 @@ exports.create = async (req, res) => {
     const asset = await Asset.create({
       asset_type: assetType,
       status,
+      status_raw: statusRaw || null,
+      status_source: 'api',
       EmployeeId: ownerEmployeeId || null
     }, { transaction: t });
 
@@ -254,9 +270,12 @@ exports.update = async (req, res) => {
     const numero = standardizeAssetIdentifier(input.numero) || null;
     const iccid = standardizeAssetIdentifier(input.iccid) || null;
 
+    const statusRaw = input.status != null ? String(input.status).trim() : null;
     await asset.update(
       {
         status: input.status != null ? normalizeAssetStatus(input.status) : asset.status,
+        status_raw: statusRaw,
+        status_source: 'ui',
         observacao: input.observacao ?? asset.observacao,
       },
       { transaction: t }
@@ -427,8 +446,35 @@ exports.maintenance = async (req, res) => {
     if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
 
     const oldAsset = asset.toJSON();
-    const observacao = req.body?.observacao ? standardizeText(req.body.observacao) : asset.observacao;
-    await asset.update({ status: 'Manutenção', observacao }, { transaction: t });
+    const chamado = standardizeText(req.body?.chamado || '');
+    const observacao = req.body?.observacao ? standardizeText(req.body.observacao) : '';
+    if (!chamado) return res.status(400).json({ error: 'Nº do chamado é obrigatório.' });
+
+    const activeLog = await AssetMaintenanceLog.findOne({
+      where: { AssetId: asset.id, resolved_at: null },
+      transaction: t,
+    });
+    if (!activeLog) {
+      await AssetMaintenanceLog.create(
+        {
+          AssetId: asset.id,
+          chamado,
+          observacao,
+          opened_at: new Date(),
+          resolved_at: null,
+          created_by: req.user?.email || req.user?.nome || null,
+        },
+        { transaction: t }
+      );
+    } else {
+      await activeLog.update({ chamado, observacao }, { transaction: t });
+    }
+
+    const statusRaw = req.body?.status ? String(req.body.status).trim() : 'Manutenção';
+    await asset.update(
+      { status: 'Manutenção', status_raw: statusRaw, status_source: 'ui', observacao },
+      { transaction: t }
+    );
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',
@@ -443,6 +489,82 @@ exports.maintenance = async (req, res) => {
 
     await t.commit();
     return res.status(200).json({ message: 'Ativo marcado como Manutenção' });
+  } catch (error) {
+    if (t) await t.rollback();
+    return res.status(400).json({ error: error.message });
+  }
+};
+
+exports.updateMaintenance = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const asset = await Asset.findByPk(req.params.id, { transaction: t });
+    if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
+
+    const chamado = standardizeText(req.body?.chamado || '');
+    const observacao = standardizeText(req.body?.observacao || '');
+    if (!chamado) return res.status(400).json({ error: 'Nº do chamado é obrigatório.' });
+
+    const log = await AssetMaintenanceLog.findOne({
+      where: { AssetId: asset.id, resolved_at: null },
+      transaction: t,
+    });
+    if (!log) return res.status(404).json({ error: 'Não há manutenção ativa para este ativo.' });
+
+    await log.update({ chamado, observacao }, { transaction: t });
+
+    await writeAuditLog(AuditLog, {
+      action: 'UPDATE',
+      table_name: 'asset_maintenance_logs',
+      record_id: log.id,
+      old_data: null,
+      new_data: log.toJSON(),
+      module: 'maintenance',
+      user: req.user?.email || req.user?.nome || null,
+      details: `Atualização de manutenção (chamado=${chamado})`,
+    });
+
+    await t.commit();
+    return res.status(200).json({ message: 'Manutenção atualizada' });
+  } catch (error) {
+    if (t) await t.rollback();
+    return res.status(400).json({ error: error.message });
+  }
+};
+
+exports.resolveMaintenance = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const asset = await Asset.findByPk(req.params.id, { transaction: t });
+    if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
+
+    const log = await AssetMaintenanceLog.findOne({
+      where: { AssetId: asset.id, resolved_at: null },
+      transaction: t,
+    });
+    if (!log) return res.status(404).json({ error: 'Não há manutenção ativa para este ativo.' });
+
+    await log.update({ resolved_at: new Date() }, { transaction: t });
+
+    const oldAsset = asset.toJSON();
+    await asset.update(
+      { status: 'Disponível', status_raw: 'Disponível', status_source: 'ui', observacao: asset.observacao },
+      { transaction: t }
+    );
+
+    await writeAuditLog(AuditLog, {
+      action: 'UPDATE',
+      table_name: 'assets',
+      record_id: asset.id,
+      old_data: oldAsset,
+      new_data: asset.toJSON(),
+      module: 'maintenance',
+      user: req.user?.email || req.user?.nome || null,
+      details: `Manutenção finalizada (chamado=${log.chamado})`,
+    });
+
+    await t.commit();
+    return res.status(200).json({ message: 'Manutenção finalizada' });
   } catch (error) {
     if (t) await t.rollback();
     return res.status(400).json({ error: error.message });
@@ -469,7 +591,12 @@ exports.discard = async (req, res) => {
     }
 
     const oldAsset = asset.toJSON();
-    await asset.update({ status: newStatus, observacao, EmployeeId: null }, { transaction: t });
+    const statusRaw = String(newStatus).trim();
+    const status = normalizeAssetStatus(statusRaw);
+    await asset.update(
+      { status, status_raw: statusRaw, status_source: 'ui', observacao, EmployeeId: null },
+      { transaction: t }
+    );
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',
@@ -479,7 +606,7 @@ exports.discard = async (req, res) => {
       new_data: asset.toJSON(),
       module: 'assets',
       user: req.user?.email || req.user?.nome || null,
-      details: `Status alterado para ${newStatus}`,
+      details: `Status alterado para ${statusRaw}`,
     });
 
     await t.commit();
@@ -513,12 +640,9 @@ exports.importBulk = async (req, res) => {
           const assetType = normalizeAssetType(input.asset_type);
           const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
           const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
-          const status =
-            input.status != null && String(input.status).trim() !== ''
-              ? normalizeAssetStatus(input.status)
-              : ownerEmployeeId
-                ? 'Em uso'
-                : 'Disponível';
+          const statusRaw =
+            input.status != null && String(input.status).trim() !== '' ? String(input.status).trim() : '';
+          const status = statusRaw ? normalizeAssetStatus(statusRaw) : ownerEmployeeId ? 'Em uso' : 'Disponível';
 
           // 🚨 A MÁGICA NO BULK IMPORT
           const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
@@ -555,7 +679,13 @@ exports.importBulk = async (req, res) => {
           }
 
           const asset = await Asset.create(
-            { asset_type: assetType, status, EmployeeId: ownerEmployeeId || null },
+            {
+              asset_type: assetType,
+              status,
+              status_raw: statusRaw || null,
+              status_source: 'import_csv',
+              EmployeeId: ownerEmployeeId || null,
+            },
             { transaction: tItem }
           );
 
