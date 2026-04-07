@@ -29,6 +29,7 @@ services:
       - DB_PASS=${DB_PASS:-senha_secreta_123}
       - DB_NAME=${DB_NAME:-inventario_db}
       - DB_DIALECT=${DB_DIALECT:-postgres}
+      - DB_SSLMODE=${DB_SSLMODE:-}
       - JWT_SECRET=${JWT_SECRET}
       - PORT=${PORT:-3000}
     networks:
