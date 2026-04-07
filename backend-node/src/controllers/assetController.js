@@ -60,7 +60,7 @@ const normalizeAssetType = (raw) => {
     notebooks: 'Notebook',
     celular: 'Celular',
     celulares: 'Celular',
-    celulare: 'Celular', // legado do slice(0,-1)
+    celulare: 'Celular', 
     chip: 'CHIP',
     chips: 'CHIP',
     starlink: 'Starlink',
@@ -86,7 +86,6 @@ exports.getAll = async (req, res) => {
         },
       ]
     });
-    // Normaliza tipos na saída para não quebrar filtros do frontend
     const normalized = assets.map(a => {
       const json = a.toJSON();
       json.asset_type = normalizeAssetType(json.asset_type);
@@ -109,11 +108,12 @@ exports.create = async (req, res) => {
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
     const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(input.status || 'Disponível');
 
-    const patrimonio = standardizeAssetIdentifier(input.patrimonio);
-    const serial_number = standardizeAssetIdentifier(input.serial_number);
-    const imei = standardizeAssetIdentifier(input.imei);
-    const numero = standardizeAssetIdentifier(input.numero);
-    const iccid = standardizeAssetIdentifier(input.iccid);
+    // 🚨 A MÁGICA: Se for texto vazio (""), ele converte para NULL na hora!
+    const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
+    const serial_number = standardizeAssetIdentifier(input.serial_number) || null;
+    const imei = standardizeAssetIdentifier(input.imei) || null;
+    const numero = standardizeAssetIdentifier(input.numero) || null;
+    const iccid = standardizeAssetIdentifier(input.iccid) || null;
 
     if (assetType === 'Notebook' && patrimonio) {
       const exists = await AssetNotebook.findOne({ where: { patrimonio }, transaction: t });
@@ -209,7 +209,6 @@ exports.create = async (req, res) => {
       }, { transaction: t });
     }
 
-    // Vínculo histórico (quando há dono atual)
     if (ownerEmployeeId) {
       await AssetAssignment.create(
         { EmployeeId: ownerEmployeeId, AssetId: asset.id, assigned_at: new Date(), returned_at: null },
@@ -248,11 +247,12 @@ exports.update = async (req, res) => {
     const assetType = normalizeAssetType(asset.asset_type);
     const dataAq = parseDataAquisicao(input.data_aquisicao);
 
-    const patrimonio = standardizeAssetIdentifier(input.patrimonio);
-    const serial_number = standardizeAssetIdentifier(input.serial_number);
-    const imei = standardizeAssetIdentifier(input.imei);
-    const numero = standardizeAssetIdentifier(input.numero);
-    const iccid = standardizeAssetIdentifier(input.iccid);
+    // 🚨 A MÁGICA TAMBÉM NA EDIÇÃO
+    const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
+    const serial_number = standardizeAssetIdentifier(input.serial_number) || null;
+    const imei = standardizeAssetIdentifier(input.imei) || null;
+    const numero = standardizeAssetIdentifier(input.numero) || null;
+    const iccid = standardizeAssetIdentifier(input.iccid) || null;
 
     await asset.update(
       {
@@ -460,7 +460,6 @@ exports.discard = async (req, res) => {
     const observacao = standardizeText(req.body?.observacao || '');
     if (!observacao) return res.status(400).json({ error: 'A justificativa é obrigatória.' });
 
-    // Se vai descartar/inutilizar/extraviar, garante que não está atribuído
     const activeAssignment = await AssetAssignment.findOne({
       where: { AssetId: asset.id, returned_at: null },
       transaction: t,
@@ -505,7 +504,6 @@ exports.importBulk = async (req, res) => {
     for (let idx = 0; idx < items.length; idx++) {
       const input = items[idx];
       try {
-        // O Savepoint: Se falhar 1 linha, as outras continuam.
         await sequelize.transaction({ transaction: t }, async (tItem) => {
           if (!input || !input.asset_type) {
             skipped++;
@@ -522,14 +520,15 @@ exports.importBulk = async (req, res) => {
                 ? 'Em uso'
                 : 'Disponível';
 
-          const patrimonio = standardizeAssetIdentifier(input.patrimonio);
-          const serial_number = standardizeAssetIdentifier(input.serial_number);
-          const imei = standardizeAssetIdentifier(input.imei);
-          const numero = standardizeAssetIdentifier(input.numero);
-          const iccid = standardizeAssetIdentifier(input.iccid);
+          // 🚨 A MÁGICA NO BULK IMPORT
+          const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
+          const serial_number = standardizeAssetIdentifier(input.serial_number) || null;
+          const imei = standardizeAssetIdentifier(input.imei) || null;
+          const numero = standardizeAssetIdentifier(input.numero) || null;
+          const iccid = standardizeAssetIdentifier(input.iccid) || null;
+          
           const dataAquisicaoBulk = parseDataAquisicao(input.data_aquisicao);
 
-          // Anti-duplicação por tipo (Ignora o item se já existir e passa para o próximo)
           if (assetType === 'Notebook') {
             if (patrimonio) {
               const exists = await AssetNotebook.findOne({ where: { patrimonio }, transaction: tItem });
@@ -627,10 +626,7 @@ exports.importBulk = async (req, res) => {
           created++;
         });
       } catch (error) {
-        // 🚨 O RAIO-X DO ERRO COMEÇA AQUI
         let mensagemExata = error.message || String(error);
-        
-        // Descasca o erro do Sequelize para pegar a coluna e o motivo exato
         if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
           if (error.errors && Array.isArray(error.errors)) {
             mensagemExata = error.errors.map(e => e.message).join(' | ');
@@ -638,11 +634,8 @@ exports.importBulk = async (req, res) => {
         }
         
         console.error(`❌ Erro no import bulk (idx=${idx}, Linha do Excel=${idx + 2}): ${mensagemExata}`);
-        
-        // Desfaz a transação pai para não corromper o banco
         if (t) await t.rollback();
         
-        // Devolve o erro na hora e mastigado para o popup do React!
         return res.status(400).json({ 
           error: `Erro na linha ${idx + 2} do arquivo Excel.`, 
           details: mensagemExata 
@@ -655,7 +648,7 @@ exports.importBulk = async (req, res) => {
       message: `Importação concluída com sucesso! ${created} ativos criados, ${skipped} ignorados (já existiam).`,
       created,
       skipped,
-      errors: [] // Zero erros se chegou até aqui
+      errors: [] 
     });
   } catch (error) {
     if (t) await t.rollback();
