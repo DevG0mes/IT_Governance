@@ -18,7 +18,9 @@ function validateBody(schema, body) {
         })),
       };
     }
-    return { ok: false, error: [{ path: '', message: 'Payload inválido' }] };
+    const msg = e && typeof e === 'object' && typeof e.message === 'string' ? e.message : 'Payload inválido';
+    const name = e && typeof e === 'object' && typeof e.name === 'string' ? e.name : 'Error';
+    return { ok: false, error: [{ path: '', message: `${name}: ${msg}` }] };
   }
 }
 
