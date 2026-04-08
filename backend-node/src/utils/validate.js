@@ -1,5 +1,3 @@
-const { ZodError } = require('zod');
-
 /**
  * Valida req.body e retorna { ok, data?, error? }
  */
@@ -8,10 +6,16 @@ function validateBody(schema, body) {
     const data = schema.parse(body);
     return { ok: true, data };
   } catch (e) {
-    if (e instanceof ZodError) {
+    // Zod pode vir com instâncias diferentes dependendo do runtime/bundle,
+    // então além de instanceof, detectamos pelo shape (issues[]).
+    const issues = e && typeof e === 'object' && Array.isArray(e.issues) ? e.issues : null;
+    if (issues) {
       return {
         ok: false,
-        error: e.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        error: issues.map((i) => ({
+          path: Array.isArray(i.path) ? i.path.join('.') : '',
+          message: i.message || 'Campo inválido',
+        })),
       };
     }
     return { ok: false, error: [{ path: '', message: 'Payload inválido' }] };
