@@ -2,7 +2,8 @@ const { z } = require('zod');
 
 const perm = z.enum(['none', 'read', 'edit']);
 
-const permissionsSchema = z.record(perm);
+// Zod v4: record exige (keySchema, valueSchema)
+const permissionsSchema = z.record(z.string(), perm);
 
 const profileCreateSchema = z.object({
   nome: z.string().trim().min(2).max(80),
