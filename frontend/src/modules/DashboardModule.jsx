@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Package,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -38,6 +39,21 @@ import api from '../services/api';
 const CHART_COLORS = ['#10b981', '#3b82f6', '#eab308', '#a855f7', '#ec4899'];
 
 export default function DashboardModule({ assets, employees, licenses, contracts, catalogItems, formatCurrency, isLoading }) {
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('dash_view_mode') || 'exec';
+    } catch {
+      return 'exec';
+    }
+  });
+  const [timeRange, setTimeRange] = useState(() => {
+    try {
+      return localStorage.getItem('dash_time_range') || 'current_month';
+    } catch {
+      return 'current_month';
+    }
+  });
+
   const [filtroAtivo, setFiltroAtivo] = useState('Todos');
   const [selectedGroupForModal, setSelectedGroupForModal] = useState(null);
   const [filtroFornecedor, setFiltroFornecedor] = useState('Todos');
@@ -49,14 +65,21 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const loadFinops = useCallback(async () => {
     setFinopsLoading(true);
     try {
-      const r = await api.get('/dashboard/finops');
+      const r = await api.get('/dashboard/finops', {
+        params: {
+          range: timeRange,
+          licenseVendor: filtroLicFornecedor !== 'Todos' ? filtroLicFornecedor : '',
+          licensePlan: filtroLicPlano !== 'Todos' ? filtroLicPlano : '',
+          contractVendor: filtroFornecedor !== 'Todos' ? filtroFornecedor : '',
+        },
+      });
       setFinops(r.data?.data || null);
     } catch {
       setFinops(null);
     } finally {
       setFinopsLoading(false);
     }
-  }, []);
+  }, [timeRange, filtroLicFornecedor, filtroLicPlano, filtroFornecedor]);
 
   useEffect(() => {
     loadFinops();
@@ -65,6 +88,13 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   useEffect(() => {
     if (!isLoading) loadFinops();
   }, [isLoading, loadFinops]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('dash_view_mode', viewMode);
+      localStorage.setItem('dash_time_range', timeRange);
+    } catch {}
+  }, [viewMode, timeRange]);
 
   const ativosFiltrados = useMemo(() => {
     if (!assets) return [];
@@ -238,6 +268,14 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   }, [licensesFiltered]);
 
   const contractChartData = useMemo(() => {
+    if (finops?.contracts?.monthlySeries?.length) {
+      return finops.contracts.monthlySeries.map((x) => ({
+        name: x.ym,
+        Previsto: x.previsto,
+        Realizado: x.realizado,
+      }));
+    }
+    // Fallback local (caso API falhe)
     const dataMap = {};
     if (contracts) {
       let dadosFiltrados = contracts;
@@ -246,7 +284,6 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           (c) => (c.fornecedor || 'Desconhecido').trim() === filtroFornecedor
         );
       }
-
       dadosFiltrados.forEach((c) => {
         if (!dataMap[c.mes_competencia])
           dataMap[c.mes_competencia] = { name: c.mes_competencia, Previsto: 0, Realizado: 0 };
@@ -255,7 +292,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       });
     }
     return Object.values(dataMap).sort((a, b) => a.name.localeCompare(b.name));
-  }, [contracts, filtroFornecedor]);
+  }, [finops, contracts, filtroFornecedor]);
 
   const valuationTotal = useMemo(() => {
     let total = 0;
@@ -300,6 +337,17 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
   const showFinopsCharts = !finopsLoading && finops && filtroAtivo === 'Todos';
 
+  const licenseSeriesChartData = useMemo(() => {
+    const s = finops?.licenses?.series;
+    if (!Array.isArray(s) || s.length === 0) return [];
+    return s.map((x) => ({
+      name: x.ym,
+      Compromisso: x.committedMonthly,
+      Usado: x.usedMonthly,
+      Ocioso: x.wasteMonthly,
+    }));
+  }, [finops]);
+
   return (
     <div className="space-y-8 animate-fade-in pb-12 relative">
       {(isLoading || finopsLoading) && (
@@ -321,6 +369,62 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             Visão consolidada: catálogo, licenças, contratos e uso vs parado. Valores de hardware vêm do{' '}
             <span className="text-brandGreen font-semibold">Catálogo</span>.
           </p>
+
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                className="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-brandGreen focus:border-brandGreen block p-2 outline-none cursor-pointer transition-colors"
+                disabled={isLoading}
+              >
+                <option value="current_month">Mês atual</option>
+                <option value="last_6">Últimos 6 meses</option>
+                <option value="ytd">YTD (ano)</option>
+              </select>
+
+              <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('exec')}
+                  className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                    viewMode === 'exec' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
+                  }`}
+                >
+                  Executivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('ops')}
+                  className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                    viewMode === 'ops' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
+                  }`}
+                >
+                  Operacional (TI)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => loadFinops()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/60 text-gray-200 hover:bg-gray-800 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${finopsLoading ? 'animate-spin' : ''}`} /> Atualizar
+              </button>
+            </div>
+
+            <div className="text-[11px] text-gray-500">
+              {finops?.meta?.generatedAt || finops?.generatedAt ? (
+                <span>
+                  Atualizado em{' '}
+                  <span className="text-gray-300 font-semibold">
+                    {new Date(finops.meta?.generatedAt || finops.generatedAt).toLocaleString('pt-BR')}
+                  </span>
+                </span>
+              ) : null}
+            </div>
+          </div>
 
           <div className="mt-4 flex items-center gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-gray-400" />
@@ -575,6 +679,57 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
           <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
             <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <DollarSign className="text-brandGreen w-6 h-6" />
+              Licenças (compromisso vs usado vs ocioso)
+            </h3>
+            <p className="text-xs text-gray-500 mb-6">
+              Série por competência selecionada ({timeRange === 'current_month' ? 'mês atual' : timeRange === 'last_6' ? 'últimos 6 meses' : 'YTD'}). Sem histórico por mês, a série é uma projeção constante.
+            </p>
+            <div className="h-72 w-full">
+              {licenseSeriesChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={licenseSeriesChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                    <defs>
+                      <linearGradient id="licCommit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="licUsed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="licWaste" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#eab308" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                    <YAxis
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      tickFormatter={(v) => (v >= 1000000 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1e3).toFixed(0)}k` : v)}
+                    />
+                    <RechartsTooltip
+                      contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px', color: '#fff' }}
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', color: '#9ca3af' }} />
+                    <Area type="monotone" dataKey="Compromisso" stroke="#10b981" fill="url(#licCommit)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="Usado" stroke="#3b82f6" fill="url(#licUsed)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="Ocioso" stroke="#eab308" fill="url(#licWaste)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
+                  Sem série disponível.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
               <PieChart className="text-brandGreen w-6 h-6" />
               Ativos por status operacional
             </h3>
@@ -798,34 +953,64 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       </div>
 
       {finops?.licenses?.topWaste?.length > 0 && filtroAtivo === 'Todos' && (
-        <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl animate-finops-reveal">
-          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-amber-400" /> Top licenças — maior ociosidade mensal (estimada)
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-300">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
-                  <th className="py-2 pr-4">Software</th>
-                  <th className="py-2 pr-4">Plano</th>
-                  <th className="py-2 pr-4 text-right">Ocioso / mês</th>
-                  <th className="py-2 text-right">Uso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finops.licenses.topWaste.slice(0, 6).map((row) => (
-                  <tr key={row.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
-                    <td className="py-2 pr-4 font-medium text-white">{row.nome}</td>
-                    <td className="py-2 pr-4 text-gray-400">{row.plano || '—'}</td>
-                    <td className="py-2 pr-4 text-right text-amber-400 font-mono">{formatCurrency(row.wasteMonthly)}</td>
-                    <td className="py-2 text-right text-gray-400">
-                      {row.quantidade_em_uso}/{row.quantidade_total}
-                    </td>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-finops-reveal">
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-amber-400" /> Top licenças — maior ociosidade mensal (estimada)
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-gray-300">
+                <thead>
+                  <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
+                    <th className="py-2 pr-4">Software</th>
+                    <th className="py-2 pr-4">Fornecedor</th>
+                    <th className="py-2 pr-4 text-right">Ocioso / mês</th>
+                    <th className="py-2 text-right">Uso</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {finops.licenses.topWaste.slice(0, 6).map((row) => (
+                    <tr key={row.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
+                      <td className="py-2 pr-4 font-medium text-white">{row.nome}</td>
+                      <td className="py-2 pr-4 text-gray-400">{row.fornecedor || '—'}</td>
+                      <td className="py-2 pr-4 text-right text-amber-400 font-mono">{formatCurrency(row.wasteMonthly)}</td>
+                      <td className="py-2 text-right text-gray-400">
+                        {row.quantidade_em_uso}/{row.quantidade_total}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {finops?.licenses?.topCost?.length > 0 && (
+            <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-brandGreen" /> Top licenças — maior custo mensal (compromisso)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-gray-300">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-gray-500 text-xs uppercase">
+                      <th className="py-2 pr-4">Software</th>
+                      <th className="py-2 pr-4">Fornecedor</th>
+                      <th className="py-2 text-right">Compromisso / mês</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finops.licenses.topCost.slice(0, 6).map((row) => (
+                      <tr key={row.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
+                        <td className="py-2 pr-4 font-medium text-white">{row.nome}</td>
+                        <td className="py-2 pr-4 text-gray-400">{row.fornecedor || '—'}</td>
+                        <td className="py-2 text-right text-brandGreen font-mono">{formatCurrency(row.committedMonthly)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
