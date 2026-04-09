@@ -29,6 +29,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   PieChart as RePie,
   Pie,
   Cell,
@@ -62,6 +64,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const [finops, setFinops] = useState(null);
   const [finopsPrev, setFinopsPrev] = useState(null);
   const [finopsLoading, setFinopsLoading] = useState(true);
+  const [monthlySnapshots, setMonthlySnapshots] = useState([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
 
   const loadFinops = useCallback(async () => {
     setFinopsLoading(true);
@@ -104,9 +108,25 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     }
   }, [timeRange, filtroLicFornecedor, filtroLicPlano, filtroFornecedor]);
 
+  const loadMonthlySnapshots = useCallback(async () => {
+    try {
+      setSnapshotsLoading(true);
+      const r = await api.get('/dashboard/finops/snapshots');
+      setMonthlySnapshots(Array.isArray(r.data?.data) ? r.data.data : []);
+    } catch {
+      setMonthlySnapshots([]);
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadFinops();
   }, [loadFinops]);
+
+  useEffect(() => {
+    loadMonthlySnapshots();
+  }, [loadMonthlySnapshots]);
 
   useEffect(() => {
     if (!isLoading) loadFinops();
@@ -390,6 +410,38 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     }));
   }, [finops]);
 
+  const snapshotSeriesData = useMemo(() => {
+    if (!Array.isArray(monthlySnapshots) || monthlySnapshots.length === 0) return [];
+    return monthlySnapshots.map((s) => ({
+      name: s.ym,
+      Total: Number(s.totals?.fixedMonthly) || 0,
+      Licenças: Number(s.totals?.licensesCommittedMonthly) || 0,
+      Contratos: Number(s.totals?.contractsRealizado) || 0,
+      Telecom: Number(s.totals?.telecomCommittedMonthly) || 0,
+      Savings: Number(s.totals?.savingsMonthly) || 0,
+    }));
+  }, [monthlySnapshots]);
+
+  const closePreviousMonth = useCallback(async () => {
+    const ref = finops?.meta?.ref;
+    if (typeof ref !== 'string' || !ref.includes('-')) return;
+    const [yStr, mStr] = ref.split('-');
+    const y = parseInt(yStr, 10);
+    const m = parseInt(mStr, 10);
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+    const prevYm = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+    const ok = window.confirm(`Gerar snapshot (fechar mês) para ${prevYm}? Isso congela os valores do mês.`);
+    if (!ok) return;
+    try {
+      await api.post(`/dashboard/finops/snapshots/${prevYm}/generate`);
+      await loadMonthlySnapshots();
+      await loadFinops();
+      alert(`✅ Snapshot gerado para ${prevYm}`);
+    } catch (err) {
+      alert(err?.response?.data?.error || err?.response?.data?.details || err?.message || 'Falha ao gerar snapshot');
+    }
+  }, [finops, loadMonthlySnapshots, loadFinops]);
+
   return (
     <div className="space-y-8 animate-fade-in pb-12 relative">
       {(isLoading || finopsLoading) && (
@@ -453,6 +505,16 @@ export default function DashboardModule({ assets, employees, licenses, contracts
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900/60 text-gray-200 hover:bg-gray-800 transition-colors"
               >
                 <RefreshCw className={`w-4 h-4 ${finopsLoading ? 'animate-spin' : ''}`} /> Atualizar
+              </button>
+
+              <button
+                type="button"
+                onClick={closePreviousMonth}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-brandGreen/30 bg-brandGreen/15 text-brandGreen hover:bg-brandGreen/20 transition-colors"
+                disabled={finopsLoading || !finops?.meta?.ref}
+                title="Gera snapshot do mês anterior (fechar mês)"
+              >
+                Fechar mês
               </button>
             </div>
 
@@ -614,6 +676,50 @@ export default function DashboardModule({ assets, employees, licenses, contracts
                 <div className="text-[11px] text-gray-500">
                   {runRatePrev != null ? `Anterior: ${formatCurrency(runRatePrev)}` : ''}
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filtroAtivo === 'Todos' && (
+        <div className="bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl animate-finops-reveal">
+          <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+            <TrendingUp className="text-brandGreen w-6 h-6" />
+            Evolução mensal (snapshots congelados)
+          </h3>
+          <p className="text-xs text-gray-500 mb-6">
+            Série mês a mês baseada em snapshots imutáveis (histórico fiel). Para iniciar, clique em <span className="text-gray-200 font-semibold">Fechar mês</span>.
+          </p>
+          <div className="h-72 w-full">
+            {snapshotsLoading ? (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">Carregando snapshots…</div>
+            ) : snapshotSeriesData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={snapshotSeriesData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                  <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickMargin={8} />
+                  <YAxis stroke="#9ca3af" fontSize={12} tickMargin={8} />
+                  <RechartsTooltip
+                    contentStyle={{
+                      background: 'rgba(17,24,39,0.95)',
+                      border: '1px solid rgba(75,85,99,0.6)',
+                      borderRadius: 12,
+                    }}
+                    labelStyle={{ color: '#9ca3af' }}
+                    formatter={(v, name) => [formatCurrency(Number(v) || 0), name]}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="Total" stroke="#10b981" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Licenças" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Contratos" stroke="#eab308" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Telecom" stroke="#a855f7" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="Savings" stroke="#34d399" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                Sem snapshots ainda.
               </div>
             )}
           </div>

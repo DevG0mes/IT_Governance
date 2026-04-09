@@ -47,6 +47,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     modelo_celular: '',
     plano: '',
     vencimento_plano: '',
+    custo_unitario_mensal: '',
+    unidade_cobranca: 'LINHA',
     data_aquisicao: '',
   });
 
@@ -232,6 +234,8 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
           iccid: ch?.iccid || '',
           plano: ch?.plano || '',
           vencimento_plano: ch?.vencimento_plano || '',
+          custo_unitario_mensal: ch?.custo_unitario_mensal ?? '',
+          unidade_cobranca: ch?.unidade_cobranca || 'LINHA',
           localizacao: st?.localizacao || '',
           projeto: st?.projeto || '',
           modelo_starlink: st?.modelo || '',
@@ -374,13 +378,26 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             </button>
             <select value={assetStatusFilter} onChange={(e) => setAssetStatusFilter(e.target.value)} className="flex-1 md:flex-none bg-gray-900/80 border border-gray-700 rounded-xl p-2.5 text-sm text-white outline-none cursor-pointer focus:border-brandGreen transition-colors">
               <option value="Todos">Todos os Status</option>
-              <option value="Disponível">Disponível</option>
-              <option value="Em uso">Em uso</option>
-              <option value="Manutenção">Manutenção</option>
-              <option value="Renovação">Renovação</option>
-              <option value="Inutilizado">Inutilizado</option>
-              <option value="Extraviado/Roubado">Extraviado/Roubado</option>
-              <option value="Descartado">Descartado</option>
+              {selectedCategory === 'CHIP' ? (
+                <>
+                  <option value="DISPONIVEL">DISPONIVEL</option>
+                  <option value="EM USO">EM USO</option>
+                  <option value="BLOQUEADO">BLOQUEADO</option>
+                  <option value="RENOVAR">RENOVAR</option>
+                  <option value="CANCELAR">CANCELAR</option>
+                  <option value="CANCELADO">CANCELADO</option>
+                </>
+              ) : (
+                <>
+                  <option value="Disponível">Disponível</option>
+                  <option value="Em uso">Em uso</option>
+                  <option value="Manutenção">Manutenção</option>
+                  <option value="Renovação">Renovação</option>
+                  <option value="Inutilizado">Inutilizado</option>
+                  <option value="Extraviado/Roubado">Extraviado/Roubado</option>
+                  <option value="Descartado">Descartado</option>
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -517,11 +534,21 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                               
                               {asset.status === 'Em uso' && <button onClick={() => handleAction(asset.id, 'unassign')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><LogOut className="w-4 h-4 text-red-400"/> Devolver para Estoque</button>}
                               
-                              {asset.asset_type === 'CHIP' && asset.status !== 'Renovação' && <button onClick={() => openStatusModal(asset, 'Renovação')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><RefreshCw className="w-4 h-4 text-blue-400"/> Marcar p/ Renovação</button>}
+                              {asset.asset_type === 'CHIP' && (
+                                <>
+                                  <div className="border-t border-gray-700 my-1"></div>
+                                  <button onClick={() => openStatusModal(asset, 'DISPONIVEL')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><CheckCircle className="w-4 h-4 text-brandGreen"/> DISPONIVEL</button>
+                                  <button onClick={() => openStatusModal(asset, 'EM USO')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Users className="w-4 h-4 text-blue-300"/> EM USO</button>
+                                  <button onClick={() => openStatusModal(asset, 'BLOQUEADO')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><ShieldAlert className="w-4 h-4 text-amber-400"/> BLOQUEADO</button>
+                                  <button onClick={() => openStatusModal(asset, 'RENOVAR')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><RefreshCw className="w-4 h-4 text-cyan-300"/> RENOVAR</button>
+                                  <button onClick={() => openStatusModal(asset, 'CANCELAR')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><AlertTriangle className="w-4 h-4 text-orange-400"/> CANCELAR</button>
+                                  <button onClick={() => openStatusModal(asset, 'CANCELADO')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Trash2 className="w-4 h-4 text-red-400"/> CANCELADO</button>
+                                </>
+                              )}
                               
-                              {asset.status !== 'Manutenção' && <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsMaintenanceModalOpen(true); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Wrench className="w-4 h-4 text-yellow-400"/> Enviar p/ Manutenção</button>}
+                              {asset.asset_type !== 'CHIP' && asset.status !== 'Manutenção' && <button onClick={() => { setOpenActionMenu(null); setActiveAsset(asset); setIsMaintenanceModalOpen(true); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><Wrench className="w-4 h-4 text-yellow-400"/> Enviar p/ Manutenção</button>}
                               
-                              {['Disponível', 'Manutenção', 'Renovação'].includes(asset.status) && (
+                              {asset.asset_type !== 'CHIP' && ['Disponível', 'Manutenção', 'Renovação'].includes(asset.status) && (
                                 <>
                                   <div className="border-t border-gray-700 my-1"></div>
                                   <button onClick={() => openStatusModal(asset, 'Inutilizado')} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><ShieldAlert className="w-4 h-4 text-orange-400"/> Marcar Inutilizado</button>
@@ -672,6 +699,30 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                   </div>
                   <input type="text" required placeholder="Número da Linha" value={newAsset.numero} onChange={(e) => setNewAsset({...newAsset, numero: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
                   <input type="text" placeholder="ICCID (Opcional)" value={newAsset.iccid} onChange={(e) => setNewAsset({...newAsset, iccid: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Custo unit. mensal (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Ex: 29.90"
+                        value={newAsset.custo_unitario_mensal ?? ''}
+                        onChange={(e) => setNewAsset({ ...newAsset, custo_unitario_mensal: e.target.value })}
+                        className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">Unidade</label>
+                      <select
+                        value={newAsset.unidade_cobranca || 'LINHA'}
+                        onChange={(e) => setNewAsset({ ...newAsset, unidade_cobranca: e.target.value })}
+                        className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-white outline-none"
+                      >
+                        <option value="LINHA">LINHA</option>
+                        <option value="GB">GB</option>
+                      </select>
+                    </div>
+                  </div>
                   <div>
                     <label className="text-xs text-gray-400 block mb-1">Vencimento do plano (fatura)</label>
                     <input type="date" value={newAsset.vencimento_plano} onChange={(e) => setNewAsset({...newAsset, vencimento_plano: e.target.value})} className="w-full bg-black/50 border border-gray-700 focus:border-brandGreen transition-colors rounded-xl p-3 text-gray-400 outline-none" title="Vencimento do Plano" />
