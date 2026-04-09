@@ -60,22 +60,45 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const [filtroLicFornecedor, setFiltroLicFornecedor] = useState('Todos');
   const [filtroLicPlano, setFiltroLicPlano] = useState('Todos');
   const [finops, setFinops] = useState(null);
+  const [finopsPrev, setFinopsPrev] = useState(null);
   const [finopsLoading, setFinopsLoading] = useState(true);
 
   const loadFinops = useCallback(async () => {
     setFinopsLoading(true);
     try {
-      const r = await api.get('/dashboard/finops', {
-        params: {
-          range: timeRange,
-          licenseVendor: filtroLicFornecedor !== 'Todos' ? filtroLicFornecedor : '',
-          licensePlan: filtroLicPlano !== 'Todos' ? filtroLicPlano : '',
-          contractVendor: filtroFornecedor !== 'Todos' ? filtroFornecedor : '',
-        },
-      });
+      const params = {
+        range: timeRange,
+        licenseVendor: filtroLicFornecedor !== 'Todos' ? filtroLicFornecedor : '',
+        licensePlan: filtroLicPlano !== 'Todos' ? filtroLicPlano : '',
+        contractVendor: filtroFornecedor !== 'Todos' ? filtroFornecedor : '',
+      };
+
+      const r = await api.get('/dashboard/finops', { params });
       setFinops(r.data?.data || null);
+
+      // Run Rate: comparação vs mês anterior (somente quando range=current_month)
+      try {
+        const ref = r.data?.data?.meta?.ref;
+        if (timeRange === 'current_month' && typeof ref === 'string' && ref.includes('-')) {
+          const [yStr, mStr] = ref.split('-');
+          const y = parseInt(yStr, 10);
+          const m = parseInt(mStr, 10);
+          if (Number.isFinite(y) && Number.isFinite(m) && m >= 1 && m <= 12) {
+            const prevYm = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+            const prev = await api.get('/dashboard/finops', { params: { ...params, range: 'current_month', ref: prevYm } });
+            setFinopsPrev(prev.data?.data || null);
+          } else {
+            setFinopsPrev(null);
+          }
+        } else {
+          setFinopsPrev(null);
+        }
+      } catch {
+        setFinopsPrev(null);
+      }
     } catch {
       setFinops(null);
+      setFinopsPrev(null);
     } finally {
       setFinopsLoading(false);
     }
@@ -324,6 +347,25 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const finopsHwParado = finops?.hardware?.valorCatalogoParado;
   const contractVariance = finops?.contracts?.variance;
 
+  const runRate = useMemo(() => {
+    if (!finops?.licenses || !finops?.contracts) return null;
+    const lic = Number(finops.licenses.committedMonthly) || 0;
+    const con = Number(finops.contracts.totalRealizado) || 0;
+    return (lic + con) * 12;
+  }, [finops]);
+
+  const runRatePrev = useMemo(() => {
+    if (!finopsPrev?.licenses || !finopsPrev?.contracts) return null;
+    const lic = Number(finopsPrev.licenses.committedMonthly) || 0;
+    const con = Number(finopsPrev.contracts.totalRealizado) || 0;
+    return (lic + con) * 12;
+  }, [finopsPrev]);
+
+  const runRateDelta = useMemo(() => {
+    if (runRate == null || runRatePrev == null) return null;
+    return runRate - runRatePrev;
+  }, [runRate, runRatePrev]);
+
   const byTypeChartData = useMemo(() => {
     if (!finops?.charts?.byType?.length) return [];
     return finops.charts.byType.map((x) => ({
@@ -462,6 +504,32 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       </div>
 
+      {finops?.hardware?.valorCompraTotal != null && filtroAtivo === 'Todos' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-finops-reveal">
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Valuation do parque (valor de compra)</h3>
+            <p className="text-2xl font-bold text-white">{formatCurrency(finops.hardware.valorCompraTotal)}</p>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Ativos com valor_compra preenchido: <span className="text-gray-200 font-semibold">{finops.hardware.ativosComValorCompra || 0}</span>
+            </p>
+          </div>
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Valor residual (RFB)</h3>
+            <p className="text-2xl font-bold text-cyan-300">{formatCurrency(finops.hardware.valorResidualRfbTotal || 0)}</p>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Depreciação linear em {finops.hardware.depreciacaoRfb?.mesesVidaUtil || 60} meses (padrão TI).
+            </p>
+          </div>
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Depreciação acumulada</h3>
+            <p className="text-2xl font-bold text-amber-300">
+              {formatCurrency(Math.max(0, (finops.hardware.valorCompraTotal || 0) - (finops.hardware.valorResidualRfbTotal || 0)))}
+            </p>
+            <p className="text-[11px] text-gray-500 mt-2">Compra − residual (quanto já “perdeu” no tempo).</p>
+          </div>
+        </div>
+      )}
+
       {finops && filtroAtivo === 'Todos' && (
         <div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
@@ -521,6 +589,32 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
+      {runRate != null && filtroAtivo === 'Todos' && (
+        <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl animate-finops-reveal">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Run Rate (anualizado)</h3>
+              <p className="text-2xl font-bold text-white mt-1">{formatCurrency(runRate)}</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Base: (licenças compromisso mensal + contratos realizado no período carregado) × 12
+              </p>
+            </div>
+            {runRateDelta != null && (
+              <div className="text-right">
+                <div className="text-xs text-gray-500 font-bold uppercase">vs mês anterior</div>
+                <div className={`text-lg font-bold ${runRateDelta >= 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {runRateDelta >= 0 ? '+' : ''}
+                  {formatCurrency(runRateDelta)}
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  {runRatePrev != null ? `Anterior: ${formatCurrency(runRatePrev)}` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {finops && filtroAtivo === 'Todos' && finops?.hardware?.valorResidualEstimado != null && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-finops-reveal">
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
@@ -557,6 +651,95 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             ) : (
               <p className="text-gray-500 text-sm italic">Nenhum ativo com correspondência no catálogo.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {finops?.licenses && filtroAtivo === 'Todos' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6 animate-finops-reveal">
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Waste (R$) — ociosidade</h3>
+            <p className="text-2xl font-bold text-red-300">{formatCurrency(finops.licenses.wasteMonthly || 0)}</p>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Meta eficiência &gt; <span className="text-gray-200 font-semibold">90%</span>
+            </p>
+          </div>
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Eficiência (uso)</h3>
+            <p
+              className={`text-2xl font-bold ${
+                (finops.licenses.totalSeats || 0) > 0 &&
+                (finops.licenses.assignedSeats || 0) / (finops.licenses.totalSeats || 1) >= 0.9
+                  ? 'text-emerald-300'
+                  : 'text-amber-300'
+              }`}
+            >
+              {(
+                (finops.licenses.totalSeats || 0) > 0
+                  ? ((finops.licenses.assignedSeats || 0) / (finops.licenses.totalSeats || 1)) * 100
+                  : 0
+              ).toFixed(1)}
+              %
+            </p>
+            <p className="text-[11px] text-gray-500 mt-2">
+              {finops.licenses.assignedSeats || 0} / {finops.licenses.totalSeats || 0} licenças em uso
+            </p>
+          </div>
+          <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Donut (Waste vs Usado)</h3>
+            <div className="h-40 w-full">
+              {(() => {
+                const used = finops.licenses.usedMonthly || 0;
+                const waste = finops.licenses.wasteMonthly || 0;
+                const total = Math.max(0, used + waste);
+                const data = [
+                  { name: 'Usado', value: used },
+                  { name: 'Waste', value: waste },
+                ].filter((x) => x.value > 0);
+                if (!total || data.length === 0) {
+                  return <div className="h-full flex items-center justify-center text-xs text-gray-500">Sem dados</div>;
+                }
+                return (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={data} dataKey="value" nameKey="name" innerRadius={52} outerRadius={72} paddingAngle={2}>
+                        {data.map((_, i) => (
+                          <Cell key={i} fill={i === 0 ? '#10b981' : '#ef4444'} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        formatter={(v, name) => [formatCurrency(Number(v) || 0), name]}
+                        contentStyle={{
+                          background: 'rgba(17,24,39,0.95)',
+                          border: '1px solid rgba(75,85,99,0.6)',
+                          borderRadius: 12,
+                        }}
+                        labelStyle={{ color: '#9ca3af' }}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {finops?.savings && timeRange === 'current_month' && filtroAtivo === 'Todos' && (
+        <div className="bg-gradient-to-r from-emerald-900/30 to-gray-900/60 border border-emerald-800/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-[0_0_25px_rgba(16,185,129,0.12)] animate-finops-reveal">
+          <div>
+            <div className="text-xs text-emerald-200/80 font-bold uppercase tracking-wide">Troféu da TI — savings</div>
+            <div className="text-white font-bold text-lg mt-1">
+              Economia gerada no mês: <span className="text-emerald-300">{formatCurrency(finops.savings.savedMonthly || 0)}</span>
+            </div>
+            <div className="text-[11px] text-gray-400 mt-1">
+              Anualizado: <span className="text-emerald-200 font-semibold">{formatCurrency(finops.savings.savedAnnualized || 0)}</span>
+              {finops.savings.month ? ` • ref ${finops.savings.month}` : ''}
+            </div>
+          </div>
+          <div className="text-[11px] text-gray-400">
+            Baseado nas revogações registradas em auditoria (valor_economizado).
           </div>
         </div>
       )}

@@ -105,7 +105,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const [newEmployeeForAssign, setNewEmployeeForAssign] = useState({ nome: '', email: '', departamento: '' });
   
   const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
-  const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '' });
+  const [maintenanceForm, setMaintenanceForm] = useState({ chamado: '', observacao: '', custo_reparo: '' });
   const [statusModalData, setStatusModalData] = useState(null);
 
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
@@ -302,10 +302,16 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const submitMaintenance = async (e) => {
     e.preventDefault();
     try {
-      await api.put(`/api/assets/${activeAsset.id}/maintenance`, maintenanceForm);
+      await api.put(`/api/assets/${activeAsset.id}/maintenance`, {
+        ...maintenanceForm,
+        custo_reparo:
+          maintenanceForm.custo_reparo !== '' && maintenanceForm.custo_reparo != null
+            ? Number(maintenanceForm.custo_reparo)
+            : null,
+      });
       registerLog('UPDATE', 'Manutenção', `Enviou ativo ID ${activeAsset.id} p/ conserto`); 
       setIsMaintenanceModalOpen(false); 
-      setMaintenanceForm({chamado: '', observacao: ''}); 
+      setMaintenanceForm({ chamado: '', observacao: '', custo_reparo: '' });
       fetchData();
     } catch (err) { alert(getAxiosError(err, 'Erro ao enviar para manutenção')); }
   };
@@ -916,6 +922,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             <form onSubmit={submitMaintenance} className="flex flex-col gap-4">
               <input type="text" required placeholder="Nº do Chamado (Ex: GLPI-1234)" value={maintenanceForm.chamado} onChange={(e) => setMaintenanceForm({...maintenanceForm, chamado: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none" />
               <textarea required placeholder="Motivo da manutenção..." value={maintenanceForm.observacao} onChange={(e) => setMaintenanceForm({...maintenanceForm, observacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white h-24 focus:border-brandGreen outline-none custom-scrollbar" />
+              <input type="number" step="0.01" placeholder="Custo do reparo (R$) — opcional" value={maintenanceForm.custo_reparo} onChange={(e) => setMaintenanceForm({...maintenanceForm, custo_reparo: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none" />
               <button type="submit" className="w-full bg-yellow-500 hover:bg-yellow-400 text-black py-4 rounded-full font-bold shadow-lg transition-all">Registrar Manutenção</button>
             </form>
           </div>
