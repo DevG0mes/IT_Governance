@@ -36,6 +36,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: true,
     },
+    custo_unitario_mensal: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+    },
+    unidade_cobranca: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   }, { 
     tableName: 'asset_chips', 
     timestamps: false // 🚨 CORRIGIDO: Desligando a busca por createdAt e updatedAt

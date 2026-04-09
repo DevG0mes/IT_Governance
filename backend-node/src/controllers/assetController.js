@@ -40,7 +40,7 @@ function parseDataAquisicao(v) {
   return null;
 }
 
-const normalizeAssetStatus = (raw) => {
+const normalizeGenericStatus = (raw) => {
   if (!raw) return 'Disponível';
   const s = String(raw).trim().toLowerCase().replace(/\s+/g, ' ');
   const map = {
@@ -58,11 +58,32 @@ const normalizeAssetStatus = (raw) => {
     'extraviado/roubado': 'Extraviado/Roubado',
     extraviado: 'Extraviado/Roubado',
     roubado: 'Extraviado/Roubado',
-    cancelar: 'Descartado',
-    cancelado: 'Descartado',
-    bloqueado: 'Manutenção',
   };
   return map[s] || raw;
+};
+
+const normalizeChipStatus = (raw) => {
+  if (!raw) return 'DISPONIVEL';
+  const s = String(raw).trim().toLowerCase().replace(/\s+/g, ' ');
+  const map = {
+    disponivel: 'DISPONIVEL',
+    'disponível': 'DISPONIVEL',
+    'em uso': 'EM USO',
+    emuso: 'EM USO',
+    bloqueado: 'BLOQUEADO',
+    cancelar: 'CANCELAR',
+    cancelado: 'CANCELADO',
+    renovar: 'RENOVAR',
+    renovacao: 'RENOVAR',
+    'renovação': 'RENOVAR',
+  };
+  return map[s] || String(raw).trim().toUpperCase();
+};
+
+const normalizeStatusByType = (raw, assetType) => {
+  const t = normalizeAssetType(assetType);
+  if (t === 'CHIP') return normalizeChipStatus(raw);
+  return normalizeGenericStatus(raw);
 };
 
 const normalizeAssetType = (raw) => {
@@ -121,7 +142,7 @@ exports.create = async (req, res) => {
     const requestedEmployeeId = input.EmployeeId ?? input.employee_id ?? null;
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
     const statusRaw = input.status != null ? String(input.status).trim() : '';
-    const status = ownerEmployeeId ? 'Em uso' : normalizeAssetStatus(statusRaw || 'Disponível');
+    const status = ownerEmployeeId ? (assetType === 'CHIP' ? 'EM USO' : 'Em uso') : normalizeStatusByType(statusRaw || 'Disponível', assetType);
 
     // 🚨 A MÁGICA: Se for texto vazio (""), ele converte para NULL na hora!
     const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
@@ -206,6 +227,11 @@ exports.create = async (req, res) => {
         plano: standardizeText(input.plano),
         grupo: standardizeText(input.grupo),
         responsavel: standardizeText(input.responsavel),
+        custo_unitario_mensal:
+          input.custo_unitario_mensal != null && input.custo_unitario_mensal !== ''
+            ? Number(input.custo_unitario_mensal)
+            : null,
+        unidade_cobranca: input.unidade_cobranca != null ? String(input.unidade_cobranca || '').trim() || null : null,
         vencimento_plano: input.vencimento_plano,
         data_aquisicao: dataAquisicaoCreate,
       }, { transaction: t });
@@ -274,7 +300,7 @@ exports.update = async (req, res) => {
     const statusRaw = input.status != null ? String(input.status).trim() : null;
     await asset.update(
       {
-        status: input.status != null ? normalizeAssetStatus(input.status) : asset.status,
+        status: input.status != null ? normalizeStatusByType(input.status, assetType) : asset.status,
         status_raw: statusRaw,
         status_source: 'ui',
         observacao: input.observacao ?? asset.observacao,
@@ -354,6 +380,11 @@ exports.update = async (req, res) => {
           plano: standardizeText(input.plano),
           grupo: standardizeText(input.grupo),
           responsavel: standardizeText(input.responsavel),
+          custo_unitario_mensal:
+            input.custo_unitario_mensal != null && input.custo_unitario_mensal !== ''
+              ? Number(input.custo_unitario_mensal)
+              : chip.custo_unitario_mensal,
+          unidade_cobranca: input.unidade_cobranca != null ? String(input.unidade_cobranca || '').trim() || null : chip.unidade_cobranca,
           vencimento_plano: input.vencimento_plano || null,
           data_aquisicao: dataAq,
         },
@@ -601,7 +632,7 @@ exports.resolveMaintenance = async (req, res) => {
 exports.discard = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const asset = await Asset.findByPk(req.params.id, { transaction: t });
+    const asset = await Asset.findByPk(req.params.id, { transaction: t, include: ASSET_INCLUDES_FULL });
     if (!asset) return res.status(404).json({ error: 'Ativo não encontrado' });
 
     const newStatus = req.body?.status;
@@ -619,11 +650,54 @@ exports.discard = async (req, res) => {
 
     const oldAsset = asset.toJSON();
     const statusRaw = String(newStatus).trim();
-    const status = normalizeAssetStatus(statusRaw);
+    const status = normalizeStatusByType(statusRaw, normalizeAssetType(asset.asset_type));
     await asset.update(
       { status, status_raw: statusRaw, status_source: 'ui', observacao, EmployeeId: null },
       { transaction: t }
     );
+
+    // Savings telecom: quando CHIP entra em fluxo de cancelamento (CANCELAR/CANCELADO), registra economia mensal (best-effort).
+    try {
+      const assetType = normalizeAssetType(asset.asset_type);
+      const prevStatus = String(oldAsset?.status || '').trim().toUpperCase();
+      const nextStatus = String(status || '').trim().toUpperCase();
+      const cancelSet = new Set(['CANCELAR', 'CANCELADO']);
+      if (assetType === 'CHIP' && cancelSet.has(nextStatus) && !cancelSet.has(prevStatus)) {
+        const chip = asset.Chip || (await AssetChip.findOne({ where: { AssetId: asset.id }, transaction: t }));
+        const unit = chip && chip.custo_unitario_mensal != null ? Number(chip.custo_unitario_mensal) : null;
+        if (Number.isFinite(unit) && unit > 0) {
+          const now = new Date();
+          const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const start = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, 0, 0, 0));
+          const end = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0));
+
+          const exists = await AuditLog.findOne({
+            where: {
+              module: 'telecom',
+              action: 'SAVING',
+              table_name: 'assets',
+              record_id: asset.id,
+              timestamp: { [Op.gte]: start, [Op.lt]: end },
+            },
+            transaction: t,
+          });
+
+          if (!exists) {
+            await writeAuditLog(AuditLog, {
+              action: 'SAVING',
+              table_name: 'assets',
+              record_id: asset.id,
+              old_data: null,
+              new_data: asset.toJSON(),
+              module: 'telecom',
+              user: req.user?.email || req.user?.nome || null,
+              details: `Saving telecom (CHIP cancelamento) ym=${ym} status=${nextStatus} linha=${chip?.numero || '—'} plano=${chip?.plano || '—'}`,
+              valor_economizado: unit,
+            });
+          }
+        }
+      }
+    } catch (_) {}
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',
@@ -669,7 +743,11 @@ exports.importBulk = async (req, res) => {
           const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
           const statusRaw =
             input.status != null && String(input.status).trim() !== '' ? String(input.status).trim() : '';
-          const status = statusRaw ? normalizeAssetStatus(statusRaw) : ownerEmployeeId ? 'Em uso' : 'Disponível';
+          const status = statusRaw
+            ? normalizeStatusByType(statusRaw, assetType)
+            : ownerEmployeeId
+              ? (assetType === 'CHIP' ? 'EM USO' : 'Em uso')
+              : normalizeStatusByType('Disponível', assetType);
 
           // 🚨 A MÁGICA NO BULK IMPORT
           const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
@@ -743,6 +821,11 @@ exports.importBulk = async (req, res) => {
               plano: standardizeText(input.plano),
               grupo: standardizeText(input.grupo),
               responsavel: standardizeText(input.responsavel),
+              custo_unitario_mensal:
+                input.custo_unitario_mensal != null && input.custo_unitario_mensal !== ''
+                  ? Number(input.custo_unitario_mensal)
+                  : null,
+              unidade_cobranca: input.unidade_cobranca != null ? String(input.unidade_cobranca || '').trim() || null : null,
               vencimento_plano: input.vencimento_plano,
               data_aquisicao: dataAquisicaoBulk,
             }, { transaction: tItem });

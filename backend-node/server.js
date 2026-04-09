@@ -23,6 +23,7 @@ const auditRoutes = require('./src/routes/audit');
 const userRoutes = require('./src/routes/users'); 
 const finopsRoutes = require('./src/routes/finops');
 const profilesRoutes = require('./src/routes/profiles');
+const { ensurePreviousMonthSnapshotBestEffort } = require('./src/services/finopsSnapshotService');
 
 const app = express();
 
@@ -120,6 +121,14 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   try {
     await connectDatabase();
+    try {
+      const r = await ensurePreviousMonthSnapshotBestEffort();
+      if (r && r.ok) {
+        console.log(`🧊 FinOps snapshots: verificação mês anterior (${r.ym}) ok.`);
+      } else {
+        console.warn('🧊 FinOps snapshots: verificação mês anterior falhou.');
+      }
+    } catch (_) {}
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });

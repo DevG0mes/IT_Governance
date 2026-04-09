@@ -295,6 +295,22 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     { name: 'Outros', value: statusCounts.outros, fill: '#6b7280' },
   ].filter((d) => d.value > 0);
 
+  // Telecom (CHIPs): custo fixo mensal por linha/plano (license-like)
+  let telecomCommittedMonthly = 0;
+  let telecomLinesCount = 0;
+  (assets || []).forEach((raw) => {
+    const a = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
+    const t = assetTypeToCatalogKey(a.asset_type);
+    if (t !== 'chip') return;
+    const st = String(a.status || '').trim().toUpperCase();
+    if (st === 'CANCELADO') return; // deixa de contabilizar como fixo
+    const ch = a.Chip || a.chip;
+    const unit = ch && ch.custo_unitario_mensal != null ? Number(ch.custo_unitario_mensal) : null;
+    if (!Number.isFinite(unit) || unit <= 0) return;
+    telecomCommittedMonthly += unit;
+    telecomLinesCount += 1;
+  });
+
   let licensesCommittedMonthly = 0;
   let licensesUsedMonthly = 0;
   let licensesWasteMonthly = 0;
@@ -466,6 +482,11 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       totalRealizado: contractsRealizado,
       variance: contractsRealizado - contractsPrevisto,
       monthlySeries: contractMonthlySeries,
+    },
+    telecom: {
+      committedMonthly: telecomCommittedMonthly,
+      linesCount: telecomLinesCount,
+      nota: 'Telecom (CHIPs) tratado como custo fixo mensal por linha. Status CANCELADO deixa de ser contabilizado.',
     },
     charts: {
       byType: byTypeChart,

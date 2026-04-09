@@ -50,6 +50,7 @@ const AssetMaintenanceLog = require('../Models/AssetMaintenanceLog')(sequelize, 
 const EmployeeLicense = require('../Models/EmployeeLicense')(sequelize, DataTypes);
 const AssetAssignment = require('../Models/AssetAssignment')(sequelize, DataTypes);
 const AccessProfile = require('../Models/AccessProfile')(sequelize, DataTypes);
+const FinopsMonthlySnapshot = require('../Models/FinopsMonthlySnapshot')(sequelize, DataTypes);
 
 User.belongsTo(AccessProfile, { foreignKey: 'profile_id', as: 'AccessProfile' });
 AccessProfile.hasMany(User, { foreignKey: 'profile_id', as: 'Users' });
@@ -149,5 +150,5 @@ const connectDatabase = async () => {
 // EXPORTAÇÃO COMPLETA
 module.exports = { 
   sequelize, User, Employee, Asset, AssetNotebook, AssetStarlink, AssetChip, AssetCelular, 
-  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, AssetMaintenanceLog, AccessProfile, connectDatabase 
+  License, Contract, CatalogItem, AuditLog, EmployeeLicense, AssetAssignment, AssetMaintenanceLog, AccessProfile, FinopsMonthlySnapshot, connectDatabase 
 };

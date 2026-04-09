@@ -9,6 +9,7 @@ const {
   EmployeeLicense,
   Contract,
   AuditLog,
+  FinopsMonthlySnapshot,
 } = require('../../config/db');
 const { buildFinopsSnapshot } = require('../services/finopsRules');
 const { Op } = require('sequelize');
@@ -57,6 +58,78 @@ function ymStartEnd(ym) {
   return { start, end };
 }
 
+async function sumSavingsForYm(refYm) {
+  const w = ymStartEnd(refYm);
+  if (!w) return 0;
+  const rows = await AuditLog.findAll({
+    where: {
+      valor_economizado: { [Op.ne]: null },
+      timestamp: { [Op.gte]: w.start, [Op.lt]: w.end },
+      module: { [Op.in]: ['licenses', 'telecom'] },
+    },
+    attributes: ['valor_economizado'],
+  });
+  return (rows || []).reduce((acc, r) => acc + (Number(r.valor_economizado) || 0), 0);
+}
+
+async function buildLiveSnapshot({ range, ref, months, filters }) {
+  const licenseVendor = String(filters?.licenseVendor || '').trim();
+  const licensePlan = String(filters?.licensePlan || '').trim();
+  const contractVendor = String(filters?.contractVendor || '').trim();
+
+  const [assets, catalogItems, licenses, contracts, savingsValue] = await Promise.all([
+    Asset.findAll({
+      include: [
+        { model: AssetNotebook, as: 'Notebook' },
+        { model: AssetStarlink, as: 'Starlink' },
+        { model: AssetChip, as: 'Chip' },
+        { model: AssetCelular, as: 'Celular' },
+      ],
+    }),
+    CatalogItem.findAll(),
+    License.findAll({
+      include: [
+        {
+          model: EmployeeLicense,
+          as: 'EmployeeLicenses',
+          required: false,
+        },
+      ],
+    }),
+    Contract.findAll({
+      where: {
+        ...(months?.length ? { mes_competencia: { [Op.in]: months } } : {}),
+        ...(contractVendor ? { fornecedor: contractVendor } : {}),
+      },
+    }),
+    sumSavingsForYm(ref),
+  ]);
+
+  const licFiltered = (licenses || []).filter((l) => {
+    const vend = (l.fornecedor || 'Desconhecido').trim();
+    const plan = (l.plano || '—').trim();
+    if (licenseVendor && vend !== licenseVendor) return false;
+    if (licensePlan && plan !== licensePlan) return false;
+    return true;
+  });
+
+  const snapshot = buildFinopsSnapshot({
+    assets,
+    catalogItems,
+    licenses: licFiltered,
+    contracts,
+    meta: { range, ref, months, filters: { licenseVendor, licensePlan, contractVendor } },
+  });
+
+  snapshot.savings = {
+    month: ref,
+    savedMonthly: Number(savingsValue) || 0,
+    savedAnnualized: (Number(savingsValue) || 0) * 12,
+  };
+
+  return snapshot;
+}
+
 exports.getSnapshot = async (req, res) => {
   try {
     const rangeRaw = String(req.query.range || 'current_month').trim().toLowerCase();
@@ -75,70 +148,22 @@ exports.getSnapshot = async (req, res) => {
       return res.status(200).json({ data: cached.data });
     }
 
-    const [assets, catalogItems, licenses, contracts, savingsMonth] = await Promise.all([
-      Asset.findAll({
-        include: [
-          { model: AssetNotebook, as: 'Notebook' },
-          { model: AssetStarlink, as: 'Starlink' },
-          { model: AssetChip, as: 'Chip' },
-          { model: AssetCelular, as: 'Celular' },
-        ],
-      }),
-      CatalogItem.findAll(),
-      License.findAll({
-        include: [
-          {
-            model: EmployeeLicense,
-            as: 'EmployeeLicenses',
-            required: false,
-          },
-        ],
-      }),
-      Contract.findAll({
-        where: {
-          ...(months?.length ? { mes_competencia: { [Op.in]: months } } : {}),
-          ...(contractVendor ? { fornecedor: contractVendor } : {}),
-        },
-      }),
-      (async () => {
-        // Savings: soma de valor_economizado no mês de referência (range=current_month)
-        if (range !== 'current_month') return { month: ref, value: 0 };
-        const w = ymStartEnd(ref);
-        if (!w) return { month: ref, value: 0 };
-        const rows = await AuditLog.findAll({
-          where: {
-            module: 'licenses',
-            valor_economizado: { [Op.ne]: null },
-            timestamp: { [Op.gte]: w.start, [Op.lt]: w.end },
-          },
-          attributes: ['valor_economizado'],
-        });
-        const total = (rows || []).reduce((acc, r) => acc + (Number(r.valor_economizado) || 0), 0);
-        return { month: ref, value: total };
-      })(),
-    ]);
+    // Para meses passados: preferimos snapshot congelado (imutável) quando existir.
+    const isPastRef = range === 'current_month' && ref !== nowYm();
+    if (isPastRef) {
+      const frozen = await FinopsMonthlySnapshot.findOne({ where: { ym: ref } });
+      if (frozen?.data) {
+        cache.set(cacheKey, { at: Date.now(), data: frozen.data });
+        return res.status(200).json({ data: frozen.data });
+      }
+    }
 
-    const licFiltered = (licenses || []).filter((l) => {
-      const vend = (l.fornecedor || 'Desconhecido').trim();
-      const plan = (l.plano || '—').trim();
-      if (licenseVendor && vend !== licenseVendor) return false;
-      if (licensePlan && plan !== licensePlan) return false;
-      return true;
+    const snapshot = await buildLiveSnapshot({
+      range,
+      ref,
+      months,
+      filters: { licenseVendor, licensePlan, contractVendor },
     });
-
-    const snapshot = buildFinopsSnapshot({
-      assets,
-      catalogItems,
-      licenses: licFiltered,
-      contracts,
-      meta: { range, ref, months, filters: { licenseVendor, licensePlan, contractVendor } },
-    });
-
-    snapshot.savings = {
-      month: savingsMonth?.month || ref,
-      savedMonthly: Number(savingsMonth?.value) || 0,
-      savedAnnualized: (Number(savingsMonth?.value) || 0) * 12,
-    };
 
     cache.set(cacheKey, { at: Date.now(), data: snapshot });
     return res.status(200).json({ data: snapshot });
@@ -149,5 +174,88 @@ exports.getSnapshot = async (req, res) => {
         ? undefined
         : error?.message || String(error);
     return res.status(500).json({ error: 'Erro ao montar painel FinOps', ...(details ? { details } : {}) });
+  }
+};
+
+exports.listMonthlySnapshots = async (req, res) => {
+  try {
+    const from = clampYm(req.query.from) || null;
+    const to = clampYm(req.query.to) || null;
+    const rows = await FinopsMonthlySnapshot.findAll({
+      where: {
+        ...(from ? { ym: { [Op.gte]: from } } : {}),
+        ...(to ? { ym: { [Op.lte]: to } } : {}),
+      },
+      order: [['ym', 'ASC']],
+    });
+
+    const data = (rows || []).map((r) => {
+      const j = r.toJSON();
+      const snap = j.data || {};
+      const lic = snap.licenses || {};
+      const con = snap.contracts || {};
+      const telSavings = snap.savings || {};
+      const telecomCommittedMonthly = snap.telecom?.committedMonthly || 0;
+      const fixedMonthly = (Number(lic.committedMonthly) || 0) + (Number(con.totalRealizado) || 0) + (Number(telecomCommittedMonthly) || 0);
+      return {
+        ym: j.ym,
+        generated_at: j.generated_at,
+        locked: j.locked,
+        totals: {
+          licensesCommittedMonthly: Number(lic.committedMonthly) || 0,
+          contractsRealizado: Number(con.totalRealizado) || 0,
+          telecomCommittedMonthly: Number(telecomCommittedMonthly) || 0,
+          fixedMonthly,
+          savingsMonthly: Number(telSavings.savedMonthly) || 0,
+        },
+      };
+    });
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    console.error('❌ listMonthlySnapshots:', error);
+    return res.status(500).json({ error: 'Erro ao listar snapshots' });
+  }
+};
+
+exports.generateMonthlySnapshot = async (req, res) => {
+  try {
+    const ym = clampYm(req.params.ym);
+    if (!ym) return res.status(400).json({ error: 'ym inválido. Use YYYY-MM.' });
+
+    const existing = await FinopsMonthlySnapshot.findOne({ where: { ym } });
+    if (existing && existing.locked) {
+      return res.status(409).json({ error: 'Snapshot já existe e está travado (locked).' });
+    }
+
+    const snapshot = await buildLiveSnapshot({
+      range: 'current_month',
+      ref: ym,
+      months: [ym],
+      filters: { licenseVendor: '', licensePlan: '', contractVendor: '' },
+    });
+
+    const saved = existing
+      ? await existing.update(
+          {
+            data: snapshot,
+            generated_at: new Date(),
+            generated_by: req.user?.email || req.user?.nome || null,
+            locked: true,
+          },
+          {}
+        )
+      : await FinopsMonthlySnapshot.create({
+          ym,
+          data: snapshot,
+          generated_at: new Date(),
+          generated_by: req.user?.email || req.user?.nome || null,
+          locked: true,
+        });
+
+    return res.status(201).json({ data: saved.toJSON() });
+  } catch (error) {
+    console.error('❌ generateMonthlySnapshot:', error);
+    return res.status(500).json({ error: 'Erro ao gerar snapshot mensal', details: error?.message || String(error) });
   }
 };
