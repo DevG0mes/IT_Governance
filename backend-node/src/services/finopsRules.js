@@ -138,11 +138,13 @@ function isParadoEstoque(asset) {
   return rawGroup.trim().toLowerCase() === 'estoque';
 }
 
-function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
+function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }) {
   const list = Array.isArray(assets) ? assets : [];
   const cats = Array.isArray(catalogItems) ? catalogItems : [];
   const lics = Array.isArray(licenses) ? licenses : [];
   const contr = Array.isArray(contracts) ? contracts : [];
+  const metaSafe = meta && typeof meta === 'object' ? meta : null;
+  const months = Array.isArray(metaSafe?.months) ? metaSafe.months : [];
 
   const vidaMesesDepreciacao = Math.max(
     1,
@@ -247,6 +249,9 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
   let seatsTotal = 0;
 
   const topWaste = [];
+  const topCost = [];
+  const byVendor = new Map();
+  const byPlan = new Map();
 
   lics.forEach((raw) => {
     const lic = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
@@ -261,6 +266,17 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
     licensesWasteMonthly += w;
     assignedSeatsTotal += usoSync;
     seatsTotal += Number(lic.quantidade_total) || 0;
+    topCost.push({
+      id: lic.id,
+      nome: lic.nome,
+      plano: lic.plano,
+      fornecedor: lic.fornecedor,
+      committedMonthly: c,
+      usedMonthly: u,
+      wasteMonthly: w,
+      quantidade_total: lic.quantidade_total,
+      quantidade_em_uso: usoSync,
+    });
     topWaste.push({
       id: lic.id,
       nome: lic.nome,
@@ -276,23 +292,68 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
           ? 1 - (Number(lic.quantidade_em_uso) || 0) / Number(lic.quantidade_total)
           : 0,
     });
+
+    const vendKey = (lic.fornecedor || 'Desconhecido').trim() || 'Desconhecido';
+    const prevV = byVendor.get(vendKey) || { fornecedor: vendKey, committedMonthly: 0, usedMonthly: 0, wasteMonthly: 0, seatsTotal: 0, seatsUsed: 0 };
+    prevV.committedMonthly += c;
+    prevV.usedMonthly += u;
+    prevV.wasteMonthly += w;
+    prevV.seatsTotal += Number(lic.quantidade_total) || 0;
+    prevV.seatsUsed += usoSync;
+    byVendor.set(vendKey, prevV);
+
+    const planKey = (lic.plano || '—').trim() || '—';
+    const prevP = byPlan.get(planKey) || { plano: planKey, committedMonthly: 0, usedMonthly: 0, wasteMonthly: 0, seatsTotal: 0, seatsUsed: 0 };
+    prevP.committedMonthly += c;
+    prevP.usedMonthly += u;
+    prevP.wasteMonthly += w;
+    prevP.seatsTotal += Number(lic.quantidade_total) || 0;
+    prevP.seatsUsed += usoSync;
+    byPlan.set(planKey, prevP);
   });
 
   topWaste.sort((a, b) => b.wasteMonthly - a.wasteMonthly);
+  topCost.sort((a, b) => b.committedMonthly - a.committedMonthly);
 
   let contractsPrevisto = 0;
   let contractsRealizado = 0;
+  const contractMonthlyMap = new Map();
   contr.forEach((raw) => {
     const c = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
     contractsPrevisto += parseFloat(c.valor_previsto) || 0;
     contractsRealizado += parseFloat(c.valor_realizado) || 0;
+    const ym = (c.mes_competencia || '').trim();
+    if (ym) {
+      const prev = contractMonthlyMap.get(ym) || { ym, previsto: 0, realizado: 0 };
+      prev.previsto += parseFloat(c.valor_previsto) || 0;
+      prev.realizado += parseFloat(c.valor_realizado) || 0;
+      contractMonthlyMap.set(ym, prev);
+    }
   });
+  const contractMonthlySeries = Array.from(contractMonthlyMap.values()).sort((a, b) => String(a.ym).localeCompare(String(b.ym)));
+
+  // Como não temos histórico de licenças por competência hoje, a série é uma projeção constante no range selecionado.
+  const licensesSeries = (months && months.length ? months : []).map((ym) => ({
+    ym,
+    committedMonthly: licensesCommittedMonthly,
+    usedMonthly: licensesUsedMonthly,
+    wasteMonthly: licensesWasteMonthly,
+    assignedSeats: assignedSeatsTotal,
+    totalSeats: seatsTotal,
+  }));
 
   const investimentoPorModelo = Array.from(investimentoPorModeloMap.values())
     .sort((a, b) => b.investimentoTotal - a.investimentoTotal)
     .slice(0, 24);
 
   return {
+    meta: {
+      generatedAt: new Date().toISOString(),
+      range: metaSafe?.range || null,
+      ref: metaSafe?.ref || null,
+      months,
+      filters: metaSafe?.filters || null,
+    },
     generatedAt: new Date().toISOString(),
     rulesVersion: 1,
     hardware: {
@@ -320,12 +381,17 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts }) {
       totalSeats: seatsTotal,
       idlePctTotal: seatsTotal > 0 ? 1 - assignedSeatsTotal / seatsTotal : 0,
       topWaste: topWaste.slice(0, 8),
+      topCost: topCost.slice(0, 8),
+      byVendor: Array.from(byVendor.values()).sort((a, b) => b.committedMonthly - a.committedMonthly).slice(0, 12),
+      byPlan: Array.from(byPlan.values()).sort((a, b) => b.committedMonthly - a.committedMonthly).slice(0, 12),
+      series: licensesSeries,
       planoLabels: { monthly: MONTHLY, yearly: YEARLY },
     },
     contracts: {
       totalPrevisto: contractsPrevisto,
       totalRealizado: contractsRealizado,
       variance: contractsRealizado - contractsPrevisto,
+      monthlySeries: contractMonthlySeries,
     },
     charts: {
       byType: byTypeChart,
