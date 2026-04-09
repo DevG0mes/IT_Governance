@@ -40,6 +40,17 @@ import api from '../services/api';
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#eab308', '#a855f7', '#ec4899'];
 
+/** Sequelize serializa includes como PascalCase (Chip, Notebook). O front antigo usava só camelCase. */
+function assetDetailParts(a) {
+  if (!a) return { notebook: null, celular: null, chip: null, starlink: null };
+  return {
+    notebook: a.notebook ?? a.Notebook ?? null,
+    celular: a.celular ?? a.Celular ?? null,
+    chip: a.chip ?? a.Chip ?? null,
+    starlink: a.starlink ?? a.Starlink ?? null,
+  };
+}
+
 export default function DashboardModule({ assets, employees, licenses, contracts, catalogItems, formatCurrency, isLoading }) {
   const [viewMode, setViewMode] = useState(() => {
     try {
@@ -146,11 +157,12 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     const target = filtroAtivo.trim().toLowerCase();
     return assets.filter((a) => {
       const typeMatch = (a.asset_type || '').trim().toLowerCase() === target;
+      const d = assetDetailParts(a);
 
-      if (target === 'notebook') return typeMatch && !!a.notebook;
-      if (target === 'celular') return typeMatch && !!a.celular;
-      if (target === 'chip') return typeMatch && !!a.chip;
-      if (target === 'starlink') return typeMatch && !!a.starlink;
+      if (target === 'notebook') return typeMatch && !!d.notebook;
+      if (target === 'celular') return typeMatch && !!d.celular;
+      if (target === 'chip') return typeMatch && !!d.chip;
+      if (target === 'starlink') return typeMatch && !!d.starlink;
 
       return typeMatch;
     });
@@ -175,7 +187,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       if (aType === 'notebook') return isAvailable;
       if (aType === 'chip') return statusStr === 'disponivel' || statusStr === 'disponível';
 
-      const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
+      const d = assetDetailParts(a);
+      const rawGroup = d.celular?.grupo || d.chip?.grupo || d.starlink?.grupo || '';
       return isAvailable && rawGroup.trim().toLowerCase() === 'estoque';
     }).length;
 
@@ -231,16 +244,17 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     const groups = {};
     if (assets) {
       assets.forEach((a) => {
-        const groupName = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo;
+        const d = assetDetailParts(a);
+        const groupName = d.celular?.grupo || d.chip?.grupo || d.starlink?.grupo;
         if (groupName && groupName.trim() !== '' && groupName.toUpperCase() !== 'N/A') {
           if (!groups[groupName]) groups[groupName] = { total: 0, celular: 0, chip: 0, starlink: 0 };
 
           groups[groupName].total += 1;
           const aType = (a.asset_type || '').trim().toLowerCase();
 
-          if (aType === 'celular' && a.celular) groups[groupName].celular += 1;
-          if (aType === 'chip' && a.chip) groups[groupName].chip += 1;
-          if (aType === 'starlink' && a.starlink) groups[groupName].starlink += 1;
+          if (aType === 'celular' && d.celular) groups[groupName].celular += 1;
+          if (aType === 'chip' && d.chip) groups[groupName].chip += 1;
+          if (aType === 'starlink' && d.starlink) groups[groupName].starlink += 1;
         }
       });
     }
@@ -250,7 +264,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const assetsInSelectedGroup = useMemo(() => {
     if (!selectedGroupForModal || !assets) return [];
     return assets.filter((a) => {
-      const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
+      const d = assetDetailParts(a);
+      const rawGroup = d.celular?.grupo || d.chip?.grupo || d.starlink?.grupo || '';
       return rawGroup.trim() === selectedGroupForModal;
     });
   }, [assets, selectedGroupForModal]);
@@ -345,12 +360,13 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     let total = 0;
     ativosFiltrados.forEach((a) => {
       const aType = (a.asset_type || '').trim().toLowerCase();
+      const d = assetDetailParts(a);
       let catModel = '';
 
-      if (aType === 'notebook' && a.notebook) catModel = a.notebook.modelo;
-      else if (aType === 'celular' && a.celular) catModel = a.celular.modelo;
-      else if (aType === 'starlink' && a.starlink) catModel = a.starlink.modelo;
-      else if (aType === 'chip' && a.chip) catModel = a.chip.plano;
+      if (aType === 'notebook' && d.notebook) catModel = d.notebook.modelo;
+      else if (aType === 'celular' && d.celular) catModel = d.celular.modelo;
+      else if (aType === 'starlink' && d.starlink) catModel = d.starlink.modelo;
+      else if (aType === 'chip' && d.chip) catModel = d.chip.plano;
 
       const targetModel = (catModel || '').trim().toLowerCase();
 
@@ -1396,22 +1412,27 @@ export default function DashboardModule({ assets, employees, licenses, contracts
                   {assetsInSelectedGroup.length > 0 ? (
                     assetsInSelectedGroup.map((a) => {
                       const type = a.asset_type;
+                      const d = assetDetailParts(a);
                       let ident = '';
                       let extra = '';
                       let resp = '';
 
-                      if (type === 'Celular') {
-                        ident = a.celular?.imei ? `IMEI: ${a.celular.imei}` : '-';
-                        extra = a.celular?.modelo || '';
-                        resp = a.celular?.responsavel || '-';
+                      if (type === 'Notebook') {
+                        ident = d.notebook?.serial || d.notebook?.patrimonio ? String(d.notebook.serial || d.notebook.patrimonio) : '-';
+                        extra = d.notebook?.modelo || '';
+                        resp = d.notebook?.responsavel || '-';
+                      } else if (type === 'Celular') {
+                        ident = d.celular?.imei ? `IMEI: ${d.celular.imei}` : '-';
+                        extra = d.celular?.modelo || '';
+                        resp = d.celular?.responsavel || '-';
                       } else if (type === 'CHIP') {
-                        ident = a.chip?.numero ? `Nº: ${a.chip.numero}` : '-';
-                        extra = a.chip?.plano || '';
-                        resp = a.chip?.responsavel || '-';
+                        ident = d.chip?.numero ? `Nº: ${d.chip.numero}` : '-';
+                        extra = d.chip?.plano || '';
+                        resp = d.chip?.responsavel || '-';
                       } else if (type === 'Starlink') {
-                        ident = a.starlink?.modelo || '-';
-                        extra = a.starlink?.localizacao || '';
-                        resp = a.starlink?.responsavel || '-';
+                        ident = d.starlink?.modelo || '-';
+                        extra = d.starlink?.localizacao || '';
+                        resp = d.starlink?.responsavel || '-';
                       }
 
                       const statusStr = (a.status || '').trim().toLowerCase();
