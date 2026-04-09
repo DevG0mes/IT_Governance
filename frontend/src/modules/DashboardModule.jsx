@@ -159,16 +159,21 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const stats = useMemo(() => {
     const totalAssets = ativosFiltrados.length;
 
-    const activeAssets = ativosFiltrados.filter(
-      (a) => (a.status || '').trim().toLowerCase() === 'em uso'
-    ).length;
+    const isChip = (a) => (a.asset_type || '').trim().toLowerCase() === 'chip';
+    const norm = (s) => String(s || '').trim().toLowerCase();
+
+    const activeAssets = ativosFiltrados.filter((a) => {
+      const st = norm(a.status);
+      return isChip(a) ? st === 'em uso' : st === 'em uso';
+    }).length;
 
     const availableAssets = ativosFiltrados.filter((a) => {
-      const statusStr = (a.status || '').trim().toLowerCase();
-      const isAvailable = statusStr === 'disponível' || statusStr === 'disponivel';
+      const statusStr = norm(a.status);
+      const isAvailable = statusStr === 'disponível' || statusStr === 'disponivel' || statusStr === 'disponivel';
       const aType = (a.asset_type || '').trim().toLowerCase();
 
       if (aType === 'notebook') return isAvailable;
+      if (aType === 'chip') return statusStr === 'disponivel' || statusStr === 'disponível';
 
       const rawGroup = a.celular?.grupo || a.chip?.grupo || a.starlink?.grupo || '';
       return isAvailable && rawGroup.trim().toLowerCase() === 'estoque';
@@ -183,8 +188,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     const expiringChips = ativosFiltrados.filter(
       (a) =>
         (a.asset_type || '').trim().toLowerCase() === 'chip' &&
-        ((a.status || '').trim().toLowerCase() === 'renovação' ||
-          (a.status || '').trim().toLowerCase() === 'renovacao')
+        (norm(a.status) === 'renovar' || norm(a.status) === 'renovação' || norm(a.status) === 'renovacao')
     ).length;
 
     const totalEmployees = employees ? employees.length : 0;
@@ -397,7 +401,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
   const statusPieData = finops?.charts?.statusDistribution || [];
 
-  const showFinopsCharts = !finopsLoading && finops && filtroAtivo === 'Todos';
+  // FinOps é global, mas para CHIP também faz sentido (telecom + status).
+  const showFinopsCharts = !finopsLoading && finops && (filtroAtivo === 'Todos' || filtroAtivo === 'CHIP');
 
   const licenseSeriesChartData = useMemo(() => {
     const s = finops?.licenses?.series;

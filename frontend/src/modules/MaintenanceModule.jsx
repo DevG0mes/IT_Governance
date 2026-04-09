@@ -12,10 +12,12 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
   const [isEditMaintenanceModalOpen, setIsEditMaintenanceModalOpen] = useState(false);
   const [editMaintenanceForm, setEditMaintenanceForm] = useState({ assetId: null, chamado: '', observacao: '' });
 
-  const kanbanColumns = useMemo(
-    () => ['Manutenção', 'Renovação', 'Disponível', 'Em uso', 'Inutilizado', 'Descartado', 'Extraviado/Roubado'],
-    []
-  );
+  const kanbanColumns = useMemo(() => {
+    if (typeFilter === 'CHIP') {
+      return ['DISPONIVEL', 'EM USO', 'BLOQUEADO', 'RENOVAR', 'CANCELAR', 'CANCELADO'];
+    }
+    return ['Manutenção', 'Renovação', 'Disponível', 'Em uso', 'Inutilizado', 'Descartado', 'Extraviado/Roubado'];
+  }, [typeFilter]);
 
   const maintenanceAssets = useMemo(() => {
     const list = Array.isArray(assets) ? assets : [];
@@ -23,6 +25,19 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
     if (typeFilter === 'Todos') return filtered;
     return filtered.filter((a) => a?.asset_type === typeFilter);
   }, [assets, kanbanColumns, typeFilter]);
+
+  const setChipStatus = async (asset, nextStatus) => {
+    const obs = window.prompt(`Justificativa para status ${nextStatus} (obrigatório):`, '');
+    if (!obs || !obs.trim()) return;
+    try {
+      await api.put(`/api/assets/${asset.id}/discard`, { status: nextStatus, observacao: obs.trim() });
+      registerLog('UPDATE', 'Telecom', `CHIP ${asset.id} -> ${nextStatus}`);
+      setOpenActionMenu(null);
+      fetchData();
+    } catch (err) {
+      alert(getAxiosError(err, 'Erro ao alterar status do CHIP'));
+    }
+  };
 
   const assetsByStatus = useMemo(() => {
     const map = {};
@@ -159,7 +174,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
                             <p className="text-xs text-gray-500 truncate">{ident}</p>
                           </div>
                         </div>
-                        {col === 'Manutenção' && (
+                        {col === 'Manutenção' && typeFilter !== 'CHIP' && (
                           <div className="mt-3 text-xs">
                             <p className="text-gray-400">
                               Chamado: <span className="text-yellow-300 font-mono">{activeLog?.chamado || '—'}</span>
@@ -184,7 +199,20 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
 
                     {openActionMenu === `maint-${asset.id}` && (
                       <div data-maint-actions-root="true" className="absolute right-4 top-14 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] overflow-hidden py-2 text-left">
-                        {asset.status === 'Manutenção' && hasAccess('maintenance', 'edit') ? (
+                        {typeFilter === 'CHIP' ? (
+                          <>
+                            {['DISPONIVEL', 'EM USO', 'BLOQUEADO', 'RENOVAR', 'CANCELAR', 'CANCELADO'].map((st) => (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => setChipStatus(asset, st)}
+                                className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"
+                              >
+                                <CheckCircle className="w-4 h-4 text-brandGreen" /> {st}
+                              </button>
+                            ))}
+                          </>
+                        ) : asset.status === 'Manutenção' && hasAccess('maintenance', 'edit') ? (
                           <>
                             <button
                               onClick={() => openEditMaintenance(asset)}
