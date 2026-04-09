@@ -179,6 +179,8 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
   let hardwareValorCompraTotal = 0;
   let hardwareValorResidualRfbTotal = 0;
   let hardwareAtivosComValorCompra = 0;
+  let hardwareValorResidualRfbProxyTotal = 0;
+  let hardwareAtivosResidualProxy = 0;
   let assetsSemCatalogo = 0;
   let ativosCatalogoSemDataAquisicao = 0;
   const investimentoPorModeloMap = new Map();
@@ -224,12 +226,17 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       }
     }
 
-    // Valor residual real (Receita Federal) baseado em valor_compra
-    if (valorCompra != null) {
+    // Valor residual (RFB): preferimos valor_compra; se não existir, usamos o valor do catálogo como proxy (estimativa)
+    {
       const dataStr = getDataAquisicaoStr(asset);
-      hardwareValorCompraTotal += valorCompra;
-      hardwareValorResidualRfbTotal += residualReceitaFederal(valorCompra, dataStr, vidaMesesReceita);
-      hardwareAtivosComValorCompra += 1;
+      if (valorCompra != null) {
+        hardwareValorCompraTotal += valorCompra;
+        hardwareValorResidualRfbTotal += residualReceitaFederal(valorCompra, dataStr, vidaMesesReceita);
+        hardwareAtivosComValorCompra += 1;
+      } else if (valor != null) {
+        hardwareValorResidualRfbProxyTotal += residualReceitaFederal(valor, dataStr, vidaMesesReceita);
+        hardwareAtivosResidualProxy += 1;
+      }
     }
 
     if (isEmUso(asset)) {
@@ -397,6 +404,8 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       valorCompraTotal: hardwareValorCompraTotal,
       valorResidualRfbTotal: hardwareValorResidualRfbTotal,
       ativosComValorCompra: hardwareAtivosComValorCompra,
+      valorResidualRfbProxyTotal: hardwareValorResidualRfbProxyTotal,
+      ativosResidualProxy: hardwareAtivosResidualProxy,
       investimentoPorModelo,
       depreciacao: {
         mesesVidaUtil: vidaMesesDepreciacao,
@@ -407,7 +416,7 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
         mesesVidaUtil: vidaMesesReceita,
         metodo: 'linear',
         env: 'FINOPS_RFB_MONTHS',
-        nota: 'RFB: 60 meses (~20% a.a) para TI (valor_compra + data_aquisicao).',
+        nota: 'RFB: 60 meses (~20% a.a) para TI. Preferência: valor_compra; fallback: valor catálogo como proxy quando valor_compra não existe.',
       },
       assetsSemMatchCatalogo: assetsSemCatalogo,
       ativosComCatalogoSemDataAquisicao: ativosCatalogoSemDataAquisicao,
