@@ -309,6 +309,7 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
   lics.forEach((raw) => {
     const lic = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
     const elCount = (lic.EmployeeLicenses || []).length;
+    const isConsumption = isConsumptionLicense(lic);
     const licAdj = isConsumptionLicense(lic)
       ? { ...lic }
       : { ...lic, quantidade_em_uso: Math.max(Number(lic.quantidade_em_uso) || 0, elCount) };
@@ -320,10 +321,11 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     licensesWasteMonthly += w;
 
     // Eficiência por assentos só faz sentido para licenças com vínculo por colaborador.
-    if (!isConsumptionLicense(lic)) {
-      const usoSync = Math.max(Number(lic.quantidade_em_uso) || 0, elCount);
-      assignedSeatsTotal += usoSync;
-      seatsTotal += Number(lic.quantidade_total) || 0;
+    const seatsUsedAgg = !isConsumption ? Math.max(Number(lic.quantidade_em_uso) || 0, elCount) : 0;
+    const seatsTotalAgg = !isConsumption ? Number(lic.quantidade_total) || 0 : 0;
+    if (!isConsumption) {
+      assignedSeatsTotal += seatsUsedAgg;
+      seatsTotal += seatsTotalAgg;
     }
     topCost.push({
       id: lic.id,
@@ -335,7 +337,7 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       wasteMonthly: w,
       quantidade_total: lic.quantidade_total,
       quantidade_em_uso: licAdj.quantidade_em_uso,
-      metricUnit: isConsumptionLicense(lic) ? 'GB' : 'SEATS',
+      metricUnit: isConsumption ? 'GB' : 'SEATS',
     });
     topWaste.push({
       id: lic.id,
@@ -347,7 +349,7 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       usedMonthly: u,
       quantidade_total: lic.quantidade_total,
       quantidade_em_uso: licAdj.quantidade_em_uso,
-      metricUnit: isConsumptionLicense(lic) ? 'GB' : 'SEATS',
+      metricUnit: isConsumption ? 'GB' : 'SEATS',
       pctIdle:
         (Number(lic.quantidade_total) || 0) > 0
           ? 1 - (Number(licAdj.quantidade_em_uso) || 0) / Number(lic.quantidade_total)
@@ -359,8 +361,8 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     prevV.committedMonthly += c;
     prevV.usedMonthly += u;
     prevV.wasteMonthly += w;
-    prevV.seatsTotal += Number(lic.quantidade_total) || 0;
-    prevV.seatsUsed += usoSync;
+    prevV.seatsTotal += seatsTotalAgg;
+    prevV.seatsUsed += seatsUsedAgg;
     byVendor.set(vendKey, prevV);
 
     const planKey = (lic.plano || '—').trim() || '—';
@@ -368,8 +370,8 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     prevP.committedMonthly += c;
     prevP.usedMonthly += u;
     prevP.wasteMonthly += w;
-    prevP.seatsTotal += Number(lic.quantidade_total) || 0;
-    prevP.seatsUsed += usoSync;
+    prevP.seatsTotal += seatsTotalAgg;
+    prevP.seatsUsed += seatsUsedAgg;
     byPlan.set(planKey, prevP);
   });
 
