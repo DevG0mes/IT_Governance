@@ -519,6 +519,11 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             <p className="text-[11px] text-gray-500 mt-2">
               Depreciação linear em {finops.hardware.depreciacaoRfb?.mesesVidaUtil || 60} meses (padrão TI).
             </p>
+            {(finops.hardware.ativosResidualProxy || 0) > 0 && (
+              <p className="text-[11px] text-gray-500 mt-1">
+                Proxy via catálogo: <span className="text-gray-200 font-semibold">{finops.hardware.ativosResidualProxy}</span> ativos (estim.).
+              </p>
+            )}
           </div>
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Depreciação acumulada</h3>
