@@ -44,4 +44,5 @@ jobs:
             sudo docker-compose up -d --build
             
             # Limpa imagens antigas e órfãs para não lotar o disco do servidor
-            sudo docker image prune -f
+            # Não falha o deploy se o prune estiver concorrendo
+            sudo docker image prune -f || true

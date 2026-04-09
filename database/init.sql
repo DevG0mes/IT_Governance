@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS asset_notebooks (
   modelo VARCHAR(100),
   garantia VARCHAR(100),
   status_garantia VARCHAR(50),
-  data_aquisicao DATE NULL
+  data_aquisicao DATE NULL,
+  valor_compra DOUBLE PRECISION NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_celulares (
@@ -85,7 +86,8 @@ CREATE TABLE IF NOT EXISTS asset_celulares (
   modelo VARCHAR(100),
   grupo VARCHAR(100),
   responsavel VARCHAR(150),
-  data_aquisicao DATE NULL
+  data_aquisicao DATE NULL,
+  valor_compra DOUBLE PRECISION NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_chips (
@@ -97,7 +99,8 @@ CREATE TABLE IF NOT EXISTS asset_chips (
   grupo VARCHAR(100),
   responsavel VARCHAR(150),
   vencimento_plano DATE NULL,
-  data_aquisicao DATE NULL
+  data_aquisicao DATE NULL,
+  valor_compra DOUBLE PRECISION NULL
 );
 
 CREATE TABLE IF NOT EXISTS asset_starlinks (
@@ -112,7 +115,8 @@ CREATE TABLE IF NOT EXISTS asset_starlinks (
   senha_roteador VARCHAR(150),
   projeto VARCHAR(150),
   email_responsavel VARCHAR(150),
-  data_aquisicao DATE NULL
+  data_aquisicao DATE NULL,
+  valor_compra DOUBLE PRECISION NULL
 );
 
 -- =========================
@@ -137,6 +141,7 @@ CREATE TABLE IF NOT EXISTS asset_maintenance_logs (
   "AssetId" BIGINT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
   chamado VARCHAR(80) NOT NULL,
   observacao TEXT NULL,
+  custo_reparo DOUBLE PRECISION NULL,
   opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   resolved_at TIMESTAMPTZ NULL,
   created_by VARCHAR(150) NULL
@@ -213,7 +218,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   timestamp TIMESTAMPTZ DEFAULT NOW(),
   "user" VARCHAR(150),
   module VARCHAR(100),
-  details TEXT
+  details TEXT,
+  valor_economizado DOUBLE PRECISION NULL
 );
 CREATE INDEX IF NOT EXISTS ix_audit_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS ix_audit_table ON audit_logs(table_name);
