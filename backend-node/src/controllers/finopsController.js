@@ -143,7 +143,11 @@ exports.getSnapshot = async (req, res) => {
     cache.set(cacheKey, { at: Date.now(), data: snapshot });
     return res.status(200).json({ data: snapshot });
   } catch (error) {
-    console.error('❌ FinOps snapshot:', error.message);
-    return res.status(500).json({ error: 'Erro ao montar painel FinOps' });
+    console.error('❌ FinOps snapshot:', error);
+    const details =
+      process.env.NODE_ENV && String(process.env.NODE_ENV).toLowerCase() === 'production'
+        ? undefined
+        : error?.message || String(error);
+    return res.status(500).json({ error: 'Erro ao montar painel FinOps', ...(details ? { details } : {}) });
   }
 };
