@@ -180,7 +180,24 @@ export default function ImportModule({ hasAccess, employees = [], contracts = []
           return;
         } catch (err) {
           setIsImporting(false);
-          Swal.fire('Erro', err.response?.data?.error || err.message || 'Falha no bulk de ativos', 'error');
+          const title = err.response?.data?.error || err.message || 'Falha no bulk de ativos';
+          const details = err.response?.data?.details;
+          Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            html: `
+              <div style="text-align:left">
+                <div style="font-weight:700; margin-bottom:8px;">${String(title).replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</div>
+                ${
+                  details
+                    ? `<div style="font-size:12px; opacity:0.9; white-space:pre-wrap;">${String(details)
+                        .replaceAll('<', '&lt;')
+                        .replaceAll('>', '&gt;')}</div>`
+                    : ''
+                }
+              </div>
+            `,
+          });
           return;
         }
       }
