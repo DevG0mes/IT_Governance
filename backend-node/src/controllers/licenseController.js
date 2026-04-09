@@ -22,15 +22,25 @@ exports.getAll = async (req, res) => {
       order: [['nome', 'ASC']]
     });
 
+    const isConsumptionLicense = (licJson) => {
+      const nome = String(licJson?.nome || '').toLowerCase();
+      // Itens cobrados por volume (ex.: GB) não possuem vínculo com colaboradores.
+      return nome.includes('extra file storage');
+    };
+
     const patch = [];
     const data = licenses.map((l) => {
       const j = l.toJSON();
       const assignments = j.EmployeeLicenses || [];
       const n = assignments.length;
-      if (Number(j.quantidade_em_uso) !== n) {
-        patch.push({ id: j.id, n });
+      if (!isConsumptionLicense(j)) {
+        if (Number(j.quantidade_em_uso) !== n) {
+          patch.push({ id: j.id, n });
+        }
+        return { ...j, quantidade_em_uso: n };
       }
-      return { ...j, quantidade_em_uso: n };
+      // Consumo: preserva quantidade_em_uso (pode representar GB usado) e não sincroniza por vínculos.
+      return j;
     });
 
     if (patch.length) {

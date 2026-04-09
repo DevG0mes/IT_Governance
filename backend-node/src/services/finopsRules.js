@@ -7,6 +7,12 @@
 const MONTHLY = 'mensal';
 const YEARLY = 'anual';
 
+function isConsumptionLicense(lic) {
+  const nome = String(lic?.nome || '').toLowerCase();
+  // Ex.: Microsoft "Office 365 Extra File Storage" é cobrado por GB, não por usuário.
+  return nome.includes('extra file storage');
+}
+
 function licenseMonthlyCommitment(lic) {
   const q = Math.max(0, Number(lic.quantidade_total) || 0);
   const unit = Number(lic.custo);
@@ -30,9 +36,17 @@ function licenseMonthlyCommitment(lic) {
 function licenseMonthlyUsed(lic) {
   const committed = licenseMonthlyCommitment(lic);
   const q = Math.max(0, Number(lic.quantidade_total) || 0);
-  const used = Math.max(0, Number(lic.quantidade_em_uso) || 0);
+  const rawUsed = Number(lic.quantidade_em_uso);
   if (q === 0) return 0;
-  return committed * (used / q);
+
+  // Para consumo (GB), se não houver "usado" informado, assumimos 100% usado (sem waste por default).
+  const usedQty = isConsumptionLicense(lic)
+    ? Number.isFinite(rawUsed) && rawUsed > 0
+      ? Math.min(q, Math.max(0, rawUsed))
+      : q
+    : Math.max(0, rawUsed || 0);
+
+  return committed * (usedQty / q);
 }
 
 function licenseMonthlyWaste(lic) {
@@ -295,16 +309,22 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
   lics.forEach((raw) => {
     const lic = typeof raw.toJSON === 'function' ? raw.toJSON() : raw;
     const elCount = (lic.EmployeeLicenses || []).length;
-    const usoSync = Math.max(Number(lic.quantidade_em_uso) || 0, elCount);
-    const licAdj = { ...lic, quantidade_em_uso: usoSync };
+    const licAdj = isConsumptionLicense(lic)
+      ? { ...lic }
+      : { ...lic, quantidade_em_uso: Math.max(Number(lic.quantidade_em_uso) || 0, elCount) };
     const c = licenseMonthlyCommitment(licAdj);
     const u = licenseMonthlyUsed(licAdj);
     const w = licenseMonthlyWaste(licAdj);
     licensesCommittedMonthly += c;
     licensesUsedMonthly += u;
     licensesWasteMonthly += w;
-    assignedSeatsTotal += usoSync;
-    seatsTotal += Number(lic.quantidade_total) || 0;
+
+    // Eficiência por assentos só faz sentido para licenças com vínculo por colaborador.
+    if (!isConsumptionLicense(lic)) {
+      const usoSync = Math.max(Number(lic.quantidade_em_uso) || 0, elCount);
+      assignedSeatsTotal += usoSync;
+      seatsTotal += Number(lic.quantidade_total) || 0;
+    }
     topCost.push({
       id: lic.id,
       nome: lic.nome,
@@ -314,7 +334,8 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       usedMonthly: u,
       wasteMonthly: w,
       quantidade_total: lic.quantidade_total,
-      quantidade_em_uso: usoSync,
+      quantidade_em_uso: licAdj.quantidade_em_uso,
+      metricUnit: isConsumptionLicense(lic) ? 'GB' : 'SEATS',
     });
     topWaste.push({
       id: lic.id,
@@ -325,10 +346,11 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       committedMonthly: c,
       usedMonthly: u,
       quantidade_total: lic.quantidade_total,
-      quantidade_em_uso: usoSync,
+      quantidade_em_uso: licAdj.quantidade_em_uso,
+      metricUnit: isConsumptionLicense(lic) ? 'GB' : 'SEATS',
       pctIdle:
         (Number(lic.quantidade_total) || 0) > 0
-          ? 1 - (Number(lic.quantidade_em_uso) || 0) / Number(lic.quantidade_total)
+          ? 1 - (Number(licAdj.quantidade_em_uso) || 0) / Number(lic.quantidade_total)
           : 0,
     });
 
