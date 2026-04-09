@@ -242,24 +242,59 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
   const groupStats = useMemo(() => {
     const groups = {};
+    const normStatus = (s) => String(s || '').trim().toLowerCase();
+
+    /** CHIP em fluxo de cancelamento: ainda gera custo até baixa; projeção = custo mensal da linha. */
+    const isChipCancelar = (a, d) => {
+      if ((a.asset_type || '').trim().toLowerCase() !== 'chip' || !d.chip) return false;
+      return normStatus(a.status) === 'cancelar';
+    };
+
     if (assets) {
       assets.forEach((a) => {
         const d = assetDetailParts(a);
         const groupName = d.celular?.grupo || d.chip?.grupo || d.starlink?.grupo;
         if (groupName && groupName.trim() !== '' && groupName.toUpperCase() !== 'N/A') {
-          if (!groups[groupName]) groups[groupName] = { total: 0, celular: 0, chip: 0, starlink: 0 };
+          if (!groups[groupName]) {
+            groups[groupName] = {
+              total: 0,
+              notebook: 0,
+              celular: 0,
+              chip: 0,
+              starlink: 0,
+              chipCancelar: 0,
+              savingProjecaoMensal: 0,
+            };
+          }
 
           groups[groupName].total += 1;
           const aType = (a.asset_type || '').trim().toLowerCase();
 
+          if (aType === 'notebook' && d.notebook) groups[groupName].notebook += 1;
           if (aType === 'celular' && d.celular) groups[groupName].celular += 1;
           if (aType === 'chip' && d.chip) groups[groupName].chip += 1;
           if (aType === 'starlink' && d.starlink) groups[groupName].starlink += 1;
+
+          if (isChipCancelar(a, d)) {
+            groups[groupName].chipCancelar += 1;
+            const unit = Number(d.chip.custo_unitario_mensal);
+            if (Number.isFinite(unit) && unit > 0) groups[groupName].savingProjecaoMensal += unit;
+          }
         }
       });
     }
     return Object.entries(groups).sort((a, b) => b[1].total - a[1].total);
   }, [assets]);
+
+  const groupStatsSavingTotals = useMemo(() => {
+    let lines = 0;
+    let reais = 0;
+    groupStats.forEach(([, c]) => {
+      lines += c.chipCancelar || 0;
+      reais += c.savingProjecaoMensal || 0;
+    });
+    return { lines, reais };
+  }, [groupStats]);
 
   const assetsInSelectedGroup = useMemo(() => {
     if (!selectedGroupForModal || !assets) return [];
@@ -1346,32 +1381,69 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         )}
 
       <div className="mt-8">
-        <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-          <Building className="w-7 h-7 text-brandGreen" /> Distribuição por Grupos / Obras
-        </h3>
+        <div className="flex flex-col gap-2 mb-6">
+          <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+            <Building className="w-7 h-7 text-brandGreen" /> Distribuição por Grupos / Obras
+          </h3>
+          <p className="text-xs text-gray-500 max-w-3xl">
+            Cada card agrupa ativos pelo campo <span className="text-gray-400">grupo</span> informado em Celular, CHIP ou Starlink. A linha
+            &quot;Notebooks&quot; conta apenas notebooks cujo ativo aparece nesse mesmo grupo (hoje, em geral 0 — notebook não tem campo
+            grupo no cadastro).
+          </p>
+          {groupStatsSavingTotals.lines > 0 && (
+            <p className="text-sm text-emerald-400/95">
+              Projeção global (CHIPs em <span className="text-emerald-300">CANCELAR</span>):{' '}
+              {groupStatsSavingTotals.reais > 0 ? (
+                <span className="font-semibold">{formatCurrency(groupStatsSavingTotals.reais)}/mês</span>
+              ) : (
+                <span className="text-amber-400/95">informe custo unitário mensal nos CHIPs</span>
+              )}
+              <span className="text-gray-500">
+                {' '}
+                · {groupStatsSavingTotals.lines} linha(s) em cancelamento
+              </span>
+            </p>
+          )}
+        </div>
         {groupStats.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {groupStats.map(([groupName, counts]) => (
               <div
                 key={groupName}
                 onClick={() => setSelectedGroupForModal(groupName)}
-                className="bg-gray-900/80 border border-gray-800 p-5 rounded-2xl cursor-pointer hover:border-brandGreen/50 hover:-translate-y-1 hover:shadow-lg hover:shadow-brandGreen/10 transition-all duration-300 group"
+                className="bg-gray-900/80 border border-gray-800 p-5 rounded-2xl cursor-pointer hover:border-brandGreen/50 hover:-translate-y-1 hover:shadow-lg hover:shadow-brandGreen/10 transition-all duration-300 group flex flex-col gap-3"
               >
                 <h4
-                  className="text-white font-bold text-lg mb-3 group-hover:text-brandGreen transition-colors truncate"
+                  className="text-white font-bold text-lg group-hover:text-brandGreen transition-colors truncate"
                   title={groupName}
                 >
                   {groupName}
                 </h4>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-400 text-xs">Total de Ativos</span>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-xs">Total de ativos</span>
                   <span className="text-xl font-bold text-white">{counts.total}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500 border-t border-gray-800 pt-2 mt-2">
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-gray-500 border-t border-gray-800 pt-3">
+                  <span>Notebooks: {counts.notebook ?? 0}</span>
                   <span>Celulares: {counts.celular}</span>
                   <span>CHIPs: {counts.chip}</span>
                   <span>Starlinks: {counts.starlink}</span>
                 </div>
+                {(counts.chipCancelar > 0 || (counts.savingProjecaoMensal || 0) > 0) && (
+                  <div className="rounded-lg bg-emerald-950/40 border border-emerald-800/50 px-3 py-2 text-[11px] leading-snug">
+                    <p className="text-emerald-300/95 font-semibold">Projeção saving (telecom)</p>
+                    <p className="text-gray-400 mt-0.5">
+                      {counts.chipCancelar > 0 ? `${counts.chipCancelar} CHIP(s) em CANCELAR` : '—'}
+                    </p>
+                    <p className="text-emerald-400 font-mono mt-1">
+                      {(counts.savingProjecaoMensal || 0) > 0
+                        ? `${formatCurrency(counts.savingProjecaoMensal)}/mês`
+                        : counts.chipCancelar > 0
+                          ? 'Preencha custo unitário mensal no CHIP'
+                          : '—'}
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
