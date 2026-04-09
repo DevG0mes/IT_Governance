@@ -52,6 +52,7 @@ type SystemUser = {
 
 type UiSettings = {
   inventoryPageSize: number;
+  employeesPageSize: number;
 };
 
 type Props = {
@@ -248,6 +249,7 @@ export default function SettingsModule({
   };
 
   const uiInventoryPageSize = Number(uiSettings?.inventoryPageSize || 50);
+  const uiEmployeesPageSize = Number(uiSettings?.employeesPageSize || uiInventoryPageSize || 50);
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -621,7 +623,11 @@ export default function SettingsModule({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              setUiSettings({ ...(uiSettings || { inventoryPageSize: 50 }), inventoryPageSize: uiInventoryPageSize });
+              setUiSettings({
+                ...(uiSettings || { inventoryPageSize: 50, employeesPageSize: 50 }),
+                inventoryPageSize: uiInventoryPageSize,
+                employeesPageSize: uiEmployeesPageSize,
+              });
               alert('Preferências salvas.');
             }}
             className="grid grid-cols-1 lg:grid-cols-2 gap-6"
@@ -637,7 +643,41 @@ export default function SettingsModule({
                 <label className="text-xs text-gray-400 block mb-1">Itens por página</label>
                 <select
                   value={uiInventoryPageSize}
-                  onChange={(e) => setUiSettings({ ...(uiSettings || { inventoryPageSize: 50 }), inventoryPageSize: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setUiSettings({
+                      ...(uiSettings || { inventoryPageSize: 50, employeesPageSize: 50 }),
+                      inventoryPageSize: Number(e.target.value),
+                    })
+                  }
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                >
+                  {[10, 25, 50, 100].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-black/40 border border-gray-800 rounded-2xl p-5">
+              <div className="text-white font-bold flex items-center gap-2">
+                <Save className="w-4 h-4 text-brandGreen" /> Paginação de Colaboradores
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Define quantos colaboradores serão exibidos por página na aba Colaboradores (melhor performance e padrão
+                do sistema).
+              </p>
+              <div className="mt-4">
+                <label className="text-xs text-gray-400 block mb-1">Itens por página</label>
+                <select
+                  value={uiEmployeesPageSize}
+                  onChange={(e) =>
+                    setUiSettings({
+                      ...(uiSettings || { inventoryPageSize: 50, employeesPageSize: 50 }),
+                      employeesPageSize: Number(e.target.value),
+                    })
+                  }
                   className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
                 >
                   {[10, 25, 50, 100].map((n) => (

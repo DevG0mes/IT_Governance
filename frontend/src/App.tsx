@@ -81,6 +81,7 @@ type ConfirmDialog = {
 
 type UiSettings = {
   inventoryPageSize: number;
+  employeesPageSize: number;
 };
 
 function safeParseJSON<T>(raw: unknown, fallback: T): T {
@@ -127,7 +128,9 @@ export default function App() {
 
   const [uiSettings, setUiSettings] = useState<UiSettings>(() => {
     const parsed = safeParseJSON<Record<string, unknown>>(localStorage.getItem('ui_settings'), {});
-    return { inventoryPageSize: Number(parsed.inventoryPageSize || 50) };
+    const inv = Number(parsed.inventoryPageSize || 50);
+    const emp = Number(parsed.employeesPageSize || inv || 50);
+    return { inventoryPageSize: inv, employeesPageSize: emp };
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -533,6 +536,7 @@ export default function App() {
                       requestConfirm={requestConfirm}
                       registerLog={registerLog}
                       isLoading={isLoading}
+                      pageSize={uiSettings.employeesPageSize}
                     />
                   )}
                   {activeTab === 'maintenance' && hasAccess('maintenance', 'read') && (

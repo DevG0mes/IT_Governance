@@ -5,10 +5,11 @@ import autoTable from 'jspdf-autotable';
 import api from '../services/api';
 import { formatCurrency } from '../utils/helpers';
 
-export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog }) {
+export default function EmployeesModule({ employees, assets, licenses, hasAccess, fetchData, requestConfirm, registerLog, pageSize: pageSizeProp }) {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
+  const [page, setPage] = useState(1);
 
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ nome: '', email: '', departamento: '', url_termo: '' });
@@ -39,6 +40,24 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     e.nome.toLowerCase().includes(employeeSearchTerm.toLowerCase())
   );
 
+  const pageSize = Math.max(1, Number(pageSizeProp || 50));
+  const totalItems = activeEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIdx = (currentPage - 1) * pageSize;
+  const endIdx = startIdx + pageSize;
+  const visibleEmployees = activeEmployees.slice(startIdx, endIdx);
+
+  React.useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [employeeSearchTerm]);
+
+  React.useEffect(() => {
+    const main = document.querySelector('main');
+    if (main && typeof main.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentPage]);
+
   const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'Celulare', 'CHIP', 'Starlink'].includes(a.asset_type));
 
   const getActiveAssetsForEmployee = (empId) => assets.filter(a => {
@@ -57,7 +76,10 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   };
 
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  const toggleAll = () => selectedIds.length === activeEmployees.length && activeEmployees.length > 0 ? setSelectedIds([]) : setSelectedIds(activeEmployees.map(item => item.id));
+  const toggleAll = () =>
+    selectedIds.length === visibleEmployees.length && visibleEmployees.length > 0
+      ? setSelectedIds([])
+      : setSelectedIds(visibleEmployees.map(item => item.id));
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -351,6 +373,56 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         )}
       </div>
 
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div className="text-xs text-gray-500">
+          Mostrando <span className="text-gray-200 font-semibold">{totalItems === 0 ? 0 : startIdx + 1}</span>–
+          <span className="text-gray-200 font-semibold">{Math.min(endIdx, totalItems)}</span> de{' '}
+          <span className="text-gray-200 font-semibold">{totalItems}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-gray-500">
+            Limite: <span className="text-gray-200 font-semibold">{pageSize}</span>/página
+          </div>
+          <div className="flex items-center gap-1 ml-2">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(1)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              ‹
+            </button>
+            <div className="px-2 text-xs text-gray-400">
+              Página <span className="text-gray-200 font-semibold">{currentPage}</span>/{totalPages}
+            </div>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(totalPages)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      </div>
+
       {selectedIds.length > 0 && hasAccess('employees', 'edit') && (
         <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-2xl mb-4 flex justify-between items-center animate-fade-in">
           <span className="text-white font-bold">{selectedIds.length} selecionado(s)</span>
@@ -359,15 +431,25 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
       )}
 
       <div className="bg-gray-900/80 border border-gray-800 rounded-3xl min-h-[400px] overflow-hidden">
-        <table className="w-full text-left text-sm text-gray-300">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-gray-300 min-w-[860px]">
           <thead className="bg-black/60 text-gray-400 border-b border-gray-800 uppercase text-xs">
             <tr>
-              <th className="px-6 py-4 w-12">{hasAccess('employees', 'edit') && <input type="checkbox" checked={selectedIds.length === activeEmployees.length && activeEmployees.length > 0} onChange={toggleAll} className="accent-brandGreen cursor-pointer w-4 h-4" />}</th>
+              <th className="px-6 py-4 w-12">
+                {hasAccess('employees', 'edit') && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === visibleEmployees.length && visibleEmployees.length > 0}
+                    onChange={toggleAll}
+                    className="accent-brandGreen cursor-pointer w-4 h-4"
+                  />
+                )}
+              </th>
               <th className="px-6 py-4">Nome</th><th className="px-6 py-4">Departamento</th><th className="px-6 py-4">Ativos Vinculados</th><th className="px-6 py-4 text-center">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/50">
-            {activeEmployees.map(emp => {
+            {visibleEmployees.map(emp => {
               const empAssets = getActiveAssetsForEmployee(emp.id);
               const empLicenses = getLicensesForEmployee(emp.id);
               return (
@@ -405,11 +487,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                 </tr>
               );
             })}
-            {activeEmployees.length === 0 && (
+            {visibleEmployees.length === 0 && (
               <tr><td colSpan="5" className="text-center py-20 text-gray-500 italic">Nenhum colaborador encontrado.</td></tr>
             )}
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
 
       {isOffboardingModalOpen && offboardingTarget && (

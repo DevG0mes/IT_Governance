@@ -19,30 +19,43 @@ export default function OffboardingModule({ employees = [], assets = [], license
   });
 
   const getAssetIdentDisplay = (asset) => {
-    const nb = asset?.Notebook || asset?.notebook;
-    const cel = asset?.Celular || asset?.celular;
-    const ch = asset?.Chip || asset?.chip;
-    const st = asset?.Starlink || asset?.starlink;
+    // Alguns endpoints retornam associações com nomes diferentes.
+    const nb =
+      asset?.Notebook || asset?.notebook || asset?.asset_notebook || asset?.asset_notebooks || asset?.AssetNotebook;
+    const cel =
+      asset?.Celular || asset?.celular || asset?.asset_celular || asset?.asset_celulares || asset?.AssetCelular;
+    const ch = asset?.Chip || asset?.chip || asset?.asset_chip || asset?.asset_chips || asset?.AssetChip;
+    const st =
+      asset?.Starlink || asset?.starlink || asset?.asset_starlink || asset?.asset_starlinks || asset?.AssetStarlink;
 
-    if (asset?.asset_type === 'Notebook' && nb) {
+    const typeStr = String(asset?.asset_type || '').trim();
+    const isNotebook = typeStr.toLowerCase().includes('notebook');
+    const isCelular = typeStr.toLowerCase().includes('celular'); // cobre "Celulare"
+    const isChip = typeStr.toUpperCase().includes('CHIP');
+    const isStarlink = typeStr.toLowerCase().includes('starlink');
+
+    if (isNotebook && nb) {
       const ident = nb.patrimonio || nb.serial_number || '—';
       const modelo = nb.modelo ? ` • ${nb.modelo}` : '';
       return `${ident}${modelo}`;
     }
-    if (asset?.asset_type === 'Celular' && cel) {
+    if (isCelular && cel) {
       const ident = cel.imei || '—';
       const modelo = cel.modelo ? ` • ${cel.modelo}` : '';
       return `${ident}${modelo}`;
     }
-    if (asset?.asset_type === 'CHIP' && ch) {
+    if (isChip && ch) {
       const ident = ch.numero || '—';
       const plano = ch.plano ? ` • ${ch.plano}` : '';
       return `${ident}${plano}`;
     }
-    if (asset?.asset_type === 'Starlink' && st) {
+    if (isStarlink && st) {
       return st.projeto || st.modelo || st.grupo || '—';
     }
-    return 'Sem identificador';
+
+    // Fallback final (mesmo sem asset_type coerente)
+    const ident = nb?.patrimonio || nb?.serial_number || cel?.imei || ch?.numero || st?.projeto || st?.modelo;
+    return ident || 'Sem identificador';
   };
   
   const getActiveLicenses = (empId) => {
@@ -186,7 +199,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 bg-gray-900/80 border border-gray-800 rounded-3xl overflow-hidden shadow-xl flex flex-col h-[600px]">
+        <div className="lg:col-span-1 bg-gray-900/80 border border-gray-800 rounded-3xl overflow-hidden shadow-xl flex flex-col min-h-[520px] max-h-[calc(100vh-220px)] lg:max-h-[600px]">
           <div className="p-4 bg-black/40 border-b border-gray-800">
             <h3 className="font-bold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-gray-400"/> {showAllDesligados ? 'Histórico de Desligados' : 'Fila de Desligamento'} ({offboardingEmployees.length})
@@ -221,9 +234,9 @@ export default function OffboardingModule({ employees = [], assets = [], license
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           {selectedEmployee ? (
-            <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl animate-fade-in-up h-[600px] flex flex-col">
+            <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl animate-fade-in-up min-h-[520px] max-h-[calc(100vh-220px)] lg:max-h-[600px] flex flex-col">
               <div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-800">
                 <div>
                   <h3 className="text-2xl font-bold text-white mb-1">{selectedEmployee.nome}</h3>
@@ -336,7 +349,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
               </div>
             </div>
           ) : (
-            <div className="bg-gray-900/40 border border-gray-800 border-dashed rounded-3xl h-[600px] flex flex-col items-center justify-center text-center p-8">
+            <div className="bg-gray-900/40 border border-gray-800 border-dashed rounded-3xl min-h-[520px] max-h-[calc(100vh-220px)] lg:max-h-[600px] flex flex-col items-center justify-center text-center p-8">
               <ShieldAlert className="w-16 h-16 text-gray-700 mb-4"/>
               <h3 className="text-xl font-bold text-gray-400 mb-2">Selecione um Colaborador</h3>
               <p className="text-gray-500 text-sm max-w-sm">Clique em um nome na fila ao lado para iniciar a revogação de acessos e devolução de equipamentos.</p>
