@@ -102,7 +102,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-4 min-w-[980px]">
           {kanbanColumns.map((col) => (
-            <div key={col} className="bg-gray-900/60 border border-gray-800 rounded-3xl overflow-hidden w-[320px] shrink-0">
+            <div key={col} className="bg-gray-900/60 border border-gray-800 rounded-3xl w-[320px] shrink-0">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white">{col}</span>
@@ -160,7 +160,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
                     </div>
 
                     {openActionMenu === `maint-${asset.id}` && (
-                      <div className="absolute right-4 top-14 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-40 overflow-hidden py-2 text-left">
+                      <div className="absolute right-4 top-14 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] overflow-hidden py-2 text-left">
                         {asset.status === 'Manutenção' && hasAccess('maintenance', 'edit') ? (
                           <>
                             <button

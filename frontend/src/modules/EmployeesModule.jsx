@@ -430,7 +430,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
         </div>
       )}
 
-      <div className="bg-gray-900/80 border border-gray-800 rounded-3xl min-h-[400px] overflow-hidden">
+      <div className="bg-gray-900/80 border border-gray-800 rounded-3xl min-h-[400px]">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-300 min-w-[860px]">
           <thead className="bg-black/60 text-gray-400 border-b border-gray-800 uppercase text-xs">
@@ -467,10 +467,10 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                   <td className="px-6 py-4">
                     <span className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">{empAssets.length} Hardware(s), {empLicenses.length} Software(s)</span>
                   </td>
-                  <td className="px-6 py-4 text-center relative">
+                  <td className="px-6 py-4 text-center relative overflow-visible">
                     <button onClick={() => setOpenActionMenu(openActionMenu === emp.id ? null : emp.id)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors"><MoreVertical className="w-5 h-5" /></button>
                     {openActionMenu === emp.id && (
-                      <div className="absolute right-8 top-10 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-40 py-2 text-left animate-fade-in-up">
+                      <div className="absolute right-8 top-10 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] py-2 text-left animate-fade-in-up">
                         <button onClick={() => { setOpenActionMenu(null); setEditEmployeeData(emp); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><ListChecks className="w-4 h-4 text-blue-400" /> Gerenciar Perfil</button>
                         {hasAccess('employees', 'edit') && (
                           <>
@@ -492,6 +492,56 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             )}
           </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+        <div className="text-xs text-gray-500">
+          Mostrando <span className="text-gray-200 font-semibold">{totalItems === 0 ? 0 : startIdx + 1}</span>–
+          <span className="text-gray-200 font-semibold">{Math.min(endIdx, totalItems)}</span> de{' '}
+          <span className="text-gray-200 font-semibold">{totalItems}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-gray-500">
+            Limite: <span className="text-gray-200 font-semibold">{pageSize}</span>/página
+          </div>
+          <div className="flex items-center gap-1 ml-2">
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage(1)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              ‹
+            </button>
+            <div className="px-2 text-xs text-gray-400">
+              Página <span className="text-gray-200 font-semibold">{currentPage}</span>/{totalPages}
+            </div>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(totalPages)}
+              className="px-3 py-2 text-xs rounded-xl border border-gray-700 bg-gray-900/80 text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            >
+              »
+            </button>
+          </div>
         </div>
       </div>
 
