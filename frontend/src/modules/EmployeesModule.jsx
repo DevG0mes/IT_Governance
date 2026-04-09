@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edit2, Printer, Laptop, Smartphone, Cpu, Wifi, Database, Users, ExternalLink, AlertTriangle, Link } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,15 +49,38 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const endIdx = startIdx + pageSize;
   const visibleEmployees = activeEmployees.slice(startIdx, endIdx);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setPage(1);
     setSelectedIds([]);
   }, [employeeSearchTerm]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const main = document.querySelector('main');
     if (main && typeof main.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage]);
+
+  useEffect(() => {
+    if (!openActionMenu) return;
+
+    const onMouseDown = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      // Clique dentro do menu ou do botão → não fecha.
+      if (target.closest('[data-emp-actions-root="true"]')) return;
+      setOpenActionMenu(null);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpenActionMenu(null);
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openActionMenu]);
 
   const availableAssignables = assets.filter(a => a.status === 'Disponível' && ['Notebook', 'Celular', 'Celulare', 'CHIP', 'Starlink'].includes(a.asset_type));
 
@@ -481,7 +504,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                   <td className="px-6 py-4">
                     <span className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">{empAssets.length} Hardware(s), {empLicenses.length} Software(s)</span>
                   </td>
-                  <td className="px-6 py-4 text-center relative overflow-visible">
+                  <td className="px-6 py-4 text-center relative overflow-visible" data-emp-actions-root="true">
                     <button onClick={() => openMenuSmart(emp.id, idx)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors"><MoreVertical className="w-5 h-5" /></button>
                     {openActionMenu === emp.id && (
                       <div className={`absolute ${menuPositionClass} w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] py-2 text-left animate-fade-in-up`}>

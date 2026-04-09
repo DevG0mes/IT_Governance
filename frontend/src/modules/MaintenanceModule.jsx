@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Wrench, Monitor, MoreVertical, Edit2, CheckCircle, X, Filter } from 'lucide-react';
 // 🚨 NOVO: Importando a sua API centralizada e blindada
@@ -71,6 +71,28 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
       fetchData(); 
     } catch (err) { alert(getAxiosError(err, 'Erro ao atualizar histórico de manutenção')); }
   };
+
+  useEffect(() => {
+    if (!openActionMenu) return;
+
+    const onMouseDown = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-maint-actions-root="true"]')) return;
+      setOpenActionMenu(null);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpenActionMenu(null);
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openActionMenu]);
 
   return (
     <div className="animate-fade-in space-y-4">
@@ -153,6 +175,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
                         onClick={() =>
                           setOpenActionMenu(openActionMenu === `maint-${asset.id}` ? null : `maint-${asset.id}`)
                         }
+                        data-maint-actions-root="true"
                         className="p-2 bg-gray-800 hover:bg-gray-700 transition-colors rounded-lg text-gray-300 hover:text-white shrink-0"
                       >
                         <MoreVertical className="w-5 h-5" />
@@ -160,7 +183,7 @@ export default function MaintenanceModule({ assets, hasAccess, fetchData, reques
                     </div>
 
                     {openActionMenu === `maint-${asset.id}` && (
-                      <div className="absolute right-4 top-14 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] overflow-hidden py-2 text-left">
+                      <div data-maint-actions-root="true" className="absolute right-4 top-14 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] overflow-hidden py-2 text-left">
                         {asset.status === 'Manutenção' && hasAccess('maintenance', 'edit') ? (
                           <>
                             <button

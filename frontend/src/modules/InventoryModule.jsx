@@ -181,6 +181,29 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
     if (main && typeof main.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage]);
 
+  // Fecha menu de ações ao clicar fora / ESC
+  React.useEffect(() => {
+    if (!openActionMenu) return;
+
+    const onMouseDown = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-inv-actions-root="true"]')) return;
+      setOpenActionMenu(null);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpenActionMenu(null);
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openActionMenu]);
+
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   const toggleAll = () =>
     selectedIds.length === visibleAssets.length && visibleAssets.length > 0
@@ -467,7 +490,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                       {ch?.vencimento_plano && <p className="text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded inline-block mt-1 border border-red-500/20">Vence: {ch.vencimento_plano}</p>}
                       {ownerName && <p className="text-xs text-blue-300 font-semibold mt-1 flex items-center gap-1"><Users className="w-3 h-3"/> {ownerName}</p>}
                     </td>
-                    <td className="px-6 py-4 text-center relative">
+                    <td className="px-6 py-4 text-center relative" data-inv-actions-root="true">
                       <button onClick={() => setOpenActionMenu(openActionMenu === asset.id ? null : asset.id)} className="p-2 hover:bg-gray-700 rounded-lg text-gray-500 hover:text-white transition-colors"><MoreVertical className="w-5 h-5" /></button>
                       
                       {openActionMenu === asset.id && (
