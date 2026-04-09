@@ -30,7 +30,16 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
 
   const handleUpdateLicense = async (e) => { 
     e.preventDefault(); 
-    const payload = {...editLicenseData, custo: parseCurrencyToFloat(editLicenseData.custo), quantidade_total: parseInt(editLicenseData.quantidade_total)}; 
+    const payload = {
+      ...editLicenseData,
+      custo: parseCurrencyToFloat(editLicenseData.custo),
+      quantidade_total: parseInt(editLicenseData.quantidade_total),
+      // Para licenças de consumo (ex.: storage em GB), permitimos informar "quantidade_em_uso" manualmente.
+      quantidade_em_uso:
+        editLicenseData.quantidade_em_uso != null && editLicenseData.quantidade_em_uso !== ''
+          ? parseInt(editLicenseData.quantidade_em_uso)
+          : undefined,
+    }; 
     try {
       // 🚨 NOVO: api.put limpo
       await api.put(`/licenses/${editLicenseData.id}`, payload);
@@ -190,6 +199,15 @@ export default function LicensesModule({ licenses, hasAccess, fetchData, registe
                 <input type="number" step="0.01" required placeholder="Custo Un." value={editLicenseData ? editLicenseData.custo : newLicense.custo} onChange={(e) => editLicenseData ? setEditLicenseData({...editLicenseData, custo: e.target.value}) : setNewLicense({...newLicense, custo: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors" />
                 <input type="number" required placeholder="Qtd" value={editLicenseData ? editLicenseData.quantidade_total : newLicense.quantidade_total} onChange={(e) => editLicenseData ? setEditLicenseData({...editLicenseData, quantidade_total: e.target.value}) : setNewLicense({...newLicense, quantidade_total: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors" />
               </div>
+              {editLicenseData && String(editLicenseData.nome || '').toLowerCase().includes('extra file storage') && (
+                <input
+                  type="number"
+                  placeholder="Qtd em uso (GB) — opcional"
+                  value={editLicenseData.quantidade_em_uso ?? ''}
+                  onChange={(e) => setEditLicenseData({ ...editLicenseData, quantidade_em_uso: e.target.value })}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-brandGreen outline-none transition-colors"
+                />
+              )}
               <button type="submit" className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-4 rounded-full font-bold shadow-lg hover:-translate-y-1 transition-all duration-300">Salvar Licença</button>
             </form>
           </div>
