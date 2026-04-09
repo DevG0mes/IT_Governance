@@ -394,7 +394,7 @@ export default function App() {
             <div className="text-center mb-8">
               <ShieldCheck className="text-brandGreen w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
               <h1 className="text-2xl font-bold text-white tracking-wider">
-                PSI Energy <span className="text-brandGreen">GovTI</span>
+                Gestão de Ativos <span className="text-brandGreen">GovTI</span>
               </h1>
               <p className="text-gray-400 mt-2 text-sm">Governança, FinOps e Gestão de Ativos</p>
             </div>
@@ -435,7 +435,7 @@ export default function App() {
               <ShieldCheck className="text-brandGreen w-8 h-8 flex-shrink-0" />
               {isSidebarOpen && (
                 <span className="ml-3 text-lg font-bold text-white whitespace-nowrap overflow-hidden animate-fade-in">
-                  PSI Energy
+                  Gestão de Ativos
                 </span>
               )}
             </div>

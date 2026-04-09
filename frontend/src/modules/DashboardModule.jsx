@@ -41,6 +41,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const [filtroAtivo, setFiltroAtivo] = useState('Todos');
   const [selectedGroupForModal, setSelectedGroupForModal] = useState(null);
   const [filtroFornecedor, setFiltroFornecedor] = useState('Todos');
+  const [filtroLicFornecedor, setFiltroLicFornecedor] = useState('Todos');
+  const [filtroLicPlano, setFiltroLicPlano] = useState('Todos');
   const [finops, setFinops] = useState(null);
   const [finopsLoading, setFinopsLoading] = useState(true);
 
@@ -126,13 +128,12 @@ export default function DashboardModule({ assets, employees, licenses, contracts
 
     let monthlyLicenseCost = 0;
     if (licenses) {
+      // Coerente com fatura: custo é mensal por seat (mesmo quando plano é "Anual (12x)").
       licenses.forEach((lic) => {
         const q = Math.max(0, Number(lic.quantidade_total) || 0);
         const unit = Number(lic.custo);
         if (!Number.isFinite(unit) || q === 0) return;
-        const plano = (lic.plano || '').trim().toLowerCase();
-        const totalPeriod = unit * q;
-        monthlyLicenseCost += plano === 'anual' ? totalPeriod / 12 : totalPeriod;
+        monthlyLicenseCost += unit * q;
       });
     }
 
@@ -182,6 +183,59 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     const list = contracts.map((c) => (c.fornecedor || 'Desconhecido').trim()).filter(Boolean);
     return ['Todos', ...new Set(list)].sort();
   }, [contracts]);
+
+  const licFornecedoresUnicos = useMemo(() => {
+    const list = (licenses || [])
+      .map((l) => (l.fornecedor || 'Desconhecido').trim())
+      .filter(Boolean);
+    return ['Todos', ...new Set(list)].sort();
+  }, [licenses]);
+
+  const licPlanosUnicos = useMemo(() => {
+    const list = (licenses || []).map((l) => (l.plano || '—').trim()).filter(Boolean);
+    return ['Todos', ...new Set(list)].sort();
+  }, [licenses]);
+
+  const licensesFiltered = useMemo(() => {
+    let list = Array.isArray(licenses) ? licenses : [];
+    if (filtroLicFornecedor !== 'Todos') {
+      list = list.filter((l) => (l.fornecedor || 'Desconhecido').trim() === filtroLicFornecedor);
+    }
+    if (filtroLicPlano !== 'Todos') {
+      list = list.filter((l) => (l.plano || '—').trim() === filtroLicPlano);
+    }
+    return list;
+  }, [licenses, filtroLicFornecedor, filtroLicPlano]);
+
+  const licensesFinopsCards = useMemo(() => {
+    const list = licensesFiltered;
+    let committed = 0;
+    let used = 0;
+    let waste = 0;
+    let seatsTotal = 0;
+    let seatsUsed = 0;
+
+    list.forEach((lic) => {
+      const q = Math.max(0, Number(lic.quantidade_total) || 0);
+      const u = Math.max(0, Number(lic.quantidade_em_uso) || 0);
+      const unit = Number(lic.custo);
+      if (!Number.isFinite(unit) || q === 0) return;
+      committed += unit * q;
+      used += unit * Math.min(u, q);
+      waste += unit * Math.max(0, q - Math.min(u, q));
+      seatsTotal += q;
+      seatsUsed += Math.min(u, q);
+    });
+
+    return {
+      committed,
+      used,
+      waste,
+      seatsTotal,
+      seatsUsed,
+      idlePct: seatsTotal > 0 ? 1 - seatsUsed / seatsTotal : 0,
+    };
+  }, [licensesFiltered]);
 
   const contractChartData = useMemo(() => {
     const dataMap = {};
@@ -329,7 +383,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             {
               title: 'Licenças · mês (compromisso)',
               sub: 'Custo × assentos',
-              value: formatCurrency(finopsCommitted),
+              value: formatCurrency(filtroLicFornecedor === 'Todos' && filtroLicPlano === 'Todos' ? finopsCommitted : licensesFinopsCards.committed),
               icon: DollarSign,
               accent: 'border-emerald-500/20',
               delay: '160ms',
@@ -337,7 +391,11 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             {
               title: 'Ociosidade licenças (estim.)',
               sub: 'Assentos pagos sem uso',
-              value: formatCurrency(finopsWaste ?? 0),
+              value: formatCurrency(
+                filtroLicFornecedor === 'Todos' && filtroLicPlano === 'Todos'
+                  ? finopsWaste ?? 0
+                  : licensesFinopsCards.waste
+              ),
               icon: TrendingUp,
               accent: 'border-amber-500/30',
               delay: '240ms',
@@ -657,15 +715,59 @@ export default function DashboardModule({ assets, employees, licenses, contracts
             <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
               <DollarSign className="text-brandGreen w-6 h-6" /> Licenciamento (Software)
             </h3>
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <div className="flex items-center gap-2 w-full">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <select
+                  value={filtroLicFornecedor}
+                  onChange={(e) => setFiltroLicFornecedor(e.target.value)}
+                  className="w-full bg-black/60 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brandGreen transition-colors"
+                >
+                  {licFornecedoresUnicos.map((x) => (
+                    <option key={x} value={x}>
+                      {x === 'Todos' ? 'Todos os fornecedores (licenças)' : x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 w-full">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <select
+                  value={filtroLicPlano}
+                  onChange={(e) => setFiltroLicPlano(e.target.value)}
+                  className="w-full bg-black/60 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brandGreen transition-colors"
+                >
+                  {licPlanosUnicos.map((x) => (
+                    <option key={x} value={x}>
+                      {x === 'Todos' ? 'Todos os planos' : x}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <div className="space-y-6">
               <div className="bg-black/50 p-5 rounded-2xl border border-gray-800 hover:border-brandGreen/25 transition-colors">
                 <p className="text-gray-400 text-sm font-bold mb-1">Compromisso mensal estimado</p>
-                <p className="text-3xl font-bold text-white">{formatCurrency(finopsCommitted)}</p>
+                <p className="text-3xl font-bold text-white">
+                  {formatCurrency(filtroLicFornecedor === 'Todos' && filtroLicPlano === 'Todos' ? finopsCommitted : licensesFinopsCards.committed)}
+                </p>
+                {(filtroLicFornecedor !== 'Todos' || filtroLicPlano !== 'Todos') && (
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Filtro aplicado: {licensesFinopsCards.seatsUsed}/{licensesFinopsCards.seatsTotal} seats em uso · ociosidade{' '}
+                    {(licensesFinopsCards.idlePct * 100).toFixed(0)}%
+                  </p>
+                )}
               </div>
               {finopsWaste != null && (
                 <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20">
                   <p className="text-amber-200/90 text-xs font-bold mb-1">Ociosidade estimada (mês)</p>
-                  <p className="text-2xl font-bold text-amber-400">{formatCurrency(finopsWaste)}</p>
+                  <p className="text-2xl font-bold text-amber-400">
+                    {formatCurrency(
+                      filtroLicFornecedor === 'Todos' && filtroLicPlano === 'Todos'
+                        ? finopsWaste
+                        : licensesFinopsCards.waste
+                    )}
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
