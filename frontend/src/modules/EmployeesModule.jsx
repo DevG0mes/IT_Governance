@@ -10,6 +10,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [selectedIds, setSelectedIds] = useState([]);
   const [openActionMenu, setOpenActionMenu] = useState(null);
   const [page, setPage] = useState(1);
+  const [menuDirection, setMenuDirection] = useState({});
 
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ nome: '', email: '', departamento: '', url_termo: '' });
@@ -80,6 +81,16 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     selectedIds.length === visibleEmployees.length && visibleEmployees.length > 0
       ? setSelectedIds([])
       : setSelectedIds(visibleEmployees.map(item => item.id));
+
+  const openMenuSmart = (empId, rowIndex) => {
+    if (openActionMenu === empId) {
+      setOpenActionMenu(null);
+      return;
+    }
+    const isLastRows = rowIndex >= visibleEmployees.length - 2 && visibleEmployees.length > 2;
+    setMenuDirection((prev) => ({ ...prev, [empId]: isLastRows ? 'up' : 'down' }));
+    setOpenActionMenu(empId);
+  };
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -452,6 +463,9 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             {visibleEmployees.map(emp => {
               const empAssets = getActiveAssetsForEmployee(emp.id);
               const empLicenses = getLicensesForEmployee(emp.id);
+              const idx = visibleEmployees.indexOf(emp);
+              const dir = menuDirection[emp.id] || 'down';
+              const menuPositionClass = dir === 'up' ? 'bottom-10 right-8 origin-bottom-right' : 'top-10 right-8 origin-top-right';
               return (
                 <tr key={emp.id} className="hover:bg-gray-800/80 transition-colors">
                   <td className="px-6 py-4">{hasAccess('employees', 'edit') && <input type="checkbox" checked={selectedIds.includes(emp.id)} onChange={() => toggleSelection(emp.id)} className="accent-brandGreen cursor-pointer w-4 h-4" />}</td>
@@ -468,9 +482,9 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                     <span className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">{empAssets.length} Hardware(s), {empLicenses.length} Software(s)</span>
                   </td>
                   <td className="px-6 py-4 text-center relative overflow-visible">
-                    <button onClick={() => setOpenActionMenu(openActionMenu === emp.id ? null : emp.id)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors"><MoreVertical className="w-5 h-5" /></button>
+                    <button onClick={() => openMenuSmart(emp.id, idx)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors"><MoreVertical className="w-5 h-5" /></button>
                     {openActionMenu === emp.id && (
-                      <div className="absolute right-8 top-10 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] py-2 text-left animate-fade-in-up">
+                      <div className={`absolute ${menuPositionClass} w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] py-2 text-left animate-fade-in-up`}>
                         <button onClick={() => { setOpenActionMenu(null); setEditEmployeeData(emp); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><ListChecks className="w-4 h-4 text-blue-400" /> Gerenciar Perfil</button>
                         {hasAccess('employees', 'edit') && (
                           <>
