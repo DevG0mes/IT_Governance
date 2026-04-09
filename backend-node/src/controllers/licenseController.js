@@ -2,9 +2,11 @@ const {
   sequelize, 
   License, 
   EmployeeLicense, 
-  Employee 
+  Employee,
+  AuditLog,
 } = require('../../config/db');
 const { tryFinalizeOffboarding } = require('../services/offboardingService');
+const { writeAuditLog } = require('../../utils/audit');
 
 exports.getAll = async (req, res) => {
   try {
@@ -141,6 +143,7 @@ exports.unassign = async (req, res) => {
     const employeeId = empLicense.employee_id;
 
     const license = await License.findByPk(empLicense.license_id, { transaction: t });
+    const unit = license && license.custo != null ? Number(license.custo) : null;
     if (license) {
       await license.update({ 
         quantidade_em_uso: Math.max(0, license.quantidade_em_uso - 1) 
@@ -152,6 +155,21 @@ exports.unassign = async (req, res) => {
     // best-effort: se colaborador está em desligamento e ficou tudo ok, marca como Desligado
     try {
       await tryFinalizeOffboarding(employeeId, t);
+    } catch (_) {}
+
+    // Savings: registra economia mensal (unitário) para o mês corrente via audit_logs
+    try {
+      await writeAuditLog(AuditLog, {
+        action: 'UPDATE',
+        table_name: 'employee_licenses',
+        record_id: Number(id) || null,
+        old_data: null,
+        new_data: null,
+        module: 'licenses',
+        user: req.user?.email || req.user?.nome || null,
+        details: `Revogação de licença (license_id=${empLicense.license_id}, employee_id=${employeeId})`,
+        valor_economizado: Number.isFinite(unit) ? unit : null,
+      });
     } catch (_) {}
 
     await t.commit();

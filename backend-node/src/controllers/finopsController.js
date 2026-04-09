@@ -8,6 +8,7 @@ const {
   License,
   EmployeeLicense,
   Contract,
+  AuditLog,
 } = require('../../config/db');
 const { buildFinopsSnapshot } = require('../services/finopsRules');
 const { Op } = require('sequelize');
@@ -48,6 +49,14 @@ function buildMonthRange(range, refYm) {
   return [refYm];
 }
 
+function ymStartEnd(ym) {
+  const [y, m] = String(ym).split('-').map((x) => parseInt(x, 10));
+  if (!y || !m) return null;
+  const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(y, m, 1, 0, 0, 0));
+  return { start, end };
+}
+
 exports.getSnapshot = async (req, res) => {
   try {
     const rangeRaw = String(req.query.range || 'current_month').trim().toLowerCase();
@@ -66,7 +75,7 @@ exports.getSnapshot = async (req, res) => {
       return res.status(200).json({ data: cached.data });
     }
 
-    const [assets, catalogItems, licenses, contracts] = await Promise.all([
+    const [assets, catalogItems, licenses, contracts, savingsMonth] = await Promise.all([
       Asset.findAll({
         include: [
           { model: AssetNotebook, as: 'Notebook' },
@@ -91,6 +100,22 @@ exports.getSnapshot = async (req, res) => {
           ...(contractVendor ? { fornecedor: contractVendor } : {}),
         },
       }),
+      (async () => {
+        // Savings: soma de valor_economizado no mês de referência (range=current_month)
+        if (range !== 'current_month') return { month: ref, value: 0 };
+        const w = ymStartEnd(ref);
+        if (!w) return { month: ref, value: 0 };
+        const rows = await AuditLog.findAll({
+          where: {
+            module: 'licenses',
+            valor_economizado: { [Op.ne]: null },
+            timestamp: { [Op.gte]: w.start, [Op.lt]: w.end },
+          },
+          attributes: ['valor_economizado'],
+        });
+        const total = (rows || []).reduce((acc, r) => acc + (Number(r.valor_economizado) || 0), 0);
+        return { month: ref, value: total };
+      })(),
     ]);
 
     const licFiltered = (licenses || []).filter((l) => {
@@ -108,6 +133,12 @@ exports.getSnapshot = async (req, res) => {
       contracts,
       meta: { range, ref, months, filters: { licenseVendor, licensePlan, contractVendor } },
     });
+
+    snapshot.savings = {
+      month: savingsMonth?.month || ref,
+      savedMonthly: Number(savingsMonth?.value) || 0,
+      savedAnnualized: (Number(savingsMonth?.value) || 0) * 12,
+    };
 
     cache.set(cacheKey, { at: Date.now(), data: snapshot });
     return res.status(200).json({ data: snapshot });

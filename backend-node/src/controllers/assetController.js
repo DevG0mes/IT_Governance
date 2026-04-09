@@ -460,6 +460,10 @@ exports.maintenance = async (req, res) => {
     const oldAsset = asset.toJSON();
     const chamado = standardizeText(req.body?.chamado || '');
     const observacao = req.body?.observacao ? standardizeText(req.body.observacao) : '';
+    const custo_reparo =
+      req.body?.custo_reparo != null && req.body?.custo_reparo !== ''
+        ? Number(req.body.custo_reparo)
+        : null;
     if (!chamado) return res.status(400).json({ error: 'Nº do chamado é obrigatório.' });
 
     const activeLog = await AssetMaintenanceLog.findOne({
@@ -472,6 +476,7 @@ exports.maintenance = async (req, res) => {
           AssetId: asset.id,
           chamado,
           observacao,
+          custo_reparo: Number.isFinite(custo_reparo) ? custo_reparo : null,
           opened_at: new Date(),
           resolved_at: null,
           created_by: req.user?.email || req.user?.nome || null,
@@ -479,7 +484,10 @@ exports.maintenance = async (req, res) => {
         { transaction: t }
       );
     } else {
-      await activeLog.update({ chamado, observacao }, { transaction: t });
+      await activeLog.update(
+        { chamado, observacao, ...(Number.isFinite(custo_reparo) ? { custo_reparo } : {}) },
+        { transaction: t }
+      );
     }
 
     const statusRaw = req.body?.status ? String(req.body.status).trim() : 'Manutenção';
@@ -515,6 +523,10 @@ exports.updateMaintenance = async (req, res) => {
 
     const chamado = standardizeText(req.body?.chamado || '');
     const observacao = standardizeText(req.body?.observacao || '');
+    const custo_reparo =
+      req.body?.custo_reparo != null && req.body?.custo_reparo !== ''
+        ? Number(req.body.custo_reparo)
+        : null;
     if (!chamado) return res.status(400).json({ error: 'Nº do chamado é obrigatório.' });
 
     const log = await AssetMaintenanceLog.findOne({
@@ -523,7 +535,10 @@ exports.updateMaintenance = async (req, res) => {
     });
     if (!log) return res.status(404).json({ error: 'Não há manutenção ativa para este ativo.' });
 
-    await log.update({ chamado, observacao }, { transaction: t });
+    await log.update(
+      { chamado, observacao, ...(Number.isFinite(custo_reparo) ? { custo_reparo } : {}) },
+      { transaction: t }
+    );
 
     await writeAuditLog(AuditLog, {
       action: 'UPDATE',

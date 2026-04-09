@@ -18,6 +18,9 @@ module.exports = (sequelize, DataTypes) => {
       observacao: {
         type: DataTypes.TEXT,
       },
+      custo_reparo: {
+        type: DataTypes.DECIMAL(12, 2),
+      },
       opened_at: {
         type: DataTypes.DATE,
         allowNull: false,

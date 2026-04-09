@@ -29,6 +29,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATEONLY,
       allowNull: true,
     },
+    valor_compra: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+    },
   }, { 
     tableName: 'asset_notebooks', 
     timestamps: false // 🚨 CORRIGIDO: Desligando a busca por createdAt e updatedAt

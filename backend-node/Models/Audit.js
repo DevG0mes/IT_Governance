@@ -36,6 +36,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     details: { 
       type: DataTypes.TEXT 
+    },
+    valor_economizado: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
     }
   }, { 
     tableName: 'audit_logs', 

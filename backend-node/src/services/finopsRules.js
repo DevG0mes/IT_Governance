@@ -92,6 +92,15 @@ function getDataAquisicaoStr(asset) {
   return String(s).slice(0, 10);
 }
 
+function getValorCompra(asset) {
+  const d = getAssetDetail(asset);
+  if (!d) return null;
+  const v = d.valor_compra;
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function calendarMonthsElapsed(startStr, refDate = new Date()) {
   if (!startStr) return null;
   const a = new Date(`${String(startStr).slice(0, 10)}T12:00:00`);
@@ -110,6 +119,16 @@ function residualLinearAproximado(valorCatalogo, dataAquisicaoStr, vidaMeses) {
   if (months === null) return valorCatalogo;
   const frac = Math.min(1, months / vidaMeses);
   return Math.max(0, valorCatalogo * (1 - frac));
+}
+
+/** Depreciação Receita Federal (TI): 60 meses (20% aa) linear. */
+function residualReceitaFederal(valorCompra, dataAquisicaoStr, vidaMeses = 60) {
+  if (valorCompra == null || !Number.isFinite(valorCompra)) return 0;
+  if (!dataAquisicaoStr) return valorCompra;
+  const months = calendarMonthsElapsed(dataAquisicaoStr);
+  if (months === null) return valorCompra;
+  const frac = Math.min(1, months / vidaMeses);
+  return Math.max(0, valorCompra * (1 - frac));
 }
 
 function isEmUso(asset) {
@@ -150,12 +169,16 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     1,
     parseInt(process.env.FINOPS_DEPRECIATION_MONTHS || '36', 10) || 36
   );
+  const vidaMesesReceita = Math.max(1, parseInt(process.env.FINOPS_RFB_MONTHS || '60', 10) || 60);
 
   let hardwareValorTotal = 0;
   let hardwareValorEmUso = 0;
   let hardwareValorParado = 0;
   let hardwareValorManutencao = 0;
   let hardwareValorResidualEstimado = 0;
+  let hardwareValorCompraTotal = 0;
+  let hardwareValorResidualRfbTotal = 0;
+  let hardwareAtivosComValorCompra = 0;
   let assetsSemCatalogo = 0;
   let ativosCatalogoSemDataAquisicao = 0;
   const investimentoPorModeloMap = new Map();
@@ -175,6 +198,7 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     const typeKey = ['Notebook', 'Celular', 'CHIP', 'Starlink'].includes(at) ? at : null;
     const valor = findCatalogValor(cats, asset);
     const nomeCatalogo = getCatalogLookupName(asset);
+    const valorCompra = getValorCompra(asset);
 
     if (valor == null && nomeCatalogo) assetsSemCatalogo += 1;
     const v = valor != null ? valor : 0;
@@ -198,6 +222,14 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
         prev.investimentoTotal += valor;
         investimentoPorModeloMap.set(aggKey, prev);
       }
+    }
+
+    // Valor residual real (Receita Federal) baseado em valor_compra
+    if (valorCompra != null) {
+      const dataStr = getDataAquisicaoStr(asset);
+      hardwareValorCompraTotal += valorCompra;
+      hardwareValorResidualRfbTotal += residualReceitaFederal(valorCompra, dataStr, vidaMesesReceita);
+      hardwareAtivosComValorCompra += 1;
     }
 
     if (isEmUso(asset)) {
@@ -362,11 +394,20 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
       valorCatalogoParado: hardwareValorParado,
       valorCatalogoManutencao: hardwareValorManutencao,
       valorResidualEstimado: hardwareValorResidualEstimado,
+      valorCompraTotal: hardwareValorCompraTotal,
+      valorResidualRfbTotal: hardwareValorResidualRfbTotal,
+      ativosComValorCompra: hardwareAtivosComValorCompra,
       investimentoPorModelo,
       depreciacao: {
         mesesVidaUtil: vidaMesesDepreciacao,
         metodo: 'linear',
         env: 'FINOPS_DEPRECIATION_MONTHS',
+      },
+      depreciacaoRfb: {
+        mesesVidaUtil: vidaMesesReceita,
+        metodo: 'linear',
+        env: 'FINOPS_RFB_MONTHS',
+        nota: 'RFB: 60 meses (~20% a.a) para TI (valor_compra + data_aquisicao).',
       },
       assetsSemMatchCatalogo: assetsSemCatalogo,
       ativosComCatalogoSemDataAquisicao: ativosCatalogoSemDataAquisicao,

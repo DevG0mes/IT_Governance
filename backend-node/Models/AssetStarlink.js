@@ -41,6 +41,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATEONLY,
       allowNull: true,
     },
+    valor_compra: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+    },
   }, { 
     tableName: 'asset_starlinks', 
     timestamps: false // 🚨 O print confirma que não há created_at nem updated_at aqui, então está certinho!
