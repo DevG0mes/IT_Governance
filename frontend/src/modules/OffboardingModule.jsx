@@ -17,6 +17,33 @@ export default function OffboardingModule({ employees = [], assets = [], license
     const assignments = a.Assignments || a.assignments || a.AssetAssignments || [];
     return assignments.some(asg => (asg?.EmployeeId === empId || asg?.employee_id === empId) && !asg?.returned_at);
   });
+
+  const getAssetIdentDisplay = (asset) => {
+    const nb = asset?.Notebook || asset?.notebook;
+    const cel = asset?.Celular || asset?.celular;
+    const ch = asset?.Chip || asset?.chip;
+    const st = asset?.Starlink || asset?.starlink;
+
+    if (asset?.asset_type === 'Notebook' && nb) {
+      const ident = nb.patrimonio || nb.serial_number || '—';
+      const modelo = nb.modelo ? ` • ${nb.modelo}` : '';
+      return `${ident}${modelo}`;
+    }
+    if (asset?.asset_type === 'Celular' && cel) {
+      const ident = cel.imei || '—';
+      const modelo = cel.modelo ? ` • ${cel.modelo}` : '';
+      return `${ident}${modelo}`;
+    }
+    if (asset?.asset_type === 'CHIP' && ch) {
+      const ident = ch.numero || '—';
+      const plano = ch.plano ? ` • ${ch.plano}` : '';
+      return `${ident}${plano}`;
+    }
+    if (asset?.asset_type === 'Starlink' && st) {
+      return st.projeto || st.modelo || st.grupo || '—';
+    }
+    return 'Sem identificador';
+  };
   
   const getActiveLicenses = (empId) => {
     const empLics = [];
@@ -222,7 +249,7 @@ export default function OffboardingModule({ employees = [], assets = [], license
                       <div key={asset.id} className="bg-black/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center group hover:border-blue-500/30 transition-colors">
                         <div>
                           <p className="text-sm font-bold text-white">{asset.asset_type}</p>
-                          <p className="text-xs text-gray-400">{asset.notebook?.patrimonio || asset.celular?.imei || asset.chip?.numero || asset.starlink?.projeto || 'Sem identificador'}</p>
+                          <p className="text-xs text-gray-400">{getAssetIdentDisplay(asset)}</p>
                         </div>
                         {hasAccess('assets', 'edit') && (
                           <button onClick={() => handleReturnAsset(asset.id)} className="text-xs font-bold text-blue-400 bg-blue-400/10 hover:bg-blue-400/20 px-3 py-1.5 rounded-lg transition-colors">Devolver</button>
