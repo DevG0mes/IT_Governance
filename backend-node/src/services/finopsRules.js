@@ -12,9 +12,19 @@ function licenseMonthlyCommitment(lic) {
   const unit = Number(lic.custo);
   if (!Number.isFinite(unit) || q === 0) return 0;
   const plano = (lic.plano || '').trim().toLowerCase();
-  const totalPeriod = unit * q;
-  if (plano === YEARLY) return totalPeriod / 12;
-  return totalPeriod;
+  const total = unit * q;
+
+  /**
+   * IMPORTANTE (coerência com fatura/PDF):
+   * No ambiente PSI, licenças "Anual (12x)" são cobradas mensalmente, e o campo `custo`
+   * é o valor MENSAL por seat exibido no relatório. Portanto, o compromisso mensal é `custo × seats`,
+   * sem dividir por 12.
+   *
+   * Se no futuro houver licenças com custo anual "à vista", devemos introduzir um campo explícito
+   * (ex.: billing_cycle) para evitar ambiguidade.
+   */
+  // Mantemos MONTHLY/YEARLY apenas como metadado; cálculo é mensal em ambos os casos.
+  return total;
 }
 
 function licenseMonthlyUsed(lic) {
