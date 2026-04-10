@@ -344,6 +344,39 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     return { counts, costs };
   }, [assets, catalogItems]);
 
+  /** Ativos em uso por departamento do colaborador (atribuição ativa). */
+  const assetsInUseByDepartment = useMemo(() => {
+    const map = {};
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    (assets || []).forEach((a) => {
+      if (norm(a.status) !== 'em uso') return;
+      const assigns = a.AssetAssignments || a.assignments || [];
+      const active = Array.isArray(assigns) ? assigns.find((x) => !x?.returned_at) : null;
+      let emp = active?.Employee || active?.employee;
+      if (!emp && a.EmployeeId && Array.isArray(employees)) {
+        emp = employees.find((e) => e.id === a.EmployeeId);
+      }
+      const dept = (emp?.departamento && String(emp.departamento).trim()) || 'Sem departamento';
+      map[dept] = (map[dept] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 24);
+  }, [assets, employees]);
+
+  /** Contagem por tipo de equipamento (parque físico). */
+  const countByTypeChartData = useMemo(() => {
+    const map = {};
+    (assets || []).forEach((a) => {
+      const t = String(a.asset_type || '—').trim() || '—';
+      map[t] = (map[t] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([name, qtd]) => ({ name, qtd }))
+      .sort((a, b) => b.qtd - a.qtd);
+  }, [assets]);
+
   const groupStats = useMemo(() => {
     const groups = {};
     const normStatus = (s) => String(s || '').trim().toLowerCase();
@@ -601,6 +634,9 @@ export default function DashboardModule({ assets, employees, licenses, contracts
     }
   }, [finops, loadMonthlySnapshots, loadFinops]);
 
+  const isExec = viewMode === 'exec';
+  const isOps = viewMode === 'ops';
+
   return (
     <div className="space-y-8 animate-fade-in pb-12 relative">
       {(isLoading || finopsLoading) && (
@@ -615,12 +651,23 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-            <LayoutDashboard className="w-8 h-8 text-brandGreen" /> Painel Gerencial (FinOps)
+            <LayoutDashboard className="w-8 h-8 text-brandGreen" />{' '}
+            {isExec ? 'Painel Executivo (investimento & economia)' : 'Painel Operacional (gestão do parque)'}
           </h2>
           <p className="text-gray-400 mt-2 flex items-center gap-2 flex-wrap">
             <Sparkles className="w-4 h-4 text-brandGreen shrink-0" />
-            Visão consolidada: catálogo, licenças, contratos e uso vs parado. Valores de hardware vêm do{' '}
-            <span className="text-brandGreen font-semibold">Catálogo</span>.
+            {isExec ? (
+              <>
+                Foco em <span className="text-gray-200 font-semibold">valuation</span>, compromissos (licenças, contratos, telecom),
+                run rate, snapshots e <span className="text-emerald-400/90 font-semibold">savings</span>. Hardware referenciado pelo{' '}
+                <span className="text-brandGreen font-semibold">Catálogo</span>.
+              </>
+            ) : (
+              <>
+                Foco em <span className="text-gray-200 font-semibold">contagem</span>, distribuição por status e por{' '}
+                <span className="text-gray-200 font-semibold">departamento</span>, estoque, manutenção, CHIPs e grupos/obras.
+              </>
+            )}
           </p>
 
           <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
@@ -637,25 +684,32 @@ export default function DashboardModule({ assets, employees, licenses, contracts
                 <option value="ytd">YTD (ano)</option>
               </select>
 
-              <div className="inline-flex rounded-lg overflow-hidden border border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('exec')}
-                  className={`px-3 py-2 text-sm font-semibold transition-colors ${
-                    viewMode === 'exec' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
-                  }`}
-                >
-                  Executivo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('ops')}
-                  className={`px-3 py-2 text-sm font-semibold transition-colors ${
-                    viewMode === 'ops' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
-                  }`}
-                >
-                  Operacional (TI)
-                </button>
+              <div className="flex flex-col gap-1">
+                <div className="inline-flex rounded-lg overflow-hidden border border-gray-700 self-start">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('exec')}
+                    className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                      viewMode === 'exec' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
+                    }`}
+                  >
+                    Executivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('ops')}
+                    className={`px-3 py-2 text-sm font-semibold transition-colors ${
+                      viewMode === 'ops' ? 'bg-brandGreen/15 text-brandGreen' : 'bg-gray-900/60 text-gray-300 hover:bg-gray-800'
+                    }`}
+                  >
+                    Operacional (TI)
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 max-w-[min(100%,22rem)] leading-snug">
+                  {isExec
+                    ? 'Widgets de investimento, economia e compromissos (contratos, licenças, run rate).'
+                    : 'Widgets de parque: contagens, estoque, manutenção, departamentos, CHIPs e grupos.'}
+                </p>
               </div>
 
               <button
@@ -711,21 +765,36 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         </div>
 
-        <div
-          className="text-right bg-gray-900/50 p-4 rounded-2xl border border-gray-800 transition-all duration-300 hover:border-brandGreen/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)] group"
-          title="Soma dos valores do catálogo para os ativos visíveis com o filtro atual"
-        >
-          <p className="text-sm text-gray-500 font-bold uppercase tracking-wider flex items-center justify-end gap-2">
-            <Package className="w-4 h-4 text-brandGreen opacity-80 group-hover:scale-110 transition-transform" />
-            Valuation (Catálogo)
-          </p>
-          <p className="text-3xl font-bold text-brandGreen drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-            {formatCurrency(filtroAtivo === 'Todos' && finopsHwTotal != null ? finopsHwTotal : valuationTotal)}
-          </p>
-        </div>
+        {isExec ? (
+          <div
+            className="text-right bg-gray-900/50 p-4 rounded-2xl border border-gray-800 transition-all duration-300 hover:border-brandGreen/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.12)] group"
+            title="Soma dos valores do catálogo para os ativos visíveis com o filtro atual"
+          >
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-wider flex items-center justify-end gap-2">
+              <Package className="w-4 h-4 text-brandGreen opacity-80 group-hover:scale-110 transition-transform" />
+              Valuation (Catálogo)
+            </p>
+            <p className="text-3xl font-bold text-brandGreen drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+              {formatCurrency(filtroAtivo === 'Todos' && finopsHwTotal != null ? finopsHwTotal : valuationTotal)}
+            </p>
+          </div>
+        ) : (
+          <div className="text-right bg-gray-900/50 p-4 rounded-2xl border border-gray-800 min-w-[260px]">
+            <p className="text-sm text-gray-500 font-bold uppercase tracking-wider flex items-center justify-end gap-2">
+              <Users className="w-4 h-4 text-brandGreen opacity-80" />
+              Parque (filtro atual)
+            </p>
+            <p className="text-3xl font-bold text-white mt-1">{stats.totalAssets}</p>
+            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+              Em uso: <span className="text-gray-200 font-semibold">{stats.activeAssets}</span> · Estoque:{' '}
+              <span className="text-gray-200 font-semibold">{stats.availableAssets}</span> · Manutenção:{' '}
+              <span className="text-gray-200 font-semibold">{stats.maintenanceAssets}</span>
+            </p>
+          </div>
+        )}
       </div>
 
-      {finops?.hardware?.valorCompraTotal != null && filtroAtivo === 'Todos' && (
+      {isExec && finops?.hardware?.valorCompraTotal != null && filtroAtivo === 'Todos' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-finops-reveal">
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Valuation do parque (valor de compra)</h3>
@@ -756,7 +825,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {finops && filtroAtivo === 'Todos' && (
+      {isExec && finops && filtroAtivo === 'Todos' && (
         <div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
           style={{ perspective: '1200px' }}
@@ -815,7 +884,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {runRate != null && filtroAtivo === 'Todos' && (
+      {isExec && runRate != null && filtroAtivo === 'Todos' && (
         <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl animate-finops-reveal">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -841,7 +910,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {filtroAtivo === 'Todos' && (
+      {isExec && filtroAtivo === 'Todos' && (
         <div className="bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl animate-finops-reveal">
           <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
             <TrendingUp className="text-brandGreen w-6 h-6" />
@@ -885,7 +954,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {finops && filtroAtivo === 'Todos' && finops?.hardware?.valorResidualEstimado != null && (
+      {isExec && finops && filtroAtivo === 'Todos' && finops?.hardware?.valorResidualEstimado != null && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-finops-reveal">
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-1">Valor patrimonial residual (estim.)</h3>
@@ -925,7 +994,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {finops?.licenses && filtroAtivo === 'Todos' && (
+      {isExec && finops?.licenses && filtroAtivo === 'Todos' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6 animate-finops-reveal">
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
             <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Waste (R$) — ociosidade</h3>
@@ -996,7 +1065,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {finops?.savings && timeRange === 'current_month' && filtroAtivo === 'Todos' && (
+      {isExec && finops?.savings && timeRange === 'current_month' && filtroAtivo === 'Todos' && (
         <div className="bg-gradient-to-r from-emerald-900/30 to-gray-900/60 border border-emerald-800/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-[0_0_25px_rgba(16,185,129,0.12)] animate-finops-reveal">
           <div>
             <div className="text-xs text-emerald-200/80 font-bold uppercase tracking-wide">Troféu da TI — savings</div>
@@ -1014,7 +1083,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {contractVariance != null && filtroAtivo === 'Todos' && (
+      {isExec && contractVariance != null && filtroAtivo === 'Todos' && (
         <div className="bg-gradient-to-r from-gray-900/90 to-gray-900/60 border border-gray-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 animate-finops-reveal hover:border-brandGreen/25 transition-colors">
           <div className="flex items-center gap-2 text-gray-300 text-sm">
             <PieChart className="w-5 h-5 text-brandGreen" />
@@ -1033,6 +1102,119 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
+      {showFinopsCharts && isExec && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <HardDrive className="text-brandGreen w-6 h-6" />
+              Parque por tipo (valor catálogo)
+            </h3>
+            <p className="text-xs text-gray-500 mb-6">Passe o mouse nas barras para detalhes.</p>
+            <div className="h-72 w-full">
+              {byTypeChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={byTypeChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                    <defs>
+                      <linearGradient id="barValExec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.35} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                    <YAxis
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      tickFormatter={(v) =>
+                        v >= 1000000 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1e3).toFixed(0)}k` : v
+                      }
+                    />
+                    <RechartsTooltip
+                      cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }}
+                      contentStyle={{
+                        backgroundColor: '#111827',
+                        borderColor: '#374151',
+                        borderRadius: '12px',
+                        color: '#fff',
+                      }}
+                      formatter={(value, name) =>
+                        name === 'valor' ? [formatCurrency(value), 'Valor catálogo'] : [value, name]
+                      }
+                      labelFormatter={(label, payload) =>
+                        payload?.[0]?.payload?.qtd != null ? `${label} · ${payload[0].payload.qtd} ativos` : label
+                      }
+                    />
+                    <Bar
+                      dataKey="valor"
+                      fill="url(#barValExec)"
+                      radius={[8, 8, 0, 0]}
+                      maxBarSize={56}
+                      animationDuration={900}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
+                  Sem dados de tipo para exibir.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <DollarSign className="text-brandGreen w-6 h-6" />
+              Licenças (compromisso vs usado vs ocioso)
+            </h3>
+            <p className="text-xs text-gray-500 mb-6">
+              Série por competência selecionada ({timeRange === 'current_month' ? 'mês atual' : timeRange === 'last_6' ? 'últimos 6 meses' : 'YTD'}). Sem histórico por mês, a série é uma projeção constante.
+            </p>
+            <div className="h-72 w-full">
+              {licenseSeriesChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={licenseSeriesChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                    <defs>
+                      <linearGradient id="licCommitExec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="licUsedExec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="licWasteExec" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#eab308" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                    <YAxis
+                      stroke="#9CA3AF"
+                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
+                      tickFormatter={(v) => (v >= 1000000 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1e3).toFixed(0)}k` : v)}
+                    />
+                    <RechartsTooltip
+                      contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px', color: '#fff' }}
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', color: '#9ca3af' }} />
+                    <Area type="monotone" dataKey="Compromisso" stroke="#10b981" fill="url(#licCommitExec)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="Usado" stroke="#3b82f6" fill="url(#licUsedExec)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="Ocioso" stroke="#eab308" fill="url(#licWasteExec)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
+                  Sem série disponível.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isOps && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { title: 'Total Ativos', val: stats.totalAssets, icon: HardDrive, border: 'border-gray-800' },
@@ -1070,8 +1252,9 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         ))}
       </div>
+      )}
 
-      {(filtroAtivo === 'Todos' || filtroAtivo === 'CHIP') && (
+      {isOps && (filtroAtivo === 'Todos' || filtroAtivo === 'CHIP') && (
         <div className="mt-6 bg-gray-900/60 border border-gray-800 rounded-3xl p-6 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
@@ -1162,167 +1345,138 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {showFinopsCharts && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {showFinopsCharts && isOps && (
+        <div className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
+              <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                <PieChart className="text-brandGreen w-6 h-6" />
+                Ativos por status operacional
+              </h3>
+              <p className="text-xs text-gray-500 mb-6">Distribuição de contagem (não valor).</p>
+              <div className="h-72 w-full flex items-center justify-center">
+                {statusPieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RePie>
+                      <Pie
+                        data={statusPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={58}
+                        outerRadius={96}
+                        paddingAngle={3}
+                        dataKey="value"
+                        animationDuration={1000}
+                      >
+                        {statusPieData.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={entry.fill || CHART_COLORS[index % CHART_COLORS.length]}
+                            stroke="rgba(0,0,0,0.25)"
+                            className="outline-none transition-opacity duration-200 hover:opacity-90"
+                          />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#111827',
+                          borderColor: '#374151',
+                          borderRadius: '12px',
+                          color: '#fff',
+                        }}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: '12px', color: '#9ca3af' }}
+                        formatter={(value) => <span className="text-gray-300">{value}</span>}
+                      />
+                    </RePie>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-gray-500 text-sm italic">Sem distribuição de status.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
+              <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                <HardDrive className="text-brandGreen w-6 h-6" />
+                Parque por tipo (quantidade)
+              </h3>
+              <p className="text-xs text-gray-500 mb-6">Contagem de ativos no inventário por equipamento.</p>
+              <div className="h-72 w-full">
+                {countByTypeChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={countByTypeChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                      <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                      <YAxis stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} allowDecimals={false} />
+                      <RechartsTooltip
+                        contentStyle={{
+                          backgroundColor: '#111827',
+                          borderColor: '#374151',
+                          borderRadius: '12px',
+                          color: '#fff',
+                        }}
+                      />
+                      <Bar dataKey="qtd" fill="#3b82f6" radius={[8, 8, 0, 0]} maxBarSize={48} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
+                    Sem dados por tipo.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
             <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <HardDrive className="text-brandGreen w-6 h-6" />
-              Parque por tipo (valor catálogo)
+              <Users className="text-brandGreen w-6 h-6" />
+              Ativos em uso por departamento
             </h3>
-            <p className="text-xs text-gray-500 mb-6">Passe o mouse nas barras para detalhes.</p>
-            <div className="h-72 w-full">
-              {byTypeChartData.length > 0 ? (
+            <p className="text-xs text-gray-500 mb-6">
+              Somente ativos com status &quot;Em uso&quot; e atribuição ativa ao colaborador (departamento do cadastro).
+            </p>
+            <div className="h-80 w-full">
+              {assetsInUseByDepartment.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={byTypeChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
-                    <defs>
-                      <linearGradient id="barVal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.95} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.35} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
+                  <BarChart
+                    data={assetsInUseByDepartment}
+                    layout="vertical"
+                    margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                    <XAxis type="number" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} allowDecimals={false} />
                     <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={120}
                       stroke="#9CA3AF"
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
-                      tickFormatter={(v) =>
-                        v >= 1000000 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1e3).toFixed(0)}k` : v
-                      }
+                      tick={{ fill: '#9CA3AF', fontSize: 10 }}
                     />
                     <RechartsTooltip
-                      cursor={{ fill: 'rgba(16, 185, 129, 0.08)' }}
                       contentStyle={{
                         backgroundColor: '#111827',
                         borderColor: '#374151',
                         borderRadius: '12px',
                         color: '#fff',
                       }}
-                      formatter={(value, name) =>
-                        name === 'valor' ? [formatCurrency(value), 'Valor catálogo'] : [value, name]
-                      }
-                      labelFormatter={(label, payload) =>
-                        payload?.[0]?.payload?.qtd != null ? `${label} · ${payload[0].payload.qtd} ativos` : label
-                      }
                     />
-                    <Bar
-                      dataKey="valor"
-                      fill="url(#barVal)"
-                      radius={[8, 8, 0, 0]}
-                      maxBarSize={56}
-                      animationDuration={900}
-                    />
+                    <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
-                  Sem dados de tipo para exibir.
+                  Nenhum ativo em uso com departamento identificado.
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
-            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <DollarSign className="text-brandGreen w-6 h-6" />
-              Licenças (compromisso vs usado vs ocioso)
-            </h3>
-            <p className="text-xs text-gray-500 mb-6">
-              Série por competência selecionada ({timeRange === 'current_month' ? 'mês atual' : timeRange === 'last_6' ? 'últimos 6 meses' : 'YTD'}). Sem histórico por mês, a série é uma projeção constante.
-            </p>
-            <div className="h-72 w-full">
-              {licenseSeriesChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={licenseSeriesChartData} margin={{ top: 8, right: 8, left: 4, bottom: 8 }}>
-                    <defs>
-                      <linearGradient id="licCommit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="licUsed" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="licWaste" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#eab308" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-                    <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-                    <YAxis
-                      stroke="#9CA3AF"
-                      tick={{ fill: '#9CA3AF', fontSize: 11 }}
-                      tickFormatter={(v) => (v >= 1000000 ? `${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `${(v / 1e3).toFixed(0)}k` : v)}
-                    />
-                    <RechartsTooltip
-                      contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '12px', color: '#fff' }}
-                      formatter={(value) => formatCurrency(value)}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '12px', color: '#9ca3af' }} />
-                    <Area type="monotone" dataKey="Compromisso" stroke="#10b981" fill="url(#licCommit)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="Usado" stroke="#3b82f6" fill="url(#licUsed)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="Ocioso" stroke="#eab308" fill="url(#licWaste)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-500 text-sm italic">
-                  Sem série disponível.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="finops-chart-wrap bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl">
-            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <PieChart className="text-brandGreen w-6 h-6" />
-              Ativos por status operacional
-            </h3>
-            <p className="text-xs text-gray-500 mb-6">Distribuição de contagem (não valor).</p>
-            <div className="h-72 w-full flex items-center justify-center">
-              {statusPieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePie>
-                    <Pie
-                      data={statusPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={58}
-                      outerRadius={96}
-                      paddingAngle={3}
-                      dataKey="value"
-                      animationDuration={1000}
-                    >
-                      {statusPieData.map((entry, index) => (
-                        <Cell
-                          key={entry.name}
-                          fill={entry.fill || CHART_COLORS[index % CHART_COLORS.length]}
-                          stroke="rgba(0,0,0,0.25)"
-                          className="outline-none transition-opacity duration-200 hover:opacity-90"
-                        />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: '#111827',
-                        borderColor: '#374151',
-                        borderRadius: '12px',
-                        color: '#fff',
-                      }}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontSize: '12px', color: '#9ca3af' }}
-                      formatter={(value) => <span className="text-gray-300">{value}</span>}
-                    />
-                  </RePie>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-gray-500 text-sm italic">Sem distribuição de status.</div>
               )}
             </div>
           </div>
         </div>
       )}
 
+      {isExec && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-gray-900/80 border border-gray-800 p-8 rounded-3xl shadow-xl flex flex-col transition-all duration-300 finops-chart-wrap">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
@@ -1495,8 +1649,9 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         </div>
       </div>
+      )}
 
-      {finops?.licenses?.topWaste?.length > 0 && filtroAtivo === 'Todos' && (
+      {isExec && finops?.licenses?.topWaste?.length > 0 && filtroAtivo === 'Todos' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-finops-reveal">
           <div className="bg-gray-900/80 border border-gray-800 rounded-3xl p-6 shadow-xl">
             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
@@ -1558,7 +1713,8 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         </div>
       )}
 
-      {(finops?.hardware?.assetsSemMatchCatalogo > 0 || finops?.hardware?.ativosComCatalogoSemDataAquisicao > 0) &&
+      {isExec &&
+        (finops?.hardware?.assetsSemMatchCatalogo > 0 || finops?.hardware?.ativosComCatalogoSemDataAquisicao > 0) &&
         filtroAtivo === 'Todos' && (
           <div className="text-xs text-amber-400/90 text-center space-y-1">
             {finops.hardware.assetsSemMatchCatalogo > 0 && (
@@ -1574,6 +1730,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         )}
 
+      {isOps && (
       <div className="mt-8">
         <div className="flex flex-col gap-2 mb-6">
           <h3 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -1647,6 +1804,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         )}
       </div>
+      )}
 
       {selectedGroupForModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
