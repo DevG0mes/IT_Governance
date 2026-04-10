@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS asset_chips (
   plano VARCHAR(100),
   grupo VARCHAR(100),
   responsavel VARCHAR(150),
+  custo_unitario_mensal DOUBLE PRECISION NULL,
+  unidade_cobranca VARCHAR(20) NULL,
   vencimento_plano DATE NULL,
   data_aquisicao DATE NULL,
   valor_compra DOUBLE PRECISION NULL
@@ -224,3 +226,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS ix_audit_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS ix_audit_table ON audit_logs(table_name);
 CREATE INDEX IF NOT EXISTS ix_audit_action ON audit_logs(action);
+
+-- =========================
+-- 10) FinOps snapshots (regra de ouro)
+-- =========================
+CREATE TABLE IF NOT EXISTS finops_monthly_snapshots (
+  id BIGSERIAL PRIMARY KEY,
+  ym VARCHAR(7) NOT NULL UNIQUE,
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  generated_by VARCHAR(150) NULL,
+  locked BOOLEAN NOT NULL DEFAULT true,
+  data JSONB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_finops_snapshots_ym ON finops_monthly_snapshots(ym);

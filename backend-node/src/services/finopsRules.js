@@ -62,6 +62,15 @@ function assetTypeToCatalogKey(assetType) {
   return s;
 }
 
+function normKey(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
 function getAssetDetail(asset) {
   const t = assetTypeToCatalogKey(asset.asset_type);
   return (
@@ -84,11 +93,11 @@ function getCatalogLookupName(asset) {
 function findCatalogValor(catalogItems, asset) {
   if (!catalogItems || !catalogItems.length) return null;
   const aType = assetTypeToCatalogKey(asset.asset_type);
-  const name = getCatalogLookupName(asset).toLowerCase();
+  const name = normKey(getCatalogLookupName(asset));
   if (!name) return null;
   const found = catalogItems.find((c) => {
-    const cat = (c.category || '').trim().toLowerCase();
-    const nome = (c.nome || '').trim().toLowerCase();
+    const cat = assetTypeToCatalogKey(normKey(c.category));
+    const nome = normKey(c.nome);
     return cat === aType && nome === name;
   });
   if (!found) return null;
@@ -303,7 +312,10 @@ function buildFinopsSnapshot({ assets, catalogItems, licenses, contracts, meta }
     const t = assetTypeToCatalogKey(a.asset_type);
     if (t !== 'chip') return;
     const st = String(a.status || '').trim().toUpperCase();
-    if (st === 'CANCELADO') return; // deixa de contabilizar como fixo
+    // Regras de custo (telecom): só contabiliza status que geram cobrança mensal.
+    // BLOQUEADO e CANCELADO não entram.
+    const costStatuses = new Set(['EM USO', 'DISPONIVEL', 'DISPONÍVEL', 'RENOVAR', 'CANCELAR']);
+    if (!costStatuses.has(st)) return;
     const ch = a.Chip || a.chip;
     const unit = ch && ch.custo_unitario_mensal != null ? Number(ch.custo_unitario_mensal) : null;
     if (!Number.isFinite(unit) || unit <= 0) return;

@@ -51,6 +51,24 @@ function assetDetailParts(a) {
   };
 }
 
+function normKey(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function assetTypeToCatalogKey(assetType) {
+  const s = normKey(assetType);
+  if (s === 'notebook' || s === 'notebooks') return 'notebook';
+  if (s === 'celular' || s === 'celulares') return 'celular';
+  if (s === 'chip' || s === 'chips') return 'chip';
+  if (s === 'starlink' || s === 'starlinks') return 'starlink';
+  return s;
+}
+
 export default function DashboardModule({ assets, employees, licenses, contracts, catalogItems, formatCurrency, isLoading }) {
   const [viewMode, setViewMode] = useState(() => {
     try {
@@ -198,11 +216,19 @@ export default function DashboardModule({ assets, employees, licenses, contracts
         (a.status || '').trim().toLowerCase() === 'manutencao'
     ).length;
 
-    const expiringChips = ativosFiltrados.filter(
-      (a) =>
-        (a.asset_type || '').trim().toLowerCase() === 'chip' &&
-        (norm(a.status) === 'renovar' || norm(a.status) === 'renovação' || norm(a.status) === 'renovacao')
-    ).length;
+    const expiringChips = ativosFiltrados.filter((a) => {
+      if ((a.asset_type || '').trim().toLowerCase() !== 'chip') return false;
+      const st = norm(a.status);
+      if (st === 'cancelado' || st === 'bloqueado') return false;
+      const d = assetDetailParts(a);
+      const dueRaw = d.chip?.vencimento_plano;
+      if (!dueRaw) return false;
+      const due = new Date(String(dueRaw).slice(0, 10));
+      if (Number.isNaN(due.getTime())) return false;
+      const now = new Date();
+      const horizon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 60);
+      return due <= horizon;
+    }).length;
 
     const totalEmployees = employees ? employees.length : 0;
     const activeEmployees = employees
@@ -239,6 +265,84 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       monthlyLicenseCost,
     };
   }, [ativosFiltrados, employees, licenses]);
+
+  const chipInsights = useMemo(() => {
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const isChip = (a) => (a.asset_type || '').trim().toLowerCase() === 'chip';
+
+    const chips = (assets || []).filter((a) => isChip(a));
+
+    const counts = {
+      total: 0,
+      emUso: 0,
+      disponivel: 0,
+      cancelar: 0,
+      cancelado: 0,
+      renovar: 0,
+      bloqueado: 0,
+      atribuidoCancelar: 0,
+      expiram60d: 0,
+    };
+
+    const costs = {
+      estoqueParadoMensal: 0, // DISPONIVEL
+      savingProjecaoMensal: 0, // CANCELAR
+    };
+
+    const getChipUnitMonthly = (a, d) => {
+      // Preferência: custo_unitario_mensal (campo específico) -> fallback catálogo por plano.
+      const byField = Number(d?.chip?.custo_unitario_mensal);
+      if (Number.isFinite(byField) && byField > 0) return byField;
+      const plano = normKey(d?.chip?.plano);
+      if (!plano) return 0;
+      const mapped = (catalogItems || []).find(
+        (c) =>
+          assetTypeToCatalogKey(c?.category) === 'chip' && normKey(c?.nome) === plano
+      );
+      const byCatalog = Number(mapped?.valor);
+      return Number.isFinite(byCatalog) && byCatalog > 0 ? byCatalog : 0;
+    };
+
+    const hasActiveAssignment = (a) => {
+      if (a?.EmployeeId) return true;
+      const assigns = a?.AssetAssignments || a?.assignments || [];
+      return Array.isArray(assigns) ? assigns.some((x) => !x?.returned_at) : false;
+    };
+
+    chips.forEach((a) => {
+      const d = assetDetailParts(a);
+      const st = norm(a.status);
+      counts.total += 1;
+
+      if (st === 'em uso') counts.emUso += 1;
+      else if (st === 'disponivel' || st === 'disponível') counts.disponivel += 1;
+      else if (st === 'cancelar') counts.cancelar += 1;
+      else if (st === 'cancelado') counts.cancelado += 1;
+      else if (st === 'renovar' || st === 'renovacao' || st === 'renovação') counts.renovar += 1;
+      else if (st === 'bloqueado') counts.bloqueado += 1;
+
+      if (st === 'cancelar' && hasActiveAssignment(a)) counts.atribuidoCancelar += 1;
+
+      // Expiração 60d (alerta)
+      if (st !== 'cancelado' && st !== 'bloqueado') {
+        const dueRaw = d.chip?.vencimento_plano;
+        if (dueRaw) {
+          const due = new Date(String(dueRaw).slice(0, 10));
+          if (!Number.isNaN(due.getTime())) {
+            const now = new Date();
+            const horizon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 60);
+            if (due <= horizon) counts.expiram60d += 1;
+          }
+        }
+      }
+
+      const unit = getChipUnitMonthly(a, d);
+      if (st === 'cancelar') costs.savingProjecaoMensal += unit;
+      if (st === 'disponivel' || st === 'disponível') costs.estoqueParadoMensal += unit;
+    });
+
+    return { counts, costs };
+  }, [assets, catalogItems]);
 
   const groupStats = useMemo(() => {
     const groups = {};
@@ -394,7 +498,7 @@ export default function DashboardModule({ assets, employees, licenses, contracts
   const valuationTotal = useMemo(() => {
     let total = 0;
     ativosFiltrados.forEach((a) => {
-      const aType = (a.asset_type || '').trim().toLowerCase();
+      const aType = assetTypeToCatalogKey(a.asset_type);
       const d = assetDetailParts(a);
       let catModel = '';
 
@@ -403,12 +507,11 @@ export default function DashboardModule({ assets, employees, licenses, contracts
       else if (aType === 'starlink' && d.starlink) catModel = d.starlink.modelo;
       else if (aType === 'chip' && d.chip) catModel = d.chip.plano;
 
-      const targetModel = (catModel || '').trim().toLowerCase();
+      const targetModel = normKey(catModel);
 
       const mappedCatalog = (catalogItems || []).find(
         (c) =>
-          (c.category || '').trim().toLowerCase() === aType &&
-          (c.nome || '').trim().toLowerCase() === targetModel
+          assetTypeToCatalogKey(c?.category) === aType && normKey(c?.nome) === targetModel
       );
       if (mappedCatalog) total += parseFloat(mappedCatalog.valor || 0);
     });
@@ -967,6 +1070,97 @@ export default function DashboardModule({ assets, employees, licenses, contracts
           </div>
         ))}
       </div>
+
+      {(filtroAtivo === 'Todos' || filtroAtivo === 'CHIP') && (
+        <div className="mt-6 bg-gray-900/60 border border-gray-800 rounded-3xl p-6 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-brandGreen" />
+                CHIPs — status, custo e saving
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Regras: custo mensal considera <span className="text-gray-300 font-semibold">EM USO, DISPONIVEL, RENOVAR, CANCELAR</span>.{' '}
+                <span className="text-gray-300 font-semibold">BLOQUEADO</span> e <span className="text-gray-300 font-semibold">CANCELADO</span> não geram custo.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] text-gray-500">Projeção saving (CANCELAR)</div>
+              <div className="text-lg font-bold text-emerald-300">
+                {formatCurrency(chipInsights.costs.savingProjecaoMensal || 0)}/mês
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+            {[
+              {
+                title: 'DISPONIVEL',
+                sub: 'Estoque parado (custo mensal)',
+                val: chipInsights.counts.disponivel,
+                money: chipInsights.costs.estoqueParadoMensal,
+                tone: 'border-blue-500/20',
+              },
+              {
+                title: 'EM USO',
+                sub: 'Linhas ativas',
+                val: chipInsights.counts.emUso,
+                tone: 'border-brandGreen/25',
+              },
+              {
+                title: 'RENOVAR (alerta)',
+                sub: `Expiram em ≤ 60 dias: ${chipInsights.counts.expiram60d}`,
+                val: chipInsights.counts.renovar,
+                tone: chipInsights.counts.expiram60d > 0 ? 'border-red-900/50' : 'border-gray-800',
+              },
+              {
+                title: 'CANCELAR',
+                sub: 'Projeção saving / mês',
+                val: chipInsights.counts.cancelar,
+                money: chipInsights.costs.savingProjecaoMensal,
+                tone: 'border-emerald-800/40',
+              },
+              {
+                title: 'Atribuído × CANCELAR',
+                sub: 'Urgente: linha atribuída será cancelada',
+                val: chipInsights.counts.atribuidoCancelar,
+                tone: chipInsights.counts.atribuidoCancelar > 0 ? 'border-orange-900/50' : 'border-gray-800',
+              },
+              {
+                title: 'BLOQUEADO',
+                sub: 'Sem custo',
+                val: chipInsights.counts.bloqueado,
+                tone: 'border-gray-800',
+              },
+              {
+                title: 'CANCELADO',
+                sub: 'Sem custo (após competência)',
+                val: chipInsights.counts.cancelado,
+                tone: 'border-gray-800',
+              },
+              {
+                title: 'TOTAL CHIPs',
+                sub: 'Inventário',
+                val: chipInsights.counts.total,
+                tone: 'border-gray-800',
+              },
+            ].map((c) => (
+              <div key={c.title} className={`bg-gray-900/80 border ${c.tone} rounded-2xl p-4 shadow`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-bold uppercase tracking-wide text-gray-400">{c.title}</div>
+                  <div className="text-2xl font-bold text-white">{c.val}</div>
+                </div>
+                <div className="text-[11px] text-gray-500 mt-1">{c.sub}</div>
+                {typeof c.money === 'number' && (
+                  <div className="text-[12px] mt-2 font-mono text-emerald-300">
+                    {formatCurrency(c.money || 0)}/mês
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showFinopsCharts && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

@@ -15,6 +15,25 @@ function formatDateDisplay(v) {
   return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('pt-BR');
 }
 
+function normKey(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function catalogCategoryCanonical(v) {
+  const s = normKey(v);
+  if (s === 'notebook' || s === 'notebooks') return 'Notebook';
+  if (s === 'celular' || s === 'celulares') return 'Celular';
+  if (s === 'chip' || s === 'chips') return 'CHIP';
+  if (s === 'starlink' || s === 'starlinks') return 'Starlink';
+  // Se já vier no padrão legado (Notebook/Celular/CHIP/Starlink), preserva.
+  return String(v || '').trim();
+}
+
 export default function InventoryModule({ assets, employees, catalogItems, hasAccess, fetchData, requestConfirm, registerLog, isLoading, pageSize: pageSizeProp }) {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [inventorySearchTerm, setInventorySearchTerm] = useState('');
@@ -57,7 +76,7 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
   const catalogNomePorCategoria = useMemo(() => {
     const map = { Notebook: [], Celular: [], CHIP: [], Starlink: [] };
     (catalogItems || []).forEach((c) => {
-      const cat = (c.category || '').trim();
+      const cat = catalogCategoryCanonical(c.category);
       const nome = (c.nome || '').trim();
       if (nome && Object.prototype.hasOwnProperty.call(map, cat)) map[cat].push(nome);
     });
@@ -489,7 +508,11 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
                 const ownerName = empInfo?.nome || cel?.responsavel || ch?.responsavel || st?.responsavel; 
                 const groupName = cel?.grupo || ch?.grupo || st?.grupo;
                 let catModel = nb?.modelo || cel?.modelo || st?.modelo || ch?.plano || '';
-                const mappedCatalog = (catalogItems || []).find(c => c.category === asset.asset_type && c.nome?.toLowerCase() === catModel?.toLowerCase());
+                const mappedCatalog = (catalogItems || []).find((c) => {
+                  const cat = catalogCategoryCanonical(c?.category);
+                  const typeCat = catalogCategoryCanonical(asset?.asset_type);
+                  return cat === typeCat && normKey(c?.nome) === normKey(catModel);
+                });
 
                 const isLastRows = idx >= visibleAssets.length - 2 && visibleAssets.length > 2;
                 const menuPositionClass = isLastRows ? "bottom-10 right-8 origin-bottom-right" : "top-10 right-8 origin-top-right";

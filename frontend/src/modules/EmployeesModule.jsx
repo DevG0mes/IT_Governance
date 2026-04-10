@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, Trash2, MoreVertical, ListChecks, CheckCircle, PowerOff, Edit2, Printer, Laptop, Smartphone, Cpu, Wifi, Database, Users, ExternalLink, AlertTriangle, Link } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,6 +11,7 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   const [openActionMenu, setOpenActionMenu] = useState(null);
   const [page, setPage] = useState(1);
   const [menuDirection, setMenuDirection] = useState({});
+  const selectAllRef = useRef(null);
 
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [newEmployee, setNewEmployee] = useState({ nome: '', email: '', departamento: '', url_termo: '' });
@@ -33,12 +34,22 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
 
   const getAxiosError = (err, defaultMsg) => err.response?.data?.error || err.message || defaultMsg;
 
-  const activeEmployees = employees.filter(e =>
-    e.status !== 'Desligado' &&
-    e.status !== 'Em Desligamento' &&
-    e.offboarding !== true &&
-    e.offboarding !== 1 &&
-    e.nome.toLowerCase().includes(employeeSearchTerm.toLowerCase())
+  const baseEmployees = useMemo(
+    () =>
+      (employees || []).filter(
+        (e) =>
+          e.status !== 'Desligado' &&
+          e.status !== 'Em Desligamento' &&
+          e.offboarding !== true &&
+          e.offboarding !== 1
+      ),
+    [employees]
+  );
+
+  const activeEmployees = useMemo(
+    () =>
+      baseEmployees.filter((e) => e.nome.toLowerCase().includes(employeeSearchTerm.toLowerCase())),
+    [baseEmployees, employeeSearchTerm]
   );
 
   const pageSize = Math.max(1, Number(pageSizeProp || 50));
@@ -53,6 +64,15 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
     setPage(1);
     setSelectedIds([]);
   }, [employeeSearchTerm]);
+
+  // Tri-state: selecionado total / parcial / nenhum
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (!el) return;
+    const total = baseEmployees.length;
+    const selected = selectedIds.length;
+    el.indeterminate = selected > 0 && selected < total;
+  }, [selectedIds, baseEmployees.length]);
 
   useEffect(() => {
     const main = document.querySelector('main');
@@ -100,18 +120,35 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
   };
 
   const toggleSelection = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  const toggleAll = () =>
-    selectedIds.length === visibleEmployees.length && visibleEmployees.length > 0
-      ? setSelectedIds([])
-      : setSelectedIds(visibleEmployees.map(item => item.id));
+  const toggleAll = () => {
+    const total = baseEmployees.length;
+    if (total === 0) return;
+    setSelectedIds((prev) => (prev.length === total ? [] : baseEmployees.map((e) => e.id)));
+  };
 
-  const openMenuSmart = (empId, rowIndex) => {
+  const pickMenuDirection = (anchorEl) => {
+    try {
+      if (!anchorEl || typeof anchorEl.getBoundingClientRect !== 'function') return 'down';
+      const rect = anchorEl.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement?.clientHeight || 800;
+      // Estimativa conservadora (varia conforme permissões/itens)
+      const MENU_HEIGHT = 280;
+      const spaceBelow = Math.max(0, viewportH - rect.bottom);
+      const spaceAbove = Math.max(0, rect.top);
+      if (spaceBelow < MENU_HEIGHT && spaceAbove > spaceBelow) return 'up';
+      return 'down';
+    } catch {
+      return 'down';
+    }
+  };
+
+  const openMenuSmart = (empId, anchorEl) => {
     if (openActionMenu === empId) {
       setOpenActionMenu(null);
       return;
     }
-    const isLastRows = rowIndex >= visibleEmployees.length - 2 && visibleEmployees.length > 2;
-    setMenuDirection((prev) => ({ ...prev, [empId]: isLastRows ? 'up' : 'down' }));
+    const dir = pickMenuDirection(anchorEl);
+    setMenuDirection((prev) => ({ ...prev, [empId]: dir }));
     setOpenActionMenu(empId);
   };
 
@@ -472,8 +509,9 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
               <th className="px-6 py-4 w-12">
                 {hasAccess('employees', 'edit') && (
                   <input
+                    ref={selectAllRef}
                     type="checkbox"
-                    checked={selectedIds.length === visibleEmployees.length && visibleEmployees.length > 0}
+                    checked={baseEmployees.length > 0 && selectedIds.length === baseEmployees.length}
                     onChange={toggleAll}
                     className="accent-brandGreen cursor-pointer w-4 h-4"
                   />
@@ -486,7 +524,6 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
             {visibleEmployees.map(emp => {
               const empAssets = getActiveAssetsForEmployee(emp.id);
               const empLicenses = getLicensesForEmployee(emp.id);
-              const idx = visibleEmployees.indexOf(emp);
               const dir = menuDirection[emp.id] || 'down';
               const menuPositionClass = dir === 'up' ? 'bottom-10 right-8 origin-bottom-right' : 'top-10 right-8 origin-top-right';
               return (
@@ -505,7 +542,12 @@ export default function EmployeesModule({ employees, assets, licenses, hasAccess
                     <span className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700">{empAssets.length} Hardware(s), {empLicenses.length} Software(s)</span>
                   </td>
                   <td className="px-6 py-4 text-center relative overflow-visible" data-emp-actions-root="true">
-                    <button onClick={() => openMenuSmart(emp.id, idx)} className="p-2 hover:bg-gray-700 rounded-lg transition-colors"><MoreVertical className="w-5 h-5" /></button>
+                    <button
+                      onClick={(e) => openMenuSmart(emp.id, e.currentTarget)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
                     {openActionMenu === emp.id && (
                       <div className={`absolute ${menuPositionClass} w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-[120] py-2 text-left animate-fade-in-up`}>
                         <button onClick={() => { setOpenActionMenu(null); setEditEmployeeData(emp); }} className="w-full px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white flex items-center gap-3 transition-colors"><ListChecks className="w-4 h-4 text-blue-400" /> Gerenciar Perfil</button>
