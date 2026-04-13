@@ -79,8 +79,11 @@ exports.changePassword = async (req, res) => {
     const parsed = validateBody(changePasswordSchema, req.body);
     if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
 
-    const userId = req.user?.user_id;
-    if (!userId) return res.status(401).json({ error: 'Token inválido' });
+    const rawUserId = req.user?.user_id ?? req.user?.id ?? req.user?.sub;
+    const userId = rawUserId == null ? null : Number(rawUserId);
+    if (!Number.isFinite(userId)) {
+      return res.status(401).json({ error: 'Token inválido ou expirado' });
+    }
 
     const { senha_atual, senha_nova } = parsed.data;
     if (String(senha_nova || '').trim() === String(senha_atual || '').trim()) {

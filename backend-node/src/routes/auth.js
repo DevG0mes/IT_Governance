@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const verificarToken = require('../../middlewares/auth');
 
 // Rota de Login (POST)
 router.post('/login', authController.login);
 
 // Troca de senha do próprio usuário (token obrigatório)
-router.post('/change-password', verificarToken, authController.changePassword);
+router.post('/change-password', authController.changePassword);
 
 // 🚨 ALERTA DE GOVERNANÇA: Rota de Setup de Administrador
 // Lembre-se de remover ou comentar esta linha após criar o primeiro admin em produção,
