@@ -41,6 +41,8 @@ api.interceptors.response.use(
     }
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
+      // Evita estado "meio logado": token sumiu mas `logged_user` ficou stale no localStorage.
+      localStorage.removeItem('logged_user');
       window.location.href = '/';
     }
     return Promise.reject(error);
