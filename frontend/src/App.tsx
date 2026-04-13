@@ -96,6 +96,15 @@ function safeParseJSON<T>(raw: unknown, fallback: T): T {
   }
 }
 
+function coerceMustChangePassword(raw: unknown): boolean {
+  if (raw === true || raw === 1) return true;
+  if (typeof raw === 'string') {
+    const s = raw.trim().toLowerCase();
+    return s === 'true' || s === 't' || s === '1' || s === 'yes';
+  }
+  return false;
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => {
     try {
@@ -298,6 +307,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, activeTab]);
 
+  // Se a sessão foi restaurada do localStorage e o backend marcou troca obrigatória,
+  // garantimos que o modal apareça mesmo sem passar pelo fluxo do form de login.
+  useEffect(() => {
+    if (!currentUser) return;
+    if (!coerceMustChangePassword((currentUser as any).must_change_password)) return;
+    setChangePasswordForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
+    setIsChangePasswordOpen(true);
+  }, [currentUser]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     Swal.fire({
@@ -321,7 +339,7 @@ export default function App() {
       setCurrentUser(loggedUser);
       setActiveTab('dashboard');
       Toast.fire({ icon: 'success', title: `Bem-vindo(a), ${loggedUser.nome.split(' ')[0]}!` });
-      if (loggedUser?.must_change_password) {
+      if (coerceMustChangePassword((loggedUser as any).must_change_password)) {
         setChangePasswordForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
         setIsChangePasswordOpen(true);
       }
@@ -481,7 +499,7 @@ export default function App() {
       ) : (
         <>
           {isChangePasswordOpen && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[150] animate-fade-in">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[300] animate-fade-in">
               <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <div className="flex items-center gap-2 mb-2">
                   <KeyRound className="w-5 h-5 text-brandGreen" />
