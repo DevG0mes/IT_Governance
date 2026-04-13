@@ -18,6 +18,21 @@ const verificarToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
+    // Debug (best-effort): ajuda a identificar quando o Authorization é removido por CORS/redirect/proxy.
+    // Evita logar o token; apenas contexto de headers.
+    // eslint-disable-next-line no-console
+    console.warn('⚠️ Token não fornecido:', {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      host: req.headers.host,
+      origin: req.headers.origin,
+      referer: req.headers.referer,
+      hasCookie: !!req.headers.cookie,
+      // Quando CORS preflight falha ou o browser não envia header, isso ajuda a ver o que o browser pediu/enviou.
+      accessControlRequestHeaders: req.headers['access-control-request-headers'],
+      userAgent: req.headers['user-agent'],
+      forwardedFor: req.headers['x-forwarded-for'],
+    });
     // Retorno 401 exato do Go
     return res.status(401).json({ error: 'Token não fornecido' });
   }
