@@ -48,6 +48,7 @@ type SystemUser = {
   cargo?: string | null;
   profile_id?: number | null;
   profileNome?: string | null;
+  must_change_password?: boolean;
 };
 
 type UiSettings = {
@@ -57,6 +58,8 @@ type UiSettings = {
 
 type Props = {
   hasAccess: (module: string, requiredLevel?: 'read' | 'edit') => boolean;
+  currentUser?: { id: number; email: string; nome: string; must_change_password?: boolean } | null;
+  onLoggedUserPatch?: (patch: Partial<{ must_change_password: boolean }>) => void;
   systemUsers?: SystemUser[];
   accessProfiles?: AccessProfile[];
   refreshAdminData?: () => Promise<void> | void;
@@ -100,6 +103,8 @@ function paginate<T>(list: T[], page: number, pageSize: number) {
 
 export default function SettingsModule({
   hasAccess,
+  currentUser = null,
+  onLoggedUserPatch,
   systemUsers = [],
   accessProfiles = [],
   refreshAdminData,
@@ -182,6 +187,8 @@ export default function SettingsModule({
   const [uPage, setUPage] = useState(1);
   const [uPageSize, setUPageSize] = useState(10);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isSelfPwdOpen, setIsSelfPwdOpen] = useState(false);
+  const [selfPwdForm, setSelfPwdForm] = useState({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
   const [userForm, setUserForm] = useState<{
     nome: string;
@@ -228,9 +235,46 @@ export default function SettingsModule({
       email: u.email || '',
       senha: '',
       profile_id: u.profile_id || '',
-      must_change_password: true,
+      must_change_password: !!u.must_change_password,
     });
     setIsUserModalOpen(true);
+  };
+
+  const submitSelfPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { senha_atual, senha_nova, senha_nova_confirm } = selfPwdForm;
+    if (!senha_atual.trim() || !senha_nova.trim()) {
+      alert('Informe senha atual e nova senha.');
+      return;
+    }
+    if (senha_nova.trim().length < 8) {
+      alert('A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+    if (senha_nova !== senha_nova_confirm) {
+      alert('Confirmação de senha não confere.');
+      return;
+    }
+    try {
+      await api.post('/change-password', { senha_atual, senha_nova });
+      registerLog?.('UPDATE', 'Configurações', `Trocou a própria senha (${currentUser?.email || '—'})`);
+      try {
+        const raw = localStorage.getItem('logged_user');
+        if (raw) {
+          const u = JSON.parse(raw) as Record<string, unknown>;
+          u.must_change_password = false;
+          localStorage.setItem('logged_user', JSON.stringify(u));
+        }
+      } catch {
+        // ignore
+      }
+      onLoggedUserPatch?.({ must_change_password: false });
+      setIsSelfPwdOpen(false);
+      setSelfPwdForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
+      alert('Senha atualizada com sucesso.');
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.message || 'Erro ao trocar senha');
+    }
   };
 
   const submitUser = async (e: React.FormEvent) => {
@@ -247,9 +291,8 @@ export default function SettingsModule({
         return;
       }
       if (editingUser) {
-        const body: any = { nome: userForm.nome, email: userForm.email, profile_id: pid };
+        const body: any = { nome: userForm.nome, email: userForm.email, profile_id: pid, must_change_password: userForm.must_change_password };
         if (userForm.senha?.trim()) body.senha = userForm.senha;
-        if (userForm.senha?.trim()) body.must_change_password = userForm.must_change_password;
         await api.put(`/api/users/${editingUser.id}`, body);
         registerLog?.('UPDATE', 'Configurações', `Atualizou usuário ${userForm.email}`);
       } else {
@@ -486,17 +529,36 @@ export default function SettingsModule({
               <Settings2 className="w-5 h-5 text-blue-400" />
               <h3 className="text-lg font-bold text-white">Usuários do sistema</h3>
             </div>
-            {hasAccess('settings', 'edit') && (
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
               <button
                 type="button"
-                onClick={openNewUser}
-                disabled={safeProfiles.length === 0}
-                className="bg-brandGreen hover:bg-brandGreenHover disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-2xl font-bold shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1 flex items-center gap-2"
+                onClick={() => {
+                  setSelfPwdForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
+                  setIsSelfPwdOpen(true);
+                }}
+                className="bg-black/40 hover:bg-gray-800 border border-gray-700 text-gray-200 px-5 py-3 rounded-2xl font-bold transition-colors flex items-center justify-center gap-2"
               >
-                <UserPlus className="w-5 h-5" /> Novo usuário
+                <KeyRound className="w-5 h-5 text-brandGreen" /> Trocar minha senha
               </button>
-            )}
+              {hasAccess('settings', 'edit') && (
+                <button
+                  type="button"
+                  onClick={openNewUser}
+                  disabled={safeProfiles.length === 0}
+                  className="bg-brandGreen hover:bg-brandGreenHover disabled:opacity-40 disabled:cursor-not-allowed text-white px-6 py-3 rounded-2xl font-bold shadow-[0_4px_14px_rgba(16,185,129,0.39)] transition-all hover:-translate-y-1 flex items-center gap-2"
+                >
+                  <UserPlus className="w-5 h-5" /> Novo usuário
+                </button>
+              )}
+            </div>
           </div>
+
+          {currentUser?.must_change_password && (
+            <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Sua conta está marcada para <span className="font-semibold">troca obrigatória de senha</span>. Se o modal não
+              aparecer (sessão antiga), use <span className="font-semibold">Trocar minha senha</span> acima ou faça logout/login.
+            </div>
+          )}
 
           {safeProfiles.length === 0 && (
             <p className="text-sm text-amber-400 mb-4">
@@ -525,19 +587,20 @@ export default function SettingsModule({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-300 min-w-[720px]">
+            <table className="w-full text-left text-sm text-gray-300 min-w-[860px]">
               <thead className="bg-black/60 border-b border-gray-800 uppercase text-xs">
                 <tr>
                   <th className="px-6 py-4 rounded-tl-3xl">Nome</th>
                   <th className="px-6 py-4">E-mail</th>
                   <th className="px-6 py-4">Perfil</th>
+                  <th className="px-6 py-4">Senha</th>
                   <th className="px-6 py-4 rounded-tr-3xl text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/50">
                 {userPg.items.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-16 text-center text-gray-500">
+                    <td colSpan={5} className="px-6 py-16 text-center text-gray-500">
                       Nenhum usuário encontrado.
                     </td>
                   </tr>
@@ -547,6 +610,17 @@ export default function SettingsModule({
                       <td className="px-6 py-4 font-bold text-white">{u.nome}</td>
                       <td className="px-6 py-4 text-brandGreen break-all">{u.email}</td>
                       <td className="px-6 py-4 text-gray-300">{u.profileNome || u.cargo || '—'}</td>
+                      <td className="px-6 py-4">
+                        {u.must_change_password ? (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-bold uppercase border border-amber-500/40 text-amber-200 bg-amber-500/10">
+                            Troca obrigatória
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-bold uppercase border border-gray-700 text-gray-400 bg-black/30">
+                            OK
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="inline-flex gap-2">
                           <button
@@ -819,6 +893,68 @@ export default function SettingsModule({
                   disabled={!hasAccess('settings', 'edit')}
                   className="flex-1 bg-brandGreen text-white py-3 rounded-xl font-bold hover:bg-brandGreenHover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isSelfPwdOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[220] overflow-y-auto">
+          <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl my-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-brandGreen" /> Trocar minha senha
+              </h2>
+              <button type="button" onClick={() => setIsSelfPwdOpen(false)} className="text-gray-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <form onSubmit={submitSelfPassword} className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Senha atual</label>
+                <input
+                  type="password"
+                  required
+                  value={selfPwdForm.senha_atual}
+                  onChange={(e) => setSelfPwdForm((p) => ({ ...p, senha_atual: e.target.value }))}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Nova senha</label>
+                <input
+                  type="password"
+                  required
+                  value={selfPwdForm.senha_nova}
+                  onChange={(e) => setSelfPwdForm((p) => ({ ...p, senha_nova: e.target.value }))}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Confirmar nova senha</label>
+                <input
+                  type="password"
+                  required
+                  value={selfPwdForm.senha_nova_confirm}
+                  onChange={(e) => setSelfPwdForm((p) => ({ ...p, senha_nova_confirm: e.target.value }))}
+                  className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSelfPwdOpen(false)}
+                  className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 bg-brandGreen text-white py-3 rounded-xl font-bold hover:bg-brandGreenHover transition-colors">
                   Salvar
                 </button>
               </div>

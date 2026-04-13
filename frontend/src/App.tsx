@@ -179,6 +179,19 @@ export default function App() {
     Toast.fire({ icon: 'info', title: 'Sessão encerrada com segurança.' });
   }, [currentUser]);
 
+  const onLoggedUserPatch = useCallback((patch: Partial<Pick<CurrentUser, 'must_change_password'>>) => {
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem('logged_user', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
   const fetchAdminData = useCallback(async () => {
     try {
       const [usersRes, logsRes, profilesRes] = await Promise.all([
@@ -712,6 +725,8 @@ export default function App() {
                   {activeTab === 'settings' && hasAccess('settings', 'read') && (
                     <SettingsModule
                       hasAccess={hasAccess}
+                      currentUser={currentUser}
+                      onLoggedUserPatch={onLoggedUserPatch}
                       systemUsers={systemUsers}
                       accessProfiles={accessProfiles}
                       refreshAdminData={fetchAdminData}
