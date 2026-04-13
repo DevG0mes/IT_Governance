@@ -3,8 +3,9 @@ const { z } = require('zod');
 const userCreateSchema = z.object({
   nome: z.string().trim().min(2),
   email: z.string().trim().toLowerCase().email(),
-  senha: z.string().min(6),
+  senha: z.string().min(6).optional(),
   profile_id: z.union([z.number().int().positive(), z.string().trim().min(1)]).optional(),
+  must_change_password: z.boolean().optional(),
 });
 
 const userUpdateSchema = z.object({
@@ -12,6 +13,7 @@ const userUpdateSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
   senha: z.string().min(6).optional(),
   profile_id: z.union([z.number().int().positive(), z.string().trim().min(1), z.null()]).optional(),
+  must_change_password: z.boolean().optional(),
 });
 
 module.exports = { userCreateSchema, userUpdateSchema };

@@ -6,16 +6,16 @@ PSI-122;GC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;arthur.borges@psiener
 PSI-132;FHJ34G3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;cleber.alves@psienergy.com.br;29/04/2021
 PSI-124;4D5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;fabiano.santos@psienergy.com.br;29/04/2021
 PSI-137;JHJ34G3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;fabio.silva@psienergy.com.br;29/04/2021
-PSI-119;JC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;;29/04/2021
+PSI-119;JC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;fabio.souza@psienergy.com.br;29/04/2021
 PSI-091;72Y17Z2;VOSTRO 3480;31/08/2023;VENCIDO;Em uso;ana.lima@psienergy.com.br;
 PSI-135;GHJ34G3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;geraldo.martins@psienergy.com.br;29/04/2021
-PSI-061;PE03VAV2;LENOVO 81M1;01/10/2019;VENCIDO;Em uso;andre.luis@psienergy.com.br;
+PSI-061;PE03VAV2;LENOVO 81M1;01/10/2019;VENCIDO;Disponivel;;
 PSI-121;3D5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;;29/04/2021
 PSI-123;2D5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;natalia.ramos@psienergy.com.br;29/04/2021
 PSI-134;8HJ34G3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;renan.peresin@psienergy.com.br;29/04/2021
 PSI-163;9HJ34G3;Dell Latitude 3410;24/07/2024;VENCIDO;Em uso;samille.goncalves@psienergy.com.br;29/04/2021
 PSI-130;1JJ34G3;Dell Latitude 3410;24/07/2026;ATIVO;Em uso;saulo.santos@psienergy.com.br;29/04/2021
-PSI-125;DC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;;29/04/2021
+PSI-125;DC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;thomas.kakuta@psienergy.com.br;29/04/2021
 PSI-126;1D5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;;29/04/2021
 PSI-127;HC5QQD3;Dell Latitude 3410;24/07/2026;ATIVO;Disponivel;;29/04/2021
 PSI-087;72T17Z2;VOSTRO 3480;31/08/2023;VENCIDO;Em uso;bruno.lima@psienergy.com.br;
@@ -28,7 +28,7 @@ PSI-088;72X37Z2;VOSTRO 3480;31/08/2023;VENCIDO;Em uso;camila.silva@psienergy.com
 PSI-139;J9BJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Em uso;arilson.veloso@psienergy.com.br;29/03/2022
 PSI-140;8BBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Em uso;diogo.fernandes@psienergy.com.br;29/03/2022
 PSI-145;3CBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Em uso;emilly.souza@psienergy.com.br;29/03/2022
-PSI-102;7VRWFV2;DELL INSPIRON 3576;14/03/2023;VENCIDO;Em uso;cassio.araujo@psienergy.com.br;
+PSI-102;7VRWFV2;DELL INSPIRON 3576;14/03/2023;VENCIDO;Em uso;andre.luis@psienergy.com.br;
 PSI-095;Default string;DESKTOP H1110M-H;00/01/1900;VENCIDO;Em uso;cdp@psienergy.com.br;
 PSI-141;5CBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Em uso;estevao.rossignol@psienergy.com.br;29/03/2022
 PSI-149;1BBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Em uso;felipe.barreto@psienergy.com.br;29/03/2022
@@ -50,7 +50,7 @@ PSI-151;1CBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
 PSI-152;FBBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
 PSI-016;9TCMLZ1;DELL INSPIRON 14R 5437;10/05/2015;VENCIDO;Em uso;evellyn.cavalcanti@psienergy.com.br;
 PSI-155 ;GBBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
-PSI-156;9BBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
+PSI-156;9BBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;vitor.guormik@psienergy.com.br;29/03/2022
 PSI-157;H9BJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
 PSI-162;2CBJDN3;Dell Latitude 3420;29/03/2027;ATIVO;Disponivel;;29/03/2022
 PSI-064;PE03VDRL;LENOVO 81M1;01/11/2019;VENCIDO;Em uso;fabricio.martinez@psienergy.com.br;
@@ -63,12 +63,12 @@ PSI-006;BRJ827T15P;HP 240G6;09/08/2019;VENCIDO;Em uso;felipe.jose@psienergy.com.
 PSI-184;8RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Em uso;felipe.nadai@psienergy.com.br;27/12/2023
 PSI-174;18H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Em uso;guilherme.mota@psienergy.com.br;27/12/2023
 PSI-182;6RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Em uso;igor.marcon@psienergy.com.br;27/12/2023
-PSI-167;88H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Em uso;igor.prandini@psienergy.com.br;27/12/2023
+PSI-167;88H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Manutencao;;27/12/2023
 PSI-186;5RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Em uso;joao.ferreira@psienergy.com.br;27/12/2023
 PSI-171;28H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Em uso;josimar.souza@psienergy.com.br;27/12/2023
 PSI-187;BRY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Em uso;lucas.guido@psienergy.com.br;27/12/2023
 PSI-169;98H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Em uso;rafael.santos@psienergy.com.br;27/12/2023
-PSI-181;7RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Disponivel;;27/12/2023
+PSI-181;7RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Disponivel;rodrigo.barbosa@psienergy.com.br;27/12/2023
 PSI-170;78H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Em uso;rubem.silva@psienergy.com.br;27/12/2023
 PSI-185;4RY3DZ3;Dell Latitude 3520;20/09/2028;ATIVO;Em uso;tassio.rodrigues@psienergy.com.br;27/12/2023
 PSI-172;J7H76V3;Dell Latitude 3520;27/12/2025;VENCIDO;Disponivel;;27/12/2023
@@ -85,9 +85,9 @@ PSI-238;91T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;bruno.dias@psienergy.
 PSI-214;8F48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;bruno.manfrin@psienergy.com.br;06/07/2024
 PSI-249;41T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;bruno.silva@psienergy.com.br;06/07/2024
 PSI-200;75R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;bruno.sotoski@psienergy.com.br;06/07/2024
-PSI-014;CTVMLZ1;DELL INSPIRON 3421;12/02/2015;VENCIDO;Em uso;ivanir.silva@psienergy.com.br;
+PSI-014;CTVMLZ1;DELL INSPIRON 3421;12/02/2015;VENCIDO;Em uso;;
 PSI-265;HZKWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;carlos.lacerda@psienergy.com.br;06/07/2024
-PSI-278;30LWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;carlos.santos@psienergy.com.br;06/07/2024
+PSI-278;30LWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Disponivel;;06/07/2024
 PSI-210;1F48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;caroline.santos@psienergy.com.br;06/07/2024
 PSI-202;G4R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;ciro.pavesi@psienergy.com.br;06/07/2024
 PSI-209;FD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;daniel.cantelmo@psienergy.com.br;06/07/2024
@@ -124,7 +124,7 @@ PSI-192;F4R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;henderson@psienergy.c
 PSI-208;7D48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;henrique.meneghetti@psienergy.com.br;13/08/2024
 PSI-082;1,70E+14;DESKTOP ASUS;00/01/1900;VENCIDO;Em uso;mecanica@psienergy.com.br;
 PSI-215;8D48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;higor.vilela@psienergy.com.br;13/08/2024
-PSI-107;1ZLTZ23;VOSTRO 3480;08/02/2024;VENCIDO;Em uso;monique.oliveira@psienergy.com.br;
+PSI-107;1ZLTZ23;VOSTRO 3480;08/02/2024;VENCIDO;Disponivel;;
 PSI-229;32T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;iago.oliveira@psienergy.com.br;13/08/2024
 PSI-028;BRJ827T16J;HP 240G6;09/08/2019;VENCIDO;Em uso;natalli.pereira@psienergy.com.br;
 PSI-019;2HG6K03;VOSTRO 3480;02/11/2023;VENCIDO;Em uso;nilson.machado@psienergy.com.br;
@@ -168,7 +168,7 @@ PSI-239;B1T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;ricardo.guedes@psiene
 PSI-197;65R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;ricardo.reis@psienergy.com.br;13/08/2024
 PSI-236;61T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;rodrigo.borges@psienergy.com.br;13/08/2024
 PSI-241;G1T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;rodrigo.stevanelli@psienergy.com.br;13/08/2024
-PSI-223;2F48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;silvio.cesar@psienergy.com.br;13/08/2024
+PSI-223;2F48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;igor.prandini@psienergy.com.br;13/08/2024
 PSI-193;55R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;stefanie.nakagawa@psienergy.com.br;13/08/2024
 PSI-275;GZKWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;stefano.cruz@psienergy.com.br;13/08/2024
 PSI-109;3K6DD33;VOSTRO 3480;15/03/2024;VENCIDO;Em uso;wagner.batista@psienergy.com.br;
@@ -220,7 +220,7 @@ PSI-060;0;LENOVO 80JE;01/05/2014;VENCIDO;Descartado;;
 PSI-062;PE03VDRN;0;00/01/1900;VENCIDO;Manutencao;;
 PSI-063;0;LENOVO 81M1;01/11/2019;VENCIDO;Descartado;;
 PSI-066;JVDZMZ1;Latitude E5440;22/05/2015;VENCIDO;Disponivel;;
-PSI-067;BRG050FDWQ;HP COMPAC DESKTOP 8000 ELIT;11/01/2014;VENCIDO;Disponivel;;
+PSI-067;BRG050FDWQ;HP COMPAC DESKTOP 8000 ELIT;11/01/2014;VENCIDO;Disponivel;diego.silva@psienergy.com.br;
 PSI-068;CKBHSV1;DELL VOSTRO 3560;04/12/2013;VENCIDO;Disponivel;;
 PSI-069;DOADO;DESKTOP INVALID;00/01/1900;VENCIDO;Descartado;;
 PSI-070;PE01KQ27;LENOVO 80JE;01/05/2014;VENCIDO;Descartado;;
@@ -261,12 +261,12 @@ PSI-259;J0T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;uil.mota@psienergy.co
 PSI-262;92T7854;Dell Latitude 3540;13/08/2029;ATIVO;Em uso;valdemar.lima@psienergy.com.br;06/06/2024
 PSI-272;BZKWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;valeria.santos@psienergy.com.br;06/06/2024
 PSI-218;JD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Em uso;vanessa.camargo@psienergy.com.br;06/06/2024
-PSI-220;DD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Disponivel;;06/06/2024
+PSI-220;DD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Disponivel;flavia.chanchencow@psienergy.com.br;06/06/2024
 PSI-280;CZJ1JB4;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;victor.morais@psienergy.com.br;06/06/2024
 PSI-286;B4R5414;Dell Latitude 3540;16/01/2029;ATIVO;Em uso;vinicius.igel@psienergy.com.br;06/06/2024
 PSI-274;9ZKWQ74;Dell Latitude 3540;25/03/2030;ATIVO;Em uso;williamcampos@psienergy.com.br;06/06/2024
 PSI-189;85R5414;Dell Latitude 3540;16/01/2029;ATIVO;Disponivel;;06/06/2024
-PSI-199;J4R5414;Dell Latitude 3540;16/01/2029;ATIVO;Disponivel;;06/06/2024
+PSI-199;J4R5414;Dell Latitude 3540;16/01/2029;ATIVO;Disponivel;welson.lopes@psienergy.com.br;06/06/2024
 PSI-207;GD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Disponivel;;06/06/2024
 PSI-211;HD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Disponivel;;06/06/2024
 PSI-219;BD48V34;Dell Latitude 3540;06/06/2029;ATIVO;Disponivel;;06/06/2024
@@ -307,4 +307,4 @@ PSI-177;PE0AXE26;ThinkPad L14;01/07/2028;ATIVO;Em uso;allanis.praes@psienergy.co
 PSI-179;PE0AXE24;ThinkPad L14;20/09/2028;ATIVO;Em uso;juliana.martins@psienergy.com.br;24/06/2025
 PSI-175;PE0AX849;ThinkPad L14;01/07/2028;ATIVO;Em uso;paulo.morashita@psienergy.com.br ;24/06/2025
 PSI-176;PE0AXBMF;ThinkPad L14;01/07/2028;ATIVO;Disponivel;;24/06/2025
-PSI-178;PE0AXBMP;ThinkPad L14;01/07/2028;ATIVO;Disponivel;;24/06/2025
+PSI-178;PE0AXBMP;ThinkPad L14;01/07/2028;ATIVO;Disponivel;natalli.pereira@psienergy.com.br;24/06/2025

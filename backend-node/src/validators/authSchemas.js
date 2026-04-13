@@ -5,5 +5,10 @@ const loginSchema = z.object({
   senha: z.string().min(6),
 });
 
-module.exports = { loginSchema };
+const changePasswordSchema = z.object({
+  senha_atual: z.string().min(6),
+  senha_nova: z.string().min(8),
+});
+
+module.exports = { loginSchema, changePasswordSchema };
 

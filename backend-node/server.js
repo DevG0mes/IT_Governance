@@ -10,6 +10,8 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const { connectDatabase } = require('./config/db');
+const { Asset, AssetChip, sequelize } = require('./config/db');
+const { Op } = require('sequelize');
 const verificarToken = require('./middlewares/auth'); 
 const { requirePermission } = require('./middlewares/permissions');
 
@@ -118,6 +120,43 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
+function yyyyMmDd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+async function autoCancelChipsBestEffort() {
+  try {
+    const today = yyyyMmDd(new Date());
+    await sequelize.transaction(async (t) => {
+      const chipsToCancel = await Asset.findAll({
+        where: { asset_type: 'CHIP', status: 'CANCELAR' },
+        include: [
+          {
+            model: AssetChip,
+            as: 'Chip',
+            required: true,
+            where: { previsao_cancelamento: { [Op.lte]: today } },
+          },
+        ],
+        transaction: t,
+      });
+
+      for (const a of chipsToCancel) {
+        await a.update(
+          { status: 'CANCELADO', status_raw: 'cancelado', status_source: 'auto' },
+          { transaction: t }
+        );
+      }
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('⚠️ Auto-cancelamento de CHIPs falhou (best-effort):', e?.message || e);
+  }
+}
+
 const startServer = async () => {
   try {
     await connectDatabase();
@@ -129,6 +168,14 @@ const startServer = async () => {
         console.warn('🧊 FinOps snapshots: verificação mês anterior falhou.');
       }
     } catch (_) {}
+    // Best-effort: roda no boot e depois a cada 6h
+    // (não depende de cron; em produção isso é suficiente e resiliente a restart)
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    autoCancelChipsBestEffort();
+    setInterval(() => {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      autoCancelChipsBestEffort();
+    }, 6 * 60 * 60 * 1000);
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 PSI GovTI Online na porta ${PORT}`);
     });

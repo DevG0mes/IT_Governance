@@ -143,6 +143,11 @@ exports.create = async (req, res) => {
     const ownerEmployeeId = requestedEmployeeId ? Number(requestedEmployeeId) : null;
     const statusRaw = input.status != null ? String(input.status).trim() : '';
     const status = ownerEmployeeId ? (assetType === 'CHIP' ? 'EM USO' : 'Em uso') : normalizeStatusByType(statusRaw || 'Disponível', assetType);
+    const previsaoCancelamentoCreate = parseDataAquisicao(input.previsao_cancelamento);
+    if (assetType === 'CHIP' && status === 'CANCELAR' && !previsaoCancelamentoCreate) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Informe a data de previsão de cancelamento para CHIPs com status CANCELAR.' });
+    }
 
     // 🚨 A MÁGICA: Se for texto vazio (""), ele converte para NULL na hora!
     const patrimonio = standardizeAssetIdentifier(input.patrimonio) || null;
@@ -227,6 +232,7 @@ exports.create = async (req, res) => {
         plano: standardizeText(input.plano),
         grupo: standardizeText(input.grupo),
         responsavel: standardizeText(input.responsavel),
+        previsao_cancelamento: previsaoCancelamentoCreate,
         custo_unitario_mensal:
           input.custo_unitario_mensal != null && input.custo_unitario_mensal !== ''
             ? Number(input.custo_unitario_mensal)
@@ -298,9 +304,17 @@ exports.update = async (req, res) => {
     const iccid = standardizeAssetIdentifier(input.iccid) || null;
 
     const statusRaw = input.status != null ? String(input.status).trim() : null;
+    const nextStatus = input.status != null ? normalizeStatusByType(input.status, assetType) : asset.status;
+    const previsaoCancelamento = input.previsao_cancelamento !== undefined ? parseDataAquisicao(input.previsao_cancelamento) : undefined;
+    if (assetType === 'CHIP' && nextStatus === 'CANCELAR') {
+      if (!previsaoCancelamento) {
+        await t.rollback();
+        return res.status(400).json({ error: 'Informe a data de previsão de cancelamento para CHIPs com status CANCELAR.' });
+      }
+    }
     await asset.update(
       {
-        status: input.status != null ? normalizeStatusByType(input.status, assetType) : asset.status,
+        status: nextStatus,
         status_raw: statusRaw,
         status_source: 'ui',
         observacao: input.observacao ?? asset.observacao,
@@ -380,6 +394,7 @@ exports.update = async (req, res) => {
           plano: standardizeText(input.plano),
           grupo: standardizeText(input.grupo),
           responsavel: standardizeText(input.responsavel),
+          ...(previsaoCancelamento !== undefined ? { previsao_cancelamento: previsaoCancelamento } : {}),
           custo_unitario_mensal:
             input.custo_unitario_mensal != null && input.custo_unitario_mensal !== ''
               ? Number(input.custo_unitario_mensal)
@@ -650,7 +665,19 @@ exports.discard = async (req, res) => {
 
     const oldAsset = asset.toJSON();
     const statusRaw = String(newStatus).trim();
-    const status = normalizeStatusByType(statusRaw, normalizeAssetType(asset.asset_type));
+    const assetType = normalizeAssetType(asset.asset_type);
+    const status = normalizeStatusByType(statusRaw, assetType);
+    const previsaoCancelamento = req.body?.previsao_cancelamento !== undefined ? parseDataAquisicao(req.body?.previsao_cancelamento) : undefined;
+    if (assetType === 'CHIP' && status === 'CANCELAR') {
+      if (!previsaoCancelamento) {
+        await t.rollback();
+        return res.status(400).json({ error: 'Informe a data de previsão de cancelamento para CHIPs com status CANCELAR.' });
+      }
+      const chip = asset.Chip || (await AssetChip.findOne({ where: { AssetId: asset.id }, transaction: t }));
+      if (chip) {
+        await chip.update({ previsao_cancelamento: previsaoCancelamento }, { transaction: t });
+      }
+    }
     await asset.update(
       { status, status_raw: statusRaw, status_source: 'ui', observacao, EmployeeId: null },
       { transaction: t }
@@ -658,7 +685,6 @@ exports.discard = async (req, res) => {
 
     // Savings telecom: quando CHIP entra em fluxo de cancelamento (CANCELAR/CANCELADO), registra economia mensal (best-effort).
     try {
-      const assetType = normalizeAssetType(asset.asset_type);
       const prevStatus = String(oldAsset?.status || '').trim().toUpperCase();
       const nextStatus = String(status || '').trim().toUpperCase();
       const cancelSet = new Set(['CANCELAR', 'CANCELADO']);

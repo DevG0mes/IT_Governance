@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User, AccessProfile } = require('../../config/db');
 const { validateBody } = require('../utils/validate');
-const { loginSchema } = require('../validators/authSchemas');
+const { loginSchema, changePasswordSchema } = require('../validators/authSchemas');
 
 // 🛡️ GOVERNANÇA: Em produção, exigimos JWT_SECRET. Fallback só com flag explícita.
 const jwtSecretKey = process.env.JWT_SECRET || "psi_energy_govti_secret_2026";
@@ -74,6 +74,41 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.changePassword = async (req, res) => {
+  try {
+    const parsed = validateBody(changePasswordSchema, req.body);
+    if (!parsed.ok) return res.status(422).json({ error: 'Payload inválido', details: parsed.error });
+
+    const userId = req.user?.user_id;
+    if (!userId) return res.status(401).json({ error: 'Token inválido' });
+
+    const { senha_atual, senha_nova } = parsed.data;
+    if (String(senha_nova || '').trim() === String(senha_atual || '').trim()) {
+      return res.status(400).json({ error: 'A nova senha deve ser diferente da senha atual.' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+    const validPassword = await bcrypt.compare(senha_atual, user.senha);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Senha atual inválida' });
+    }
+
+    const hashedPassword = await bcrypt.hash(senha_nova, 14);
+    await user.update({
+      senha: hashedPassword,
+      must_change_password: false,
+      password_changed_at: new Date(),
+    });
+
+    return res.status(200).json({ message: 'Senha atualizada com sucesso' });
+  } catch (error) {
+    console.error('❌ Erro ao trocar senha:', error.message);
+    return res.status(500).json({ error: 'Erro interno ao trocar senha' });
+  }
+};
+
 // 🛡️ SETUP DE EMERGÊNCIA (Isolado no Controller)
 exports.setupAdmin = async (req, res) => {
   try {
@@ -92,6 +127,7 @@ exports.setupAdmin = async (req, res) => {
       email: adminEmail,
       senha: hashedPassword,
       cargo: 'Administrator',
+      must_change_password: true,
       permissionsJSON: JSON.stringify({
         "dashboard":"edit","inventory":"edit","licenses":"edit",
         "contracts":"edit","catalog":"edit","employees":"edit",

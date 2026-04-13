@@ -341,16 +341,25 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
 
   const openStatusModal = (asset, newStatus) => { 
     setOpenActionMenu(null); 
-    setStatusModalData({ asset: asset, status: newStatus, observacao: '' }); 
+    setStatusModalData({ asset: asset, status: newStatus, observacao: '', previsao_cancelamento: '' }); 
   };
 
   const submitStatusChange = async (e) => {
     e.preventDefault(); 
     if (statusModalData.observacao.trim() === '') { alert("A justificativa é obrigatória."); return; } 
+    if (statusModalData?.asset?.asset_type === 'CHIP' && statusModalData.status === 'CANCELAR') {
+      if (!String(statusModalData.previsao_cancelamento || '').trim()) {
+        alert('Informe a data de previsão de cancelamento.');
+        return;
+      }
+    }
     try {
       await api.put(`/api/assets/${statusModalData.asset.id}/discard`, { 
           status: statusModalData.status, 
-          observacao: statusModalData.observacao 
+          observacao: statusModalData.observacao,
+          ...(statusModalData?.asset?.asset_type === 'CHIP' && statusModalData.status === 'CANCELAR'
+            ? { previsao_cancelamento: statusModalData.previsao_cancelamento }
+            : {})
       });
       registerLog('UPDATE', 'Baixas', `Status do ativo ${statusModalData.asset.id} alterado para ${statusModalData.status}`); 
       setStatusModalData(null); 
@@ -1012,6 +1021,19 @@ export default function InventoryModule({ assets, employees, catalogItems, hasAc
             </div>
             <form onSubmit={submitStatusChange} className="flex flex-col gap-4">
               <textarea required value={statusModalData.observacao} onChange={(e) => setStatusModalData({...statusModalData, observacao: e.target.value})} className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white h-24 focus:border-red-500 outline-none transition-colors" placeholder="Descreva o motivo da alteração de status..." />
+              {statusModalData?.asset?.asset_type === 'CHIP' && statusModalData.status === 'CANCELAR' && (
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Previsão de cancelamento</label>
+                  <input
+                    type="date"
+                    required
+                    value={statusModalData.previsao_cancelamento || ''}
+                    onChange={(e) => setStatusModalData({ ...statusModalData, previsao_cancelamento: e.target.value })}
+                    className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white focus:border-red-500 outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-gray-500 mt-1">No dia previsto, o status muda para CANCELADO automaticamente.</p>
+                </div>
+              )}
               <div className="flex gap-3 mt-4">
                 <button type="button" onClick={() => setStatusModalData(null)} className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-700 transition-colors">Cancelar</button>
                 <button type="submit" className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-500 transition-colors"><AlertTriangle className="w-4 h-4"/> Confirmar ({statusModalData.status})</button>

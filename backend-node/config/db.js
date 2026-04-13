@@ -122,6 +122,7 @@ const connectDatabase = async () => {
         email: 'admin@psienergy.com.br',
         senha: hashedPassword,
         cargo: 'Administrator',
+        must_change_password: true,
         permissionsJSON: JSON.stringify({
           dashboard: "edit",
           inventory: "edit",

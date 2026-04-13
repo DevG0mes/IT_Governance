@@ -28,6 +28,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BIGINT,
       allowNull: true,
     },
+    must_change_password: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    password_changed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   }, { 
     tableName: 'users', 
     timestamps: false 

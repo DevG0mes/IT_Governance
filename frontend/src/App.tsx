@@ -67,6 +67,7 @@ type CurrentUser = {
   permissionsJSON?: unknown;
   permissions_json?: unknown;
   profile_id?: number | null;
+  must_change_password?: boolean;
 };
 
 type ConfirmDialog = {
@@ -109,6 +110,12 @@ export default function App() {
   const [loginForm, setLoginForm] = useState({ email: '', senha: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    senha_atual: '',
+    senha_nova: '',
+    senha_nova_confirm: '',
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [assets, setAssets] = useState<any[]>([]);
@@ -301,6 +308,10 @@ export default function App() {
       setCurrentUser(loggedUser);
       setActiveTab('dashboard');
       Toast.fire({ icon: 'success', title: `Bem-vindo(a), ${loggedUser.nome.split(' ')[0]}!` });
+      if (loggedUser?.must_change_password) {
+        setChangePasswordForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
+        setIsChangePasswordOpen(true);
+      }
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error('Erro completo:', err);
@@ -312,6 +323,36 @@ export default function App() {
         color: '#ffffff',
         confirmButtonColor: '#ef4444',
       });
+    }
+  };
+
+  const submitChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { senha_atual, senha_nova, senha_nova_confirm } = changePasswordForm;
+    if (!senha_atual.trim() || !senha_nova.trim()) {
+      Toast.fire({ icon: 'error', title: 'Informe senha atual e nova senha.' });
+      return;
+    }
+    if (senha_nova.trim().length < 8) {
+      Toast.fire({ icon: 'error', title: 'A nova senha deve ter pelo menos 8 caracteres.' });
+      return;
+    }
+    if (senha_nova !== senha_nova_confirm) {
+      Toast.fire({ icon: 'error', title: 'Confirmação de senha não confere.' });
+      return;
+    }
+    try {
+      await api.post('/change-password', { senha_atual, senha_nova });
+      const nextUser = currentUser ? { ...currentUser, must_change_password: false } : currentUser;
+      if (nextUser) {
+        setCurrentUser(nextUser);
+        localStorage.setItem('logged_user', JSON.stringify(nextUser));
+      }
+      setIsChangePasswordOpen(false);
+      setChangePasswordForm({ senha_atual: '', senha_nova: '', senha_nova_confirm: '' });
+      Toast.fire({ icon: 'success', title: 'Senha atualizada. Acesso liberado.' });
+    } catch (err: any) {
+      Toast.fire({ icon: 'error', title: err?.response?.data?.error || 'Erro ao trocar senha.' });
     }
   };
 
@@ -426,6 +467,60 @@ export default function App() {
         </div>
       ) : (
         <>
+          {isChangePasswordOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[150] animate-fade-in">
+              <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <KeyRound className="w-5 h-5 text-brandGreen" />
+                  <h2 className="text-xl font-bold text-white">Trocar senha</h2>
+                </div>
+                <p className="text-sm text-gray-400 mb-6">
+                  Por segurança, é necessário definir uma nova senha antes de continuar.
+                </p>
+                <form onSubmit={submitChangePassword} className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Senha atual</label>
+                    <input
+                      type="password"
+                      value={changePasswordForm.senha_atual}
+                      onChange={(e) => setChangePasswordForm((p) => ({ ...p, senha_atual: e.target.value }))}
+                      className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Nova senha</label>
+                    <input
+                      type="password"
+                      value={changePasswordForm.senha_nova}
+                      onChange={(e) => setChangePasswordForm((p) => ({ ...p, senha_nova: e.target.value }))}
+                      className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                      autoComplete="new-password"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Confirmar nova senha</label>
+                    <input
+                      type="password"
+                      value={changePasswordForm.senha_nova_confirm}
+                      onChange={(e) => setChangePasswordForm((p) => ({ ...p, senha_nova_confirm: e.target.value }))}
+                      className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
+                      autoComplete="new-password"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-brandGreen hover:bg-brandGreenHover text-white py-3 rounded-xl font-bold transition-colors"
+                  >
+                    Salvar nova senha
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
           <aside
             className={`flex-shrink-0 h-screen bg-black border-r border-gray-800 transition-all duration-300 flex flex-col z-40 ${
               isSidebarOpen ? 'w-64' : 'w-20'

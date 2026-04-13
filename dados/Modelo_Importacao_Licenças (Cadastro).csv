@@ -1,6 +1,4 @@
 ﻿Software;Fornecedor;Plano;Custo;Quantidade
-Office 365 Extra File Storage ;Microsoft;Mensal ;R$ 1,70;1400
-Exchange Online (Plan 1) ;Microsoft;Anual ;R$ 27,21;5
 Planner and Project Plan 3 ;Microsoft;Anual ;R$ 202,72;26
 Office 365 E3 ;Microsoft;Anual ;R$ 153,54;5
 Exchange Online Kiosk ;Microsoft;Anual ;R$ 14,85;10
@@ -13,6 +11,6 @@ Microsoft Defender for Office 365 (Plan 1) ;Microsoft;Anual ;R$ 13,43;21
 Planner and Project Plan 3 ;Microsoft;Anual ;R$ 212,38;1
 Microsoft 365 Business Basic ;Microsoft;Anual ;R$ 41,46;31
 Microsoft 365 Business Premium ;Microsoft;Anual ;R$ 152,93;1
-Microsoft Teams Premium ;Microsoft;Anual ;R$ 66,84;14
+Microsoft Teams Premium - Legacy;Microsoft;Anual ;R$ 66,84;14
 Microsoft 365 Copilot ;Microsoft;Anual ;R$ 208,95;2
 Microsoft 365 Business Standard ;Microsoft;Mensal ;R$ 103,01;2

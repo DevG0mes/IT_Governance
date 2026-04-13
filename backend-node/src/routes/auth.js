@@ -5,6 +5,9 @@ const authController = require('../controllers/authController');
 // Rota de Login (POST)
 router.post('/login', authController.login);
 
+// Troca de senha do próprio usuário (token obrigatório)
+router.post('/change-password', authController.changePassword);
+
 // 🚨 ALERTA DE GOVERNANÇA: Rota de Setup de Administrador
 // Lembre-se de remover ou comentar esta linha após criar o primeiro admin em produção,
 // isso blinda a API contra tentativas de recriação de usuários master.

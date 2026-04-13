@@ -28,6 +28,10 @@ module.exports = (sequelize, DataTypes) => {
     vencimento_plano: {
       type: DataTypes.DATEONLY
     },
+    previsao_cancelamento: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
     data_aquisicao: {
       type: DataTypes.DATEONLY,
       allowNull: true,

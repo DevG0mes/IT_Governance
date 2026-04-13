@@ -8,6 +8,7 @@ export type SystemUser = {
   permissionsJSON?: unknown;
   permissions_json?: unknown;
   profile_id?: number | null;
+  must_change_password?: boolean;
   profileNome?: string | null;
   permissions?: Partial<PermissionsMap> | Record<string, unknown>;
 };

@@ -3,6 +3,8 @@ const { User, AccessProfile } = require('../../config/db');
 const { validateBody } = require('../utils/validate');
 const { userCreateSchema, userUpdateSchema } = require('../validators/userSchemas');
 
+const DEFAULT_TEMP_PASSWORD = 'mudar@123';
+
 async function permissionsFromProfileId(profileId) {
   if (profileId == null || profileId === '') return null;
   const p = await AccessProfile.findByPk(profileId);
@@ -15,6 +17,7 @@ function pickUserPayload(body, { forUpdate } = {}) {
   if (body.nome !== undefined) out.nome = String(body.nome).trim();
   if (body.email !== undefined) out.email = String(body.email).trim().toLowerCase();
   if (body.cargo !== undefined) out.cargo = body.cargo;
+  if (body.must_change_password !== undefined) out.must_change_password = Boolean(body.must_change_password);
   const pj = body.permissionsJSON ?? body.permissions_json;
   if (pj !== undefined) out.permissionsJSON = typeof pj === 'string' ? pj : JSON.stringify(pj);
   if (body.profile_id !== undefined) {
@@ -48,9 +51,9 @@ exports.create = async (req, res) => {
     if (!input.nome || !input.email) {
       return res.status(400).json({ error: 'Nome e e-mail são obrigatórios' });
     }
-    if (!input.senha) {
-      return res.status(400).json({ error: 'Senha é obrigatória' });
-    }
+    const rawPassword = input.senha && String(input.senha).trim() ? String(input.senha) : DEFAULT_TEMP_PASSWORD;
+    const isTemp = rawPassword === DEFAULT_TEMP_PASSWORD;
+    if (input.must_change_password === undefined) input.must_change_password = isTemp;
 
     const existing = await User.findOne({ where: { email: input.email } });
     if (existing) {
@@ -69,7 +72,7 @@ exports.create = async (req, res) => {
       return res.status(400).json({ error: 'Defina um perfil de acesso ou permissões' });
     }
 
-    input.senha = await bcrypt.hash(input.senha, 14);
+    input.senha = await bcrypt.hash(rawPassword, 14);
 
     const newUser = await User.create(input);
     const userJSON = newUser.get({ plain: true });
@@ -104,6 +107,7 @@ exports.update = async (req, res) => {
 
     if (input.senha && input.senha.trim() !== '') {
       input.senha = await bcrypt.hash(input.senha, 14);
+      if (input.must_change_password === undefined) input.must_change_password = true;
     } else {
       delete input.senha;
     }

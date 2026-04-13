@@ -183,11 +183,18 @@ export default function SettingsModule({
   const [uPageSize, setUPageSize] = useState(10);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
-  const [userForm, setUserForm] = useState<{ nome: string; email: string; senha: string; profile_id: number | '' }>({
+  const [userForm, setUserForm] = useState<{
+    nome: string;
+    email: string;
+    senha: string;
+    profile_id: number | '';
+    must_change_password: boolean;
+  }>({
     nome: '',
     email: '',
     senha: '',
     profile_id: '',
+    must_change_password: true,
   });
 
   const safeUsers = Array.isArray(systemUsers) ? systemUsers : [];
@@ -204,13 +211,25 @@ export default function SettingsModule({
 
   const openNewUser = () => {
     setEditingUser(null);
-    setUserForm({ nome: '', email: '', senha: '', profile_id: safeProfiles[0]?.id || '' });
+    setUserForm({
+      nome: '',
+      email: '',
+      senha: 'mudar@123',
+      profile_id: safeProfiles[0]?.id || '',
+      must_change_password: true,
+    });
     setIsUserModalOpen(true);
   };
 
   const openEditUser = (u: SystemUser) => {
     setEditingUser(u);
-    setUserForm({ nome: u.nome || '', email: u.email || '', senha: '', profile_id: u.profile_id || '' });
+    setUserForm({
+      nome: u.nome || '',
+      email: u.email || '',
+      senha: '',
+      profile_id: u.profile_id || '',
+      must_change_password: true,
+    });
     setIsUserModalOpen(true);
   };
 
@@ -230,10 +249,17 @@ export default function SettingsModule({
       if (editingUser) {
         const body: any = { nome: userForm.nome, email: userForm.email, profile_id: pid };
         if (userForm.senha?.trim()) body.senha = userForm.senha;
+        if (userForm.senha?.trim()) body.must_change_password = userForm.must_change_password;
         await api.put(`/api/users/${editingUser.id}`, body);
         registerLog?.('UPDATE', 'Configurações', `Atualizou usuário ${userForm.email}`);
       } else {
-        await api.post('/api/users', { nome: userForm.nome, email: userForm.email, senha: userForm.senha, profile_id: pid });
+        await api.post('/api/users', {
+          nome: userForm.nome,
+          email: userForm.email,
+          senha: userForm.senha,
+          profile_id: pid,
+          must_change_password: userForm.must_change_password,
+        });
         registerLog?.('CREATE', 'Configurações', `Criou usuário ${userForm.email}`);
       }
       setIsUserModalOpen(false);
@@ -761,6 +787,24 @@ export default function SettingsModule({
                   className="w-full bg-black/50 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-brandGreen"
                   autoComplete="new-password"
                 />
+                {!editingUser && (
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Sugestão: use a senha temporária <span className="text-gray-200 font-semibold">mudar@123</span> e marque troca
+                    obrigatória no 1º acesso.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  id="must_change_password"
+                  type="checkbox"
+                  checked={!!userForm.must_change_password}
+                  onChange={(e) => setUserForm({ ...userForm, must_change_password: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-700 bg-black/50 text-brandGreen focus:ring-brandGreen"
+                />
+                <label htmlFor="must_change_password" className="text-sm text-gray-300 select-none">
+                  Exigir troca de senha no primeiro acesso
+                </label>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
