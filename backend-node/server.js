@@ -87,18 +87,24 @@ const loginLimiter = rateLimit({
 // Health Check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', server: 'PSI GovTI no Google Cloud' }));
 
-app.use('/api', loginLimiter, authRoutes); 
-
-app.use('/api', (req, res, next) => {
+// Autenticação ANTES do router de auth:
+// - `/api/login` e `/api/setup-admin` precisam ser públicos
+// - `/api/change-password` precisa ter `req.user` populado pelo JWT antes do controller
+app.use(
+  '/api',
+  loginLimiter,
+  (req, res, next) => {
     if (req.method === 'OPTIONS') {
-        return res.sendStatus(204);
+      return res.sendStatus(204);
     }
     const publicPaths = ['/login', '/setup-admin', '/health'];
-    if (publicPaths.some(path => req.path.includes(path))) {
-        return next();
+    if (publicPaths.some((path) => req.path.includes(path))) {
+      return next();
     }
-    verificarToken(req, res, next);
-});
+    return verificarToken(req, res, next);
+  },
+  authRoutes
+);
 
 app.use('/api/assets', assetRoutes);
 app.use('/api/licenses', licenseRoutes);

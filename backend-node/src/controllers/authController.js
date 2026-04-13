@@ -82,6 +82,10 @@ exports.changePassword = async (req, res) => {
     const rawUserId = req.user?.user_id ?? req.user?.id ?? req.user?.sub;
     const userId = rawUserId == null ? null : Number(rawUserId);
     if (!Number.isFinite(userId)) {
+      // eslint-disable-next-line no-console
+      console.warn('⚠️ change-password: token sem user_id/id/sub no payload', {
+        keys: req.user ? Object.keys(req.user) : null,
+      });
       return res.status(401).json({ error: 'Token inválido ou expirado' });
     }
 
